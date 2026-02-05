@@ -1,0 +1,1 @@
+export const sendSMS = async (p, m) => { console.log(m); };
