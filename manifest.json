@@ -1,0 +1,7 @@
+{
+  "name": "IFZA Electronics ERP",
+  "short_name": "IFZA ERP",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0a0f1d"
+}
