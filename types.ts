@@ -1,0 +1,1 @@
+export type Company = 'Transtec' | 'SQ Light' | 'SQ Cables'; export type UserRole = 'ADMIN' | 'STAFF' | 'DELIVERY'; // ... (Rest of types provided)
