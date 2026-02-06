@@ -1,1 +1,4 @@
-{"name": "ifza. electronics ERP", "requestFramePermissions": ["geolocation", "microphone", "camera"]}
+{
+  "name": "ifza. electronics ERP",
+  "requestFramePermissions": ["geolocation", "microphone", "camera"]
+}
