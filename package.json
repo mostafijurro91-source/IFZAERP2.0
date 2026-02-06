@@ -1,0 +1,1 @@
+{ "name": "ifza-erp", "scripts": { "build": "vite build" }, "dependencies": { "vite": "^6.0.0", "react": "^19.0.0" } }
