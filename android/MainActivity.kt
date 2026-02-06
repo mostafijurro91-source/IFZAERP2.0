@@ -1,2 +1,2 @@
 package com.ifzaerp.app
-class MainActivity...
+// Android WebView Integration
