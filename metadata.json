@@ -1,4 +1,1 @@
-{
-  "name": "ifza. electronics ERP",
-  "requestFramePermissions": ["geolocation", "microphone", "camera"]
-}
+{"build": {"command": "npm run build", "publish": "dist"}}
