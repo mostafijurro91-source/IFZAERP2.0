@@ -109,6 +109,7 @@ const DeliveryHub: React.FC<DeliveryHubProps> = ({ company, user }) => {
         const cid = tx.customer_id;
         const co = tx.company;
         const amt = Number(tx.amount) || 0;
+        // Fix: Changed 'SQ Cable' to 'SQ Cables'
         if (!duesMap[cid]) duesMap[cid] = { Transtec: 0, 'SQ Light': 0, 'SQ Cables': 0 };
         if (duesMap[cid][co] !== undefined) {
           duesMap[cid][co] += (tx.payment_type === 'COLLECTION' ? -amt : amt);

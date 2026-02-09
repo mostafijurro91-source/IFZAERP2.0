@@ -31,12 +31,12 @@ const Showroom: React.FC = () => {
   const brandColors: Record<string, string> = {
     'Transtec': 'from-amber-400 to-orange-600',
     'SQ Light': 'from-cyan-400 to-blue-600',
-    'SQ careport': 'from-rose-500 to-red-700'
+    // Fix: Changed 'SQ Cable' to 'SQ Cables'
+    'SQ Cables': 'from-rose-500 to-red-700'
   };
 
   return (
     <div className="space-y-12 pb-40 animate-reveal">
-      {/* Premium Hero Section */}
       <div className="relative bg-slate-900 p-12 md:p-20 rounded-[4rem] shadow-2xl overflow-hidden group">
          <div className="absolute right-[-20px] top-[-20px] text-[180px] opacity-5 font-black italic select-none group-hover:opacity-10 transition-opacity">HUB</div>
          <div className="relative z-10 max-w-3xl">
@@ -46,8 +46,8 @@ const Showroom: React.FC = () => {
             </p>
             
             <div className="flex gap-2 flex-wrap">
-               {/* Fix: Changed SQ Cables to SQ careport */}
-               {['ALL', 'Transtec', 'SQ Light', 'SQ careport'].map(b => (
+               {/* Fix: Changed 'SQ Cable' to 'SQ Cables' */}
+               {['ALL', 'Transtec', 'SQ Light', 'SQ Cables'].map(b => (
                   <button key={b} onClick={() => setFilter(b)} className={`px-8 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${filter === b ? 'bg-white text-slate-900 shadow-xl' : 'bg-white/10 text-white/50 hover:bg-white/20'}`}>
                      {b}
                   </button>
@@ -56,7 +56,6 @@ const Showroom: React.FC = () => {
          </div>
       </div>
 
-      {/* Official Transtec Featured Resource */}
       {(filter === 'ALL' || filter === 'Transtec') && (
         <div className="bg-gradient-to-br from-amber-500/10 to-orange-600/10 p-10 md:p-16 rounded-[4rem] border border-orange-500/20 flex flex-col md:flex-row items-center justify-between gap-10">
            <div className="flex-1">
@@ -72,7 +71,6 @@ const Showroom: React.FC = () => {
         </div>
       )}
 
-      {/* Visual Catalog Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-10">
         {loading ? (
           <div className="col-span-full py-40 text-center animate-pulse text-slate-300 font-black uppercase italic italic">Syncing Showroom...</div>
@@ -102,7 +100,6 @@ const Showroom: React.FC = () => {
         ))}
       </div>
 
-      {/* Fullscreen Viewer */}
       {selectedItem && (
         <div className="fixed inset-0 bg-slate-950/98 backdrop-blur-3xl z-[3000] flex items-center justify-center p-4" onClick={() => setSelectedItem(null)}>
            <div className="bg-white rounded-[5rem] w-full max-w-6xl h-[85vh] overflow-hidden flex flex-col animate-reveal">

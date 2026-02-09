@@ -26,16 +26,15 @@ const CustomerPortal: React.FC<PortalProps> = ({ type, user }) => {
   const [search, setSearch] = useState("");
   const [selectedAd, setSelectedAd] = useState<Advertisement | null>(null);
 
-  // Initialize multi-company stats
-  // Fix: Changed 'SQ Cables' to 'SQ careport' to align with Company type
   const [multiStats, setMultiStats] = useState<Record<string, CompanyStats>>({
     'Transtec': { balance: 0, totalBill: 0, totalPaid: 0, lastPurchase: '—', lastPayment: '—' },
     'SQ Light': { balance: 0, totalBill: 0, totalPaid: 0, lastPurchase: '—', lastPayment: '—' },
-    'SQ careport': { balance: 0, totalBill: 0, totalPaid: 0, lastPurchase: '—', lastPayment: '—' }
+    // Fix: Changed 'SQ Cable' to 'SQ Cables' to match Company type
+    'SQ Cables': { balance: 0, totalBill: 0, totalPaid: 0, lastPurchase: '—', lastPayment: '—' }
   });
 
-  // Fix: Changed 'SQ Cables' to 'SQ careport' to align with Company type
-  const companies: Company[] = ['Transtec', 'SQ Light', 'SQ careport'];
+  // Fix: Changed 'SQ Cable' to 'SQ Cables' to match Company type
+  const companies: Company[] = ['Transtec', 'SQ Light', 'SQ Cables'];
 
   useEffect(() => {
     fetchAllData();
@@ -95,11 +94,11 @@ const CustomerPortal: React.FC<PortalProps> = ({ type, user }) => {
       setShopInfo(custRes.data);
       
       const allTxs = txRes.data || [];
-      // Fix: Changed 'SQ Cables' to 'SQ careport' to align with Company type
       const stats: Record<string, CompanyStats> = {
         'Transtec': { balance: 0, totalBill: 0, totalPaid: 0, lastPurchase: '—', lastPayment: '—' },
         'SQ Light': { balance: 0, totalBill: 0, totalPaid: 0, lastPurchase: '—', lastPayment: '—' },
-        'SQ careport': { balance: 0, totalBill: 0, totalPaid: 0, lastPurchase: '—', lastPayment: '—' }
+        // Fix: Changed 'SQ Cable' to 'SQ Cables' to match Company type
+        'SQ Cables': { balance: 0, totalBill: 0, totalPaid: 0, lastPurchase: '—', lastPayment: '—' }
       };
 
       allTxs.forEach(tx => {
@@ -128,19 +127,20 @@ const CustomerPortal: React.FC<PortalProps> = ({ type, user }) => {
   const brandStyles: Record<string, string> = {
     'Transtec': 'bg-amber-500',
     'SQ Light': 'bg-cyan-500',
-    'SQ careport': 'bg-rose-600'
+    // Fix: Changed 'SQ Cable' to 'SQ Cables' to match Company type
+    'SQ Cables': 'bg-rose-600'
   };
 
   const brandGradients: Record<string, string> = {
     'Transtec': 'from-amber-400 to-amber-600',
     'SQ Light': 'from-cyan-400 to-blue-500',
-    'SQ careport': 'from-rose-500 to-red-600'
+    // Fix: Changed 'SQ Cable' to 'SQ Cables' to match Company type
+    'SQ Cables': 'from-rose-500 to-red-600'
   };
 
   if (type === 'DASHBOARD') {
     return (
       <div className="space-y-8 pb-32 animate-reveal">
-        {/* Master Profile Info */}
         <div className="bg-white p-8 md:p-12 rounded-[3.5rem] border border-slate-100 shadow-sm flex flex-col lg:flex-row justify-between items-center gap-8">
            <div className="flex items-center gap-6">
               <div className="w-24 h-24 bg-blue-600 rounded-[2.5rem] flex items-center justify-center text-4xl font-black text-white italic shadow-2xl">
@@ -161,7 +161,6 @@ const CustomerPortal: React.FC<PortalProps> = ({ type, user }) => {
            </div>
         </div>
 
-        {/* Company Cards Grid */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
            {companies.map(co => (
              <div key={co} className="bg-white rounded-[3.5rem] border border-slate-100 shadow-sm overflow-hidden group hover:shadow-xl transition-all">
@@ -189,7 +188,6 @@ const CustomerPortal: React.FC<PortalProps> = ({ type, user }) => {
            ))}
         </div>
 
-        {/* Catalog Feed */}
         <div className="pt-10">
            <div className="flex justify-between items-end px-6 mb-8">
               <h3 className="text-3xl font-black uppercase italic tracking-tighter text-slate-900">ভিজ্যুয়াল ক্যাটালগ ও পোস্টার</h3>
@@ -217,7 +215,6 @@ const CustomerPortal: React.FC<PortalProps> = ({ type, user }) => {
            </div>
         </div>
 
-        {/* Modal Viewer */}
         {selectedAd && (
           <div className="fixed inset-0 bg-slate-950/98 backdrop-blur-3xl z-[3000] flex items-center justify-center p-4" onClick={() => setSelectedAd(null)}>
              <div className="w-full max-w-5xl bg-white rounded-[5rem] overflow-hidden flex flex-col lg:flex-row shadow-2xl text-black">

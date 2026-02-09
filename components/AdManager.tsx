@@ -117,7 +117,6 @@ const AdManager: React.FC = () => {
       }
 
       if (res.error) {
-        // Detailed Alert if Supabase rejects
         alert(`পাবলিশ করা সম্ভব হয়নি!\n\nকারণ: ${res.error.message}\nটিপস: SQL Editor-এ টেবিল তৈরি করা হয়েছে তো?`);
         console.error("Supabase Error:", res.error);
         return;
@@ -137,7 +136,6 @@ const AdManager: React.FC = () => {
 
   return (
     <div className="space-y-10 pb-32 animate-reveal">
-      {/* Dynamic Header */}
       <div className="bg-[#0f172a] p-10 md:p-14 rounded-[4rem] shadow-2xl border border-white/5 flex flex-col md:flex-row justify-between items-center gap-8">
         <div>
           <div className="flex items-center gap-3">
@@ -156,7 +154,6 @@ const AdManager: React.FC = () => {
         </button>
       </div>
 
-      {/* Grid View */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
         {loading ? (
           <div className="col-span-full py-40 text-center animate-pulse text-slate-300 font-black uppercase italic">সার্ভার সিঙ্ক হচ্ছে...</div>
@@ -188,7 +185,6 @@ const AdManager: React.FC = () => {
         ))}
       </div>
 
-      {/* Modern Publish Modal */}
       {showModal && (
         <div className="fixed inset-0 bg-[#020617]/95 backdrop-blur-3xl z-[3000] flex items-center justify-center p-4">
           <div className="bg-white rounded-[5rem] w-full max-w-2xl shadow-2xl animate-reveal max-h-[95vh] overflow-y-auto custom-scroll text-black">
@@ -230,11 +226,10 @@ const AdManager: React.FC = () => {
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
                        <label className="text-[10px] font-black text-slate-400 uppercase ml-6 italic">কোম্পানি</label>
-                       {/* Fix: Changed 'SQ Cables' to 'SQ careport' */}
                        <select className="w-full p-6 bg-slate-50 border-none rounded-[2rem] font-black text-[11px] uppercase outline-none shadow-inner" value={formData.company} onChange={e => setFormData({...formData, company: e.target.value as Company})}>
                           <option value="Transtec">TRANSTEC</option>
                           <option value="SQ Light">SQ LIGHT</option>
-                          <option value="SQ careport">SQ CAREPORT</option>
+                          <option value="SQ Cable">SQ CABLE</option>
                        </select>
                     </div>
                     <div className="space-y-2">

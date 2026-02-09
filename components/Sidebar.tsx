@@ -73,7 +73,7 @@ const Sidebar: React.FC<SidebarProps> = ({
           {!isCustomer && (
             <div className="space-y-3">
               {canSwitch ? (
-                (['Transtec', 'SQ Light', 'SQ careport'] as Company[]).map(co => (
+                (['Transtec', 'SQ Light', 'SQ Cables'] as Company[]).map(co => (
                   <button 
                     key={co} 
                     onClick={() => { onCompanyChange(co); if(window.innerWidth < 768) onClose(); }}

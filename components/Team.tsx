@@ -91,13 +91,14 @@ const Team: React.FC = () => {
                   <select className="p-5 bg-slate-50 border-none rounded-2xl outline-none font-black text-[11px] uppercase" value={formData.role} onChange={e => setFormData({...formData, role: e.target.value as UserRole})}>
                      <option value="STAFF">STAFF</option><option value="DELIVERY">DELIVERY</option><option value="ADMIN">ADMIN</option>
                   </select>
-                  {/* Fix: Changed SQ Cables to SQ careport */}
                   <select className="p-5 bg-slate-50 border-none rounded-2xl outline-none font-black text-[11px] uppercase" value={formData.company} onChange={e => setFormData({...formData, company: e.target.value as Company})}>
-                     <option value="Transtec">Transtec</option><option value="SQ Light">SQ Light</option><option value="SQ careport">SQ careport</option>
+                     <option value="Transtec">Transtec</option><option value="SQ Light">SQ Light</option>
+                     {/* Fix: Changed 'SQ Cable' to 'SQ Cables' */}
+                     <option value="SQ Cables">SQ Cables</option>
                   </select>
                </div>
                <div className="flex gap-4 pt-10">
-                  <button type="submit" className="flex-1 bg-slate-900 text-white py-6 rounded-[2.5rem] font-black uppercase text-xs tracking-widest shadow-2xl active:scale-95 transition-all">মেম্বার তৈরি করুন</button>
+                  <button type="submit" className="flex-1 bg-slate-900 text-white py-6 rounded-[2.5rem] font-black uppercase text-xs tracking-widest shadow-xl active:scale-95 transition-all">মেম্বার তৈরি করুন</button>
                   <button type="button" onClick={() => setShowModal(false)} className="px-10 text-slate-400 font-black hover:text-red-500 transition-colors">বাতিল</button>
                </div>
             </form>

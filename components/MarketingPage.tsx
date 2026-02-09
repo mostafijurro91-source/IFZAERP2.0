@@ -33,7 +33,8 @@ const MarketingPage: React.FC<MarketingPageProps> = ({ onEnterERP }) => {
   const brandStyles: Record<string, string> = {
     'Transtec': 'from-amber-400 to-orange-600',
     'SQ Light': 'from-cyan-400 to-blue-600',
-    'SQ careport': 'from-rose-500 to-red-700'
+    // Fix: Changed 'SQ Cable' to 'SQ Cables'
+    'SQ Cables': 'from-rose-500 to-red-700'
   };
 
   const handleCardClick = (ad: Advertisement) => {
@@ -46,7 +47,6 @@ const MarketingPage: React.FC<MarketingPageProps> = ({ onEnterERP }) => {
 
   return (
     <div className="min-h-screen bg-[#020408] text-white font-sans selection:bg-blue-500/30 overflow-x-hidden custom-scroll">
-      {/* Premium Navigation */}
       <nav className="fixed top-0 inset-x-0 h-24 bg-black/20 backdrop-blur-2xl z-[1000] border-b border-white/5 flex justify-between items-center px-6 md:px-20">
         <div className="flex items-center gap-4 group cursor-pointer">
           <div className="w-12 h-12 bg-blue-600 rounded-2xl flex items-center justify-center font-black italic shadow-[0_0_30px_rgba(37,99,235,0.4)] group-hover:scale-110 transition-transform">if</div>
@@ -60,7 +60,6 @@ const MarketingPage: React.FC<MarketingPageProps> = ({ onEnterERP }) => {
         </button>
       </nav>
 
-      {/* Cinematic Hero */}
       <section className="relative pt-60 pb-20 px-6 overflow-hidden">
          <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full h-full bg-[radial-gradient(circle_at_center,rgba(37,99,235,0.08)_0%,transparent_70%)] pointer-events-none"></div>
          <div className="relative z-10 max-w-7xl mx-auto text-center">
@@ -69,13 +68,12 @@ const MarketingPage: React.FC<MarketingPageProps> = ({ onEnterERP }) => {
                <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 via-indigo-400 to-emerald-400">Digital Showroom</span>
             </h1>
             <p className="text-slate-400 text-sm md:text-xl max-w-3xl mx-auto font-medium leading-relaxed mb-16 opacity-80 animate-reveal">
-               আমাদের অফিসিয়াল ক্যাটালগ এবং ম্যানুফ্যাকচারিং রিসোর্সগুলো এখন এক জায়গায়। Transtec, SQ Light এবং SQ careport-এর লেটেস্ট প্রোডাক্টের জন্য নিচের কার্ডগুলো চেক করুন।
+               আমাদের অফিসিয়াল ক্যাটালগ এবং ম্যানুফ্যাকচারিং রিসোর্সগুলো এখন এক জায়গায়। Transtec, SQ Light এবং SQ Cables-এর লেটেস্ট প্রোডাক্টের জন্য নিচের কার্ডগুলো চেক করুন।
             </p>
 
-            {/* Brand Filters */}
             <div className="flex justify-center gap-3 md:gap-4 flex-wrap animate-reveal">
-               {/* Fix: Changed SQ Cables to SQ careport */}
-               {['ALL', 'Transtec', 'SQ Light', 'SQ careport'].map(b => (
+               {/* Fix: Changed 'SQ Cable' to 'SQ Cables' */}
+               {['ALL', 'Transtec', 'SQ Light', 'SQ Cables'].map(b => (
                   <button key={b} onClick={() => setActiveBrand(b)} className={`px-10 py-5 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all border ${activeBrand === b ? 'bg-white text-black border-white shadow-2xl' : 'bg-white/5 text-slate-500 border-white/5 hover:border-white/20'}`}>
                      {b}
                   </button>
@@ -84,7 +82,6 @@ const MarketingPage: React.FC<MarketingPageProps> = ({ onEnterERP }) => {
          </div>
       </section>
 
-      {/* Brand Official Direct Links */}
       {activeBrand === 'Transtec' || activeBrand === 'ALL' ? (
         <section className="px-6 md:px-20 mb-20 max-w-[1600px] mx-auto animate-reveal">
            <div className="bg-gradient-to-br from-amber-500/20 to-orange-600/20 p-10 md:p-20 rounded-[4rem] border border-orange-500/30 flex flex-col md:flex-row justify-between items-center gap-10">
@@ -97,7 +94,6 @@ const MarketingPage: React.FC<MarketingPageProps> = ({ onEnterERP }) => {
         </section>
       ) : null}
 
-      {/* Main Visual Grid */}
       <section className="px-6 md:px-20 pb-60 max-w-[1600px] mx-auto">
          {loading ? (
             <div className="py-40 text-center animate-pulse font-black uppercase tracking-widest text-slate-600">Syncing Showcase...</div>

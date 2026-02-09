@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Company, UserRole, formatCurrency } from '../types';
 import { supabase, mapToDbCompany } from '../lib/supabase';
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, PieChart, Pie } from 'recharts';
 
 interface DashboardProps {
   company: Company;
@@ -84,7 +85,7 @@ const Dashboard: React.FC<DashboardProps> = ({ company, role }) => {
       const sValue = prodRes.data?.reduce((acc, p) => acc + (Number(p.tp) * Number(p.stock)), 0) || 0;
 
       setStats({ todaySales: t_sales, todayCollection: t_coll, totalDue: total_due, stockValue: sValue, monthSales: m_sales });
-      setMonthlyData(Object.values(monthlyMap).reverse());
+      setMonthlyData(Object.values(monthlyMap));
       setRecentActivity(recent.slice(0, 6));
     } catch (err) {
       console.error("Dashboard error:", err);
@@ -97,7 +98,7 @@ const Dashboard: React.FC<DashboardProps> = ({ company, role }) => {
     switch (company) {
       case 'Transtec': return { color: 'text-amber-500', bg: 'bg-amber-500', gradient: 'from-amber-400 to-orange-600', icon: '⚡' };
       case 'SQ Light': return { color: 'text-cyan-500', bg: 'bg-cyan-500', gradient: 'from-cyan-400 to-blue-600', icon: '💡' };
-      case 'SQ careport': return { color: 'text-rose-600', bg: 'bg-rose-600', gradient: 'from-rose-500 to-red-700', icon: '🔌' };
+      case 'SQ Cables': return { color: 'text-rose-600', bg: 'bg-rose-600', gradient: 'from-rose-500 to-red-700', icon: '🔌' };
       default: return { color: 'text-blue-500', bg: 'bg-blue-500', gradient: 'from-blue-400 to-indigo-600', icon: '📊' };
     }
   }, [company]);
@@ -155,42 +156,20 @@ const Dashboard: React.FC<DashboardProps> = ({ company, role }) => {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         
-        <div className="lg:col-span-2 bg-white rounded-[3.5rem] shadow-sm border border-slate-100 overflow-hidden animate-reveal" style={{ animationDelay: '0.6s' }}>
-          <div className="p-8 border-b bg-slate-50 flex justify-between items-center">
-            <h3 className="text-sm font-black uppercase italic tracking-widest text-slate-800">বাৎসরিক হিসাব বিবরণী</h3>
-            <div className="flex gap-4">
-              <span className="flex items-center gap-1.5 text-[8px] font-black text-slate-400 uppercase">
-                <div className="w-2 h-2 bg-blue-500 rounded-full"></div> বিক্রি
-              </span>
-              <span className="flex items-center gap-1.5 text-[8px] font-black text-slate-400 uppercase">
-                <div className="w-2 h-2 bg-emerald-500 rounded-full"></div> আদায়
-              </span>
-            </div>
-          </div>
-          <div className="overflow-x-auto max-h-[500px] custom-scroll">
-            <table className="w-full text-left">
-              <thead>
-                <tr className="bg-slate-50/50 text-[9px] font-black uppercase tracking-widest text-slate-400 border-b">
-                  <th className="px-10 py-5">মাস</th>
-                  <th className="px-10 py-5 text-right">বিক্রি (Sales)</th>
-                  <th className="px-10 py-5 text-right">আদায় (Collection)</th>
-                  <th className="px-10 py-5 text-right">বাকি/ব্যালেন্স</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-50">
-                {monthlyData.map((row, idx) => (
-                  <tr key={idx} className="hover:bg-blue-50/30 transition-all group">
-                    <td className="px-10 py-6 font-black text-slate-700 uppercase italic">{row.month}</td>
-                    <td className="px-10 py-6 text-right font-black italic text-slate-900 text-lg group-hover:text-blue-600 transition-colors">{formatCurrency(row.sales)}</td>
-                    <td className="px-10 py-6 text-right font-black italic text-emerald-600 text-lg">{formatCurrency(row.collection)}</td>
-                    <td className={`px-10 py-6 text-right font-black italic ${row.sales - row.collection > 0 ? 'text-rose-500' : 'text-blue-500'}`}>
-                      {formatCurrency(row.sales - row.collection)}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+        <div className="lg:col-span-2 bg-white rounded-[3.5rem] shadow-sm border border-slate-100 p-8 flex flex-col h-[500px]">
+          <h3 className="text-sm font-black uppercase italic tracking-widest text-slate-800 mb-8 px-4">বাৎসরিক পারফরম্যান্স গ্রাফ</h3>
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={monthlyData}>
+              <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{fontSize: 10, fontWeight: 800}} />
+              <YAxis hide />
+              <Tooltip cursor={{fill: '#f8fafc'}} contentStyle={{borderRadius: '20px', border: 'none', boxShadow: '0 20px 50px rgba(0,0,0,0.1)', fontWeight: 800}} />
+              <Bar dataKey="sales" radius={[10, 10, 0, 0]} barSize={20}>
+                 {monthlyData.map((entry, index) => (
+                   <Cell key={`cell-${index}`} fill={index === monthlyData.length - 1 ? '#2563eb' : '#e2e8f0'} />
+                 ))}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
         </div>
 
         <div className="bg-white rounded-[3.5rem] shadow-sm border border-slate-100 p-8 flex flex-col animate-reveal" style={{ animationDelay: '0.8s' }}>

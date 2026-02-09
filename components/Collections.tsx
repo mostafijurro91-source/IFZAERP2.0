@@ -1,7 +1,6 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { Company, User, formatCurrency } from '../types';
-// Fixed error: Removed unused 'db' from import
 import { supabase, mapToDbCompany } from '../lib/supabase';
 import { sendSMS } from '../lib/sms';
 
@@ -18,8 +17,7 @@ const Collections: React.FC<CollectionsProps> = ({ company, user }) => {
     total: 0,
     transtec: 0,
     sqLight: 0,
-    // Fix: Renamed sqCables to sqCareport
-    sqCareport: 0,
+    sqCables: 0,
     pendingTotal: 0
   });
   
@@ -63,23 +61,20 @@ const Collections: React.FC<CollectionsProps> = ({ company, user }) => {
         const amt = Number(tx.amount) || 0;
         const txCo = mapToDbCompany(tx.company);
         
-        // Fix: Changed 'SQ Cables' to 'SQ careport'
-        if (!dues[cid]) dues[cid] = { 'Transtec': 0, 'SQ Light': 0, 'SQ careport': 0 };
+        if (!dues[cid]) dues[cid] = { 'Transtec': 0, 'SQ Light': 0, 'SQ Cables': 0 };
         if (dues[cid][txCo] !== undefined) {
            dues[cid][txCo] += (tx.payment_type === 'COLLECTION' ? -amt : amt);
         }
       });
 
-      // Fix: Changed t_sqcables to t_sqcareport
-      let t_total = 0, t_transtec = 0, t_sqlight = 0, t_sqcareport = 0;
+      let t_total = 0, t_transtec = 0, t_sqlight = 0, t_sqcables = 0;
       todayTxRes.data?.forEach(tx => {
         const amt = Number(tx.amount) || 0;
         const txCo = mapToDbCompany(tx.company);
         t_total += amt;
         if (txCo === 'Transtec') t_transtec += amt;
         if (txCo === 'SQ Light') t_sqlight += amt;
-        // Fix: Changed check to 'SQ careport'
-        if (txCo === 'SQ careport') t_sqcareport += amt;
+        if (txCo === 'SQ Cables') t_sqcables += amt;
       });
 
       const p_total = pendRes.data?.reduce((acc, r) => acc + (Number(r.amount) || 0), 0) || 0;
@@ -88,8 +83,7 @@ const Collections: React.FC<CollectionsProps> = ({ company, user }) => {
         total: t_total, 
         transtec: t_transtec, 
         sqLight: t_sqlight, 
-        // Fix: Changed property to sqCareport
-        sqCareport: t_sqcareport,
+        sqCables: t_sqcables,
         pendingTotal: p_total
       });
 
@@ -134,7 +128,6 @@ const Collections: React.FC<CollectionsProps> = ({ company, user }) => {
   return (
     <div className="space-y-8 pb-24 font-sans text-slate-900 animate-reveal">
       
-      {/* Today's Total Collection Summary */}
       <div className="bg-slate-950 p-10 md:p-14 rounded-[4rem] shadow-2xl border border-white/5 no-print relative overflow-hidden group">
          <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-500/10 blur-[100px] rounded-full"></div>
          
@@ -151,8 +144,7 @@ const Collections: React.FC<CollectionsProps> = ({ company, user }) => {
                {[
                  { label: 'Transtec', val: todayStats.transtec, color: 'text-amber-500', bg: 'bg-amber-500/10' },
                  { label: 'SQ Light', val: todayStats.sqLight, color: 'text-cyan-400', bg: 'bg-cyan-500/10' },
-                 // Fix: Changed label to 'SQ careport' and value reference to sqCareport
-                 { label: 'SQ careport', val: todayStats.sqCareport, color: 'text-rose-500', bg: 'bg-rose-500/10' }
+                 { label: 'SQ Cables', val: todayStats.sqCables, color: 'text-rose-500', bg: 'bg-rose-500/10' }
                ].map(co => (
                  <div key={co.label} className={`${co.bg} p-6 rounded-[2.5rem] border border-white/5 min-w-[130px] text-center`}>
                     <p className="text-[8px] font-black text-slate-500 uppercase mb-2">{co.label}</p>
@@ -215,8 +207,7 @@ const Collections: React.FC<CollectionsProps> = ({ company, user }) => {
                <label className="text-[12px] font-black text-slate-400 uppercase ml-4 italic">২. কোম্পানি বাছাই</label>
                {canSwitchCompany ? (
                  <div className="grid grid-cols-3 gap-4">
-                    {/* Fix: Changed 'SQ Cables' to 'SQ careport' */}
-                    {(['Transtec', 'SQ Light', 'SQ careport'] as Company[]).map(co => (
+                    {(['Transtec', 'SQ Light', 'SQ Cables'] as Company[]).map(co => (
                       <button key={co} onClick={() => setTargetCompany(co)} className={`py-6 rounded-[2rem] text-[10px] font-black uppercase transition-all ${targetCompany === co ? 'bg-blue-600 text-white shadow-xl scale-[1.05]' : 'bg-slate-50 text-slate-400 border border-slate-100'}`}>{co}</button>
                     ))}
                  </div>
@@ -229,7 +220,7 @@ const Collections: React.FC<CollectionsProps> = ({ company, user }) => {
             </div>
 
             <div className="space-y-4">
-               <label className="text-[12px] font-black text-slate-400 uppercase ml-4 italic">৩. কালেকশন অ্যামাউন্ট (৳)</label>
+               <label className="text-[12px] font-black text-slate-400 uppercase ml-4 italic text-center block mb-2">৩. কালেকশন অ্যামাউন্ট (৳)</label>
                <input type="number" className="w-full p-10 bg-slate-50 border-2 border-slate-100 rounded-[3.5rem] text-5xl font-black italic text-slate-800 text-center outline-none shadow-inner" value={amount || ""} onChange={e => setAmount(e.target.value === "" ? "" : Number(e.target.value))} placeholder="0.00" />
             </div>
 

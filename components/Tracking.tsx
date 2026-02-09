@@ -19,11 +19,8 @@ const Tracking: React.FC = () => {
   const markersRef = useRef<Record<string, any>>({});
 
   useEffect(() => {
-    // 1. Initial Fetch
     fetchLiveLogistics();
 
-    // 2. REAL-TIME SUBSCRIPTION (The "Magic" part)
-    // Listen for any location updates in the 'users' table
     const staffChannel = supabase.channel('staff-location-sync')
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'users' }, (payload) => {
         setStaff(prev => prev.map(s => s.id === payload.new.id ? { ...s, ...payload.new } : s));
@@ -33,10 +30,9 @@ const Tracking: React.FC = () => {
         else if (status === 'TIMED_OUT') setConnStatus('RECONNECTING');
       });
 
-    // Listen for delivery task status updates
     const taskChannel = supabase.channel('task-sync')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'delivery_tasks' }, () => {
-        fetchLiveLogistics(); // Refresh tasks list on change
+        fetchLiveLogistics();
       })
       .subscribe();
 
@@ -55,7 +51,6 @@ const Tracking: React.FC = () => {
         attributionControl: false 
       }).setView([23.8103, 90.4125], 11);
       
-      // Modern Dark Map Style
       L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png').addTo(mapInstanceRef.current);
       L.control.zoom({ position: 'bottomright' }).addTo(mapInstanceRef.current);
       
@@ -88,17 +83,15 @@ const Tracking: React.FC = () => {
   const updateMapUI = () => {
     if (!staffLayerRef.current || !shopLayerRef.current || typeof L === 'undefined') return;
     
-    // Clear old layers
     staffLayerRef.current.clearLayers();
     shopLayerRef.current.clearLayers();
 
-    // Render Staff (Live Riders)
     staff.forEach(s => {
       if (activeFilter !== 'ALL' && s.company !== activeFilter) return;
       if (s.last_lat && s.last_lng) {
         const lastSeen = s.last_seen ? new Date(s.last_seen).getTime() : 0;
         const diffMinutes = (Date.now() - lastSeen) / 60000;
-        const isLive = diffMinutes < 2; // Active in last 2 mins
+        const isLive = diffMinutes < 2;
 
         const color = s.company === 'Transtec' ? '#fbbf24' : s.company === 'SQ Light' ? '#06b6d4' : '#f43f5e';
         
@@ -130,7 +123,6 @@ const Tracking: React.FC = () => {
       }
     });
 
-    // Render Target Shops
     tasks.forEach(task => {
       const shop = task.customers;
       if (shop?.lat && shop?.lng) {
@@ -151,7 +143,6 @@ const Tracking: React.FC = () => {
     <div className="relative w-full h-[75vh] md:h-[85vh] rounded-[4rem] overflow-hidden border-[8px] border-white shadow-2xl bg-slate-950 animate-reveal">
       <div ref={mapContainerRef} className="w-full h-full z-0"></div>
 
-      {/* Floating Control Hub */}
       <div className="absolute top-8 left-8 z-[1000] w-full max-w-sm pointer-events-none">
          <div className="bg-slate-900/80 backdrop-blur-3xl p-8 rounded-[3.5rem] border border-white/10 shadow-2xl space-y-6 pointer-events-auto">
             <div className="flex items-center justify-between">
@@ -168,8 +159,8 @@ const Tracking: React.FC = () => {
             </div>
 
             <div className="flex gap-2 p-1.5 bg-black/40 rounded-2xl border border-white/5">
-               {/* Fix: Changed 'SQ Cables' to 'SQ careport' */}
-               {(['ALL', 'Transtec', 'SQ Light', 'SQ careport'] as string[]).map(co => (
+               {/* Fix: Changed 'SQ Cable' to 'SQ Cables' */}
+               {(['ALL', 'Transtec', 'SQ Light', 'SQ Cables'] as string[]).map(co => (
                  <button 
                   key={co}
                   onClick={() => setActiveFilter(co)}
