@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Company, UserRole, formatCurrency } from '../types';
 import { supabase, mapToDbCompany } from '../lib/supabase';
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, PieChart, Pie } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 
 interface DashboardProps {
   company: Company;
@@ -86,7 +86,7 @@ const Dashboard: React.FC<DashboardProps> = ({ company, role }) => {
 
       setStats({ todaySales: t_sales, todayCollection: t_coll, totalDue: total_due, stockValue: sValue, monthSales: m_sales });
       setMonthlyData(Object.values(monthlyMap));
-      setRecentActivity(recent.slice(0, 6));
+      setRecentActivity(recent.slice(0, 8));
     } catch (err) {
       console.error("Dashboard error:", err);
     } finally {
@@ -103,6 +103,10 @@ const Dashboard: React.FC<DashboardProps> = ({ company, role }) => {
     }
   }, [company]);
 
+  const formatBnCurrency = (amount: number) => {
+    return amount.toLocaleString('bn-BD', { minimumFractionDigits: 0, maximumFractionDigits: 2 }) + '৳';
+  };
+
   if (loading) return (
     <div className="py-40 text-center">
       <div className="w-16 h-16 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-8"></div>
@@ -113,6 +117,7 @@ const Dashboard: React.FC<DashboardProps> = ({ company, role }) => {
   return (
     <div className="space-y-8 pb-32 animate-reveal font-sans text-slate-900">
       
+      {/* Brand Header */}
       <div className={`relative p-10 md:p-14 rounded-[3.5rem] bg-gradient-to-br ${brandTheme.gradient} text-white shadow-2xl overflow-hidden group`}>
         <div className="absolute right-[-10px] top-[-10px] text-[150px] opacity-10 font-black italic select-none animate-float">
           {brandTheme.icon}
@@ -134,6 +139,7 @@ const Dashboard: React.FC<DashboardProps> = ({ company, role }) => {
         </div>
       </div>
 
+      {/* Stats Grid */}
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-5">
         {[
           { label: 'আজকের বিক্রি', val: stats.todaySales, color: 'text-blue-600', icon: '📝' },
@@ -156,28 +162,40 @@ const Dashboard: React.FC<DashboardProps> = ({ company, role }) => {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         
-        <div className="lg:col-span-2 bg-white rounded-[3.5rem] shadow-sm border border-slate-100 p-8 flex flex-col h-[500px]">
-          <h3 className="text-sm font-black uppercase italic tracking-widest text-slate-800 mb-8 px-4">বাৎসরিক পারফরম্যান্স গ্রাফ</h3>
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={monthlyData}>
-              <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{fontSize: 10, fontWeight: 800}} />
-              <YAxis hide />
-              <Tooltip cursor={{fill: '#f8fafc'}} contentStyle={{borderRadius: '20px', border: 'none', boxShadow: '0 20px 50px rgba(0,0,0,0.1)', fontWeight: 800}} />
-              <Bar dataKey="sales" radius={[10, 10, 0, 0]} barSize={20}>
-                 {monthlyData.map((entry, index) => (
-                   <Cell key={`cell-${index}`} fill={index === monthlyData.length - 1 ? '#2563eb' : '#e2e8f0'} />
-                 ))}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
+        {/* Yearly Performance Table - Styled as requested */}
+        <div className="lg:col-span-2 bg-white rounded-[3.5rem] shadow-sm border border-slate-100 overflow-hidden flex flex-col animate-reveal" style={{ animationDelay: '0.4s' }}>
+          <div className="p-8 border-b border-slate-50 bg-slate-50/30">
+            <h3 className="text-sm font-black uppercase italic tracking-widest text-slate-800">বাৎসরিক পারফরম্যান্স রিপোর্ট</h3>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="bg-white border-b border-slate-100">
+                  <th className="p-6 text-[10px] font-black text-slate-400 uppercase tracking-widest pl-10">মাস</th>
+                  <th className="p-6 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">বিক্রি (SALES)</th>
+                  <th className="p-6 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right pr-10">কালেকশন (COLLECTION)</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-50">
+                {monthlyData.map((data, idx) => (
+                  <tr key={idx} className="hover:bg-blue-50/30 transition-colors group">
+                    <td className="p-6 pl-10 text-[14px] font-black text-slate-700 italic">{data.month}</td>
+                    <td className="p-6 text-center text-[15px] font-black text-slate-800 italic">{formatBnCurrency(data.sales)}</td>
+                    <td className="p-6 pr-10 text-right text-[15px] font-black text-emerald-600 italic">{formatBnCurrency(data.collection)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
 
-        <div className="bg-white rounded-[3.5rem] shadow-sm border border-slate-100 p-8 flex flex-col animate-reveal" style={{ animationDelay: '0.8s' }}>
+        {/* Recent Activity Sidebar */}
+        <div className="bg-white rounded-[3.5rem] shadow-sm border border-slate-100 p-8 flex flex-col animate-reveal h-fit" style={{ animationDelay: '0.8s' }}>
           <div className="flex items-center justify-between mb-8">
             <h3 className="text-sm font-black uppercase italic tracking-widest text-slate-800">সাম্প্রতিক আপডেট</h3>
             <span className="w-2 h-2 bg-emerald-500 rounded-full animate-ping"></span>
           </div>
-          <div className="space-y-5 flex-1 overflow-y-auto custom-scroll pr-2">
+          <div className="space-y-5 flex-1 overflow-y-auto custom-scroll pr-2 max-h-[600px]">
             {recentActivity.map((act, i) => (
               <div key={i} className="flex gap-5 items-start group p-4 hover:bg-slate-50 rounded-[2rem] transition-all duration-300 border border-transparent hover:border-slate-100">
                 <div className={`mt-1 w-10 h-10 rounded-xl flex items-center justify-center text-sm font-black shadow-sm shrink-0 transition-transform group-hover:scale-110 ${act.type === 'C' ? 'bg-emerald-50 text-emerald-600' : 'bg-blue-50 text-blue-600'}`}>
