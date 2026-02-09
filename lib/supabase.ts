@@ -7,7 +7,9 @@ const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 export const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
 export const mapToDbCompany = (company: string): string => {
-  if (company === 'SQ Light' || company === 'SQ careport') return company;
+  if (company === 'SQ Light' || company === 'SQ Cables') return company;
+  // If the input is old 'SQ Cable', return 'SQ Cables'
+  if (company === 'SQ Cable') return 'SQ Cables';
   return 'Transtec';
 };
 
