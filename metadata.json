@@ -1,6 +1,7 @@
+
 {
-  "name": "IFZA ERP | Official Portal",
-  "description": "Enterprise Resource Planning for Transtec, SQ Light, and SQ Cables. Powered by ifzaerp.com",
+  "name": "IFZA ERP | Enterprise Terminal",
+  "description": "Enterprise Resource Planning for Transtec, SQ Light, and SQ Cable. Powered by ifzaerp.com",
   "requestFramePermissions": [
     "geolocation",
     "microphone",

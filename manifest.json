@@ -2,13 +2,13 @@
 {
   "name": "IFZA Electronics ERP",
   "short_name": "IFZA ERP",
-  "description": "Enterprise ERP for Transtec, SQ Light, and SQ Cables",
-  "start_url": "/",
+  "description": "Enterprise ERP for Transtec, SQ Light, and SQ careport",
+  "start_url": "./index.html",
   "display": "standalone",
   "background_color": "#0a0f1d",
   "theme_color": "#2563eb",
   "orientation": "portrait",
-  "scope": "/",
+  "scope": "./",
   "icons": [
     {
       "src": "https://r.jina.ai/i/0f7939be338446b5a32b904586927500",
@@ -27,7 +27,7 @@
   "shortcuts": [
     {
       "name": "Sales Terminal",
-      "url": "/?tab=sales",
+      "url": "./index.html?tab=sales",
       "icons": [{ "src": "https://r.jina.ai/i/0f7939be338446b5a32b904586927500", "sizes": "192x192" }]
     }
   ]
