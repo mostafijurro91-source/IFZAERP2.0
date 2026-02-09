@@ -1,1 +1,13 @@
-{"build": {"command": "npm run build", "publish": "dist"}}
+{
+  "name": "IFZA ERP | Official Portal",
+  "description": "Enterprise Resource Planning for Transtec, SQ Light, and SQ Cables. Powered by ifzaerp.com",
+  "requestFramePermissions": [
+    "geolocation",
+    "microphone",
+    "camera"
+  ],
+  "build": {
+    "publish": "dist",
+    "command": "npm run build"
+  }
+}

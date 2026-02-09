@@ -1,0 +1,29 @@
+SUPABASE CORS Configuration for ifzaerp.com
+============================================
+
+Follow these steps to configure CORS in Supabase:
+
+1. Go to: https://supabase.com
+2. Login with your account
+3. Select your project: "ifza-erp" (or your project name)
+4. Go to: Settings → API (in left sidebar)
+5. Find "CORS" section
+6. Add these origins:
+   - https://ifzaerp.com
+   - https://www.ifzaerp.com
+   - http://ifzaerp.com (development)
+   - http://localhost:5173 (local development)
+
+7. Click "Save"
+
+Your Supabase Details:
+- URL: https://vtlsluworsdcluuruneo.supabase.co
+- Project: vtlsluworsdcluuruneo
+- Anon Key: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZ0bHNsdXdvcnNkY2x1dXJ1bmVvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjgyODg0MTIsImV4cCI6MjA4Mzg2NDQxMn0._GSQ5DSFaUkTVIMzdqWgGzMwBfoFyaTOxhSQdjFgHjM
+
+⚠️ Important Security Note:
+Your Supabase credentials are embedded in the frontend (this is normal for client-side apps).
+The Anon Key is public - it's designed to be exposed. Real security comes from:
+- Row Level Security (RLS) policies in Supabase
+- User authentication
+- Database permission rules

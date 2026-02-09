@@ -1,1 +1,90 @@
-<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>IFZA Electronics ERP</title><script src="https://cdn.tailwindcss.com"></script></head><body><div id="root"></div><script type="module" src="/index.tsx"></script></body></html>
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>IFZA ERP | Enterprise Cloud System</title>
+    <meta name="description" content="Official Enterprise Resource Planning Portal for IFZA Electronics - Transtec, SQ Light, and SQ careport.">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <style>
+        html, body { height: 100%; margin: 0; padding: 0; background-color: #0a0f1d; color: white; }
+        body { font-family: 'Inter', sans-serif; overflow-x: hidden; }
+        #root { min-height: 100%; }
+        .boot-screen { height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; background: radial-gradient(circle at center, #1e293b 0%, #020617 100%); }
+        .loader-ring { width: 60px; height: 60px; border: 4px solid rgba(59, 130, 246, 0.1); border-left-color: #3b82f6; border-radius: 50%; animation: spin 1s linear infinite; box-shadow: 0 0 20px rgba(59, 130, 246, 0.2); }
+        
+        @keyframes spin { to { transform: rotate(360deg); } }
+        
+        @keyframes reveal {
+            from { opacity: 0; transform: translateY(20px) scale(0.98); }
+            to { opacity: 1; transform: translateY(0) scale(1); }
+        }
+        
+        @keyframes float {
+            0% { transform: translateY(0px); }
+            50% { transform: translateY(-10px); }
+            100% { transform: translateY(0px); }
+        }
+
+        .animate-reveal { animation: reveal 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+        .animate-float { animation: float 4s ease-in-out infinite; }
+        
+        /* Premium Scrollbar */
+        .custom-scroll::-webkit-scrollbar { width: 5px; }
+        .custom-scroll::-webkit-scrollbar-track { background: transparent; }
+        .custom-scroll::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 10px; }
+        .custom-scroll::-webkit-scrollbar-thumb:hover { background: rgba(59, 130, 246, 0.5); }
+
+        #error-display { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #450a0a; color: #fecaca; padding: 40px; z-index: 9999; font-family: monospace; overflow: auto; }
+        
+        @media print { 
+            .no-print { display: none !important; } 
+            .printable-content { display: block !important; width: 100% !important; height: auto !important; } 
+            body { background: white !important; color: black !important; }
+        }
+
+        /* Prevent text selection on buttons for better app feel */
+        button { user-select: none; -webkit-tap-highlight-color: transparent; }
+    </style>
+    <script type="importmap">
+{
+  "imports": {
+    "react": "https://esm.sh/react@19.0.0",
+    "react-dom": "https://esm.sh/react-dom@19.0.0",
+    "react-dom/client": "https://esm.sh/react-dom@19.0.0/client",
+    "react/jsx-runtime": "https://esm.sh/react@19.0.0/jsx-runtime",
+    "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@2.45.4",
+    "jspdf": "https://esm.sh/jspdf@2.5.1",
+    "html2canvas": "https://esm.sh/html2canvas@1.4.1",
+    "leaflet": "https://esm.sh/leaflet@1.9.4",
+    "recharts": "https://esm.sh/recharts@2.15.0?external=react,react-dom",
+    "react-dom/": "https://esm.sh/react-dom@^19.2.4/",
+    "react/": "https://esm.sh/react@^19.2.4/",
+    "vite": "https://esm.sh/vite@^7.3.1",
+    "@vitejs/plugin-react": "https://esm.sh/@vitejs/plugin-react@^5.1.3",
+    "xlsx": "https://esm.sh/xlsx@^0.18.5"
+  }
+}
+</script>
+<link rel="stylesheet" href="/index.css">
+</head>
+<body>
+    <div id="error-display">
+        <h1 style="font-size: 24px; font-weight: 900; margin-bottom: 15px;">SYSTEM ACCESS DENIED</h1>
+        <pre id="error-content" style="background: rgba(0,0,0,0.2); padding: 20px; border-radius: 12px; white-space: pre-wrap; font-size: 12px;"></pre>
+        <button onclick="location.reload()" style="margin-top: 20px; padding: 12px 24px; background: white; color: black; border-radius: 8px; font-weight: 900;">REBOOT TERMINAL</button>
+    </div>
+    <div id="root">
+        <div class="boot-screen">
+            <div class="loader-ring"></div>
+            <p style="margin-top: 25px; font-weight: 900; letter-spacing: 0.6em; font-size: 9px; color: #3b82f6; text-transform: uppercase; opacity: 0.8;">IFZA Cloud Syncing...</p>
+        </div>
+    </div>
+    <script type="module" src="./index.tsx"></script>
+<script type="module" src="/index.tsx"></script>
+</body>
+</html>

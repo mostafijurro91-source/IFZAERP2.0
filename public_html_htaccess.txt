@@ -1,0 +1,13 @@
+# Copy this content and create .htaccess file in public_html/
+
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteBase /
+  
+  # Skip rewrite for actual files and directories
+  RewriteCond %{REQUEST_FILENAME} !-f
+  RewriteCond %{REQUEST_FILENAME} !-d
+  
+  # Rewrite all requests to index.html for SPA routing
+  RewriteRule ^(.*)$ index.html [L]
+</IfModule>

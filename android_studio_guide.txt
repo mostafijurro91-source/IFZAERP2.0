@@ -1,1 +1,49 @@
-How to build IFZA ERP Android App...
+
+অ্যান্ড্রয়েড স্টুডিওতে অ্যাপ তৈরি করার ধাপসমূহ:
+
+ধাপ ১: নতুন প্রজেক্ট খুলুন (Empty Views Activity)।
+
+ধাপ ২: AndroidManifest.xml ফাইলে ইন্টারনেট পারমিশন দিন:
+<uses-permission android:name="android.permission.INTERNET" />
+
+ধাপ ৩: activity_main.xml ফাইলে WebView যোগ করুন:
+<WebView
+    android:id="@+id/webview"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent" />
+
+ধাপ ৪: MainActivity.kt ফাইলে নিচের কোডটি লিখুন:
+
+import android.os.Bundle
+import android.webkit.WebView
+import android.webkit.WebViewClient
+import androidx.appcompat.app.AppCompatActivity
+
+class MainActivity : AppCompatActivity() {
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        setContentView(R.layout.activity_main)
+
+        val myWebView: WebView = findViewById(R.id.webview)
+        myWebView.webViewClient = WebViewClient()
+        
+        // জাভাস্ক্রিপ্ট এবং লোকাল স্টোরেজ এনাবেল করা (খুবই জরুরি)
+        val webSettings = myWebView.settings
+        webSettings.javaScriptEnabled = true
+        webSettings.domStorageEnabled = true
+        webSettings.databaseEnabled = true
+
+        // আপনার ডেপ্লয় করা ওয়েবসাইটের URL দিন
+        myWebView.loadUrl("YOUR_WEBSITE_URL_HERE")
+    }
+
+    // ব্যাক বাটন চাপলে অ্যাপ বন্ধ না হয়ে আগের পেজে যাবে
+    override fun onBackPressed() {
+        val myWebView: WebView = findViewById(R.id.webview)
+        if (myWebView.canGoBack()) {
+            myWebView.goBack()
+        } else {
+            super.onBackPressed()
+        }
+    }
+}
