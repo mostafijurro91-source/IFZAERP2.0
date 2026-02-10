@@ -60,7 +60,7 @@ const App: React.FC = () => {
         setDbError(true);
       } finally {
         // Aesthetic delay for the boot screen
-        setTimeout(() => setInitialized(true), 1500);
+        setTimeout(() => setInitialized(true), 2500);
       }
     };
     boot();
@@ -94,14 +94,18 @@ const App: React.FC = () => {
 
   if (!initialized) {
     return (
-      <div className="h-screen flex flex-col items-center justify-center bg-[#05070a] text-white">
-        <div className="relative mb-10">
-            <div className="w-24 h-24 border-[6px] border-blue-500/10 border-t-blue-600 rounded-full animate-spin shadow-[0_0_40px_rgba(37,99,235,0.2)]"></div>
-            <div className="absolute inset-0 flex items-center justify-center font-black text-2xl italic text-blue-500">if</div>
+      <div className="h-screen flex flex-col items-center justify-center bg-[#05070a] text-white overflow-hidden">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(59,130,246,0.1),transparent_70%)] pointer-events-none"></div>
+        <div className="relative mb-12">
+            <div className="w-32 h-32 border-[8px] border-blue-500/10 border-t-blue-600 rounded-full animate-spin shadow-[0_0_60px_rgba(37,99,235,0.3)]"></div>
+            <div className="absolute inset-0 flex items-center justify-center font-black text-3xl italic text-blue-500">if</div>
         </div>
-        <div className="text-center space-y-2">
-          <p className="font-black uppercase text-[12px] tracking-[0.8em] text-blue-500 animate-pulse">IFZA CLOUD ERP</p>
-          <p className="text-[9px] font-bold text-slate-600 uppercase tracking-widest">Initialising Secure Terminal v4.6</p>
+        <div className="text-center space-y-4 relative z-10">
+          <p className="font-black uppercase text-[14px] tracking-[1em] text-blue-500 animate-pulse">IFZA ELECTRONICS</p>
+          <div className="flex flex-col gap-1">
+             <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">TRANSTEC • SQ LIGHT • SQ CABLES</p>
+             <p className="text-[8px] font-medium text-slate-700 uppercase tracking-[0.5em] mt-1 italic">Enterprise Cloud Terminal v4.6.8</p>
+          </div>
         </div>
       </div>
     );

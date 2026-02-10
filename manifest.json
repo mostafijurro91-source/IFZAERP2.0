@@ -2,7 +2,7 @@
 {
   "name": "IFZA Electronics ERP",
   "short_name": "IFZA ERP",
-  "description": "Enterprise ERP for Transtec, SQ Light, and SQ careport",
+  "description": "Enterprise ERP for Transtec, SQ Light, and SQ Cables Group",
   "start_url": "./index.html",
   "display": "standalone",
   "background_color": "#0a0f1d",
