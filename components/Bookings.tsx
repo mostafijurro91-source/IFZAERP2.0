@@ -105,7 +105,6 @@ const Bookings: React.FC<BookingsProps> = ({ company, role, user }) => {
     }
   };
 
-  // RESTORED: Payment Handling Logic
   const handleBookingPayment = async () => {
     if (!selectedBooking || !newPaymentAmount || Number(newPaymentAmount) <= 0) return;
     setIsSaving(true);
@@ -113,7 +112,6 @@ const Bookings: React.FC<BookingsProps> = ({ company, role, user }) => {
       const dbCompany = mapToDbCompany(company);
       const amt = Number(newPaymentAmount);
       
-      // Update booking table
       const { error: updateErr } = await supabase
         .from('bookings')
         .update({ advance_amount: (selectedBooking.advance_amount || 0) + amt })
@@ -121,7 +119,6 @@ const Bookings: React.FC<BookingsProps> = ({ company, role, user }) => {
 
       if (updateErr) throw updateErr;
 
-      // Create transaction record
       await supabase.from('transactions').insert([{
         customer_id: selectedBooking.customer_id,
         company: dbCompany,
@@ -135,7 +132,7 @@ const Bookings: React.FC<BookingsProps> = ({ company, role, user }) => {
       setShowPaymentModal(false);
       setNewPaymentAmount("");
       fetchData();
-      setShowDetailModal(false); // Close detail to refresh stats
+      setShowDetailModal(false);
     } catch (err: any) { alert(err.message); } finally { setIsSaving(false); }
   };
 
@@ -183,7 +180,22 @@ const Bookings: React.FC<BookingsProps> = ({ company, role, user }) => {
 
   const addToCart = (p: Product) => {
     if (bookingCart.find(i => i.product_id === p.id)) return;
-    setBookingCart([...bookingCart, { product_id: p.id, name: p.name, qty: 1, unitPrice: p.tp, total: p.tp, mrp: p.mrp }]);
+    setBookingCart([...bookingCart, { 
+      product_id: p.id, 
+      name: p.name, 
+      qty: 1, 
+      unitPrice: p.tp, 
+      total: p.tp, 
+      mrp: p.mrp 
+    }]);
+  };
+
+  const updateCartItem = (idx: number, updates: any) => {
+    const updated = [...bookingCart];
+    const item = { ...updated[idx], ...updates };
+    item.total = item.qty * item.unitPrice;
+    updated[idx] = item;
+    setBookingCart(updated);
   };
 
   const handleAddBooking = async () => {
@@ -228,7 +240,6 @@ const Bookings: React.FC<BookingsProps> = ({ company, role, user }) => {
   return (
     <div className="space-y-6 pb-24 font-sans text-black animate-reveal">
       
-      {/* Stats Summary Panel */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 no-print">
         <div className="bg-white p-8 rounded-[2.5rem] border shadow-sm">
            <p className="text-[10px] font-black text-slate-400 uppercase italic mb-2">মোট বুকিং ভ্যালু</p>
@@ -244,7 +255,6 @@ const Bookings: React.FC<BookingsProps> = ({ company, role, user }) => {
         </div>
       </div>
 
-      {/* Control Header */}
       <div className="bg-white p-8 rounded-[3rem] border shadow-sm flex flex-col md:flex-row justify-between items-center gap-6 no-print">
         <div className="flex items-center gap-6">
            <div className="w-14 h-14 bg-indigo-600 rounded-2xl flex items-center justify-center text-white text-2xl font-black italic shadow-xl">B</div>
@@ -264,7 +274,6 @@ const Bookings: React.FC<BookingsProps> = ({ company, role, user }) => {
         </div>
       </div>
 
-      {/* Cards List */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 no-print">
         {loading ? (
           <div className="col-span-full py-20 text-center animate-pulse font-black uppercase italic opacity-20">লোড হচ্ছে...</div>
@@ -289,7 +298,6 @@ const Bookings: React.FC<BookingsProps> = ({ company, role, user }) => {
         ))}
       </div>
 
-      {/* 🧾 BOOKING DETAILS MODAL (Primary Workspace) */}
       {showDetailModal && selectedBooking && (
         <div className="fixed inset-0 bg-slate-950/90 backdrop-blur-xl z-[1000] flex items-center justify-center p-4 no-print">
            <div className="bg-white rounded-[3.5rem] w-full max-w-2xl shadow-2xl flex flex-col max-h-[90vh] overflow-hidden animate-reveal">
@@ -319,7 +327,7 @@ const Bookings: React.FC<BookingsProps> = ({ company, role, user }) => {
                           return (
                             <div key={idx} className="p-6">
                                <div className="flex justify-between items-center mb-3">
-                                  <div><p className="text-[12px] font-black uppercase italic">{it.name}</p><p className="text-[9px] font-bold text-slate-400 uppercase mt-1">অর্ডার: {it.qty} | <span className="text-blue-600 font-black">পাঠানো হয়েছে: {it.delivered_qty || 0}</span></p></div>
+                                  <div><p className="text-[12px] font-black uppercase italic">{it.name}</p><p className="text-[9px] font-bold text-slate-400 uppercase mt-1">অর্ডার: {it.qty} | <span className="text-blue-600 font-black">পাঠানো হয়েছে: {it.delivered_qty || 0}</span> | রেট: ৳{it.unitPrice}</p></div>
                                   <span className={`text-[11px] font-black italic ${p === 100 ? 'text-emerald-600' : 'text-blue-600'}`}>{p}% গেছে</span>
                                </div>
                                <div className="h-1.5 bg-slate-200 rounded-full overflow-hidden">
@@ -331,7 +339,6 @@ const Bookings: React.FC<BookingsProps> = ({ company, role, user }) => {
                     </div>
                  </div>
 
-                 {/* ACTION BUTTONS (RESTORED PAYMENT) */}
                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-6">
                     <button onClick={() => { setNewPaymentAmount(""); setShowPaymentModal(true); }} className="bg-emerald-600 text-white py-6 rounded-3xl font-black uppercase text-[10px] tracking-widest shadow-xl active:scale-95 flex flex-col items-center justify-center gap-1">
                        <span>💰 টাকা জমা নিন</span>
@@ -351,7 +358,6 @@ const Bookings: React.FC<BookingsProps> = ({ company, role, user }) => {
         </div>
       )}
 
-      {/* 🛠️ PAYMENT MODAL (RESTORED) */}
       {showPaymentModal && selectedBooking && (
         <div className="fixed inset-0 bg-slate-950/90 backdrop-blur-xl z-[2000] flex items-center justify-center p-4 no-print">
           <div className="bg-white p-10 rounded-[4rem] w-full max-w-md shadow-2xl animate-reveal">
@@ -374,7 +380,6 @@ const Bookings: React.FC<BookingsProps> = ({ company, role, user }) => {
         </div>
       )}
 
-      {/* 📦 DELIVERY ACTION MODAL */}
       {showDeliverModal && selectedBooking && (
         <div className="fixed inset-0 bg-slate-950/90 backdrop-blur-xl z-[2000] flex items-center justify-center p-4 no-print">
           <div className="bg-white rounded-[3.5rem] w-full max-w-xl shadow-2xl overflow-hidden flex flex-col animate-reveal">
@@ -404,7 +409,6 @@ const Bookings: React.FC<BookingsProps> = ({ company, role, user }) => {
         </div>
       )}
 
-      {/* 🎉 DELIVERY CHALLAN PREVIEW MODAL */}
       {showDeliverySuccess && selectedBooking && (
         <div className="fixed inset-0 bg-[#020617]/98 backdrop-blur-3xl z-[3000] flex flex-col items-center p-4 overflow-y-auto no-print">
            <div className="w-full max-w-[148mm] flex justify-between gap-6 mb-8 sticky top-0 z-[3001] bg-slate-900/90 p-6 rounded-3xl border border-white/10 shadow-2xl items-center">
@@ -469,10 +473,9 @@ const Bookings: React.FC<BookingsProps> = ({ company, role, user }) => {
         </div>
       )}
 
-      {/* 🏗️ ADD BOOKING MODAL */}
       {showAddModal && (
         <div className="fixed inset-0 bg-slate-950/95 backdrop-blur-xl z-[2000] flex items-center justify-center p-4 text-slate-900 no-print">
-           <div className="bg-white rounded-[4rem] w-full max-w-4xl h-[85vh] flex flex-col shadow-2xl overflow-hidden animate-reveal">
+           <div className="bg-white rounded-[4rem] w-full max-w-5xl h-[85vh] flex flex-col shadow-2xl overflow-hidden animate-reveal">
               <div className="p-8 bg-slate-900 text-white flex justify-between items-center">
                  <h3 className="text-2xl font-black uppercase italic tracking-tighter">নতুন বুকিং এন্ট্রি</h3>
                  <button onClick={() => setShowAddModal(false)} className="text-4xl text-slate-500 font-black">×</button>
@@ -518,24 +521,44 @@ const Bookings: React.FC<BookingsProps> = ({ company, role, user }) => {
                     </div>
                  </div>
                  <div className="w-full lg:w-1/2 p-10 bg-slate-50 flex flex-col">
-                    <h4 className="text-[10px] font-black text-slate-400 uppercase italic mb-6">অর্ডার কার্ট</h4>
+                    <h4 className="text-[10px] font-black text-slate-400 uppercase italic mb-6">অর্ডার কার্ট ({bookingCart.length})</h4>
                     <div className="flex-1 overflow-y-auto custom-scroll space-y-3">
                        {bookingCart.map((it, idx) => (
-                         <div key={idx} className="bg-white p-5 rounded-[2rem] border flex justify-between items-center shadow-sm">
-                            <div className="flex-1 min-w-0 pr-4">
-                               <p className="text-[10px] font-black uppercase italic truncate">{it.name}</p><p className="text-[8px] font-bold text-slate-300 uppercase italic mt-1">Rate: ৳{it.unitPrice}</p>
-                            </div>
-                            <div className="flex items-center gap-2">
-                               <input type="number" className="w-16 p-2 bg-slate-50 rounded-xl text-center font-black outline-none border" value={it.qty} onChange={e => setBookingCart(bookingCart.map((item, i) => i === idx ? {...item, qty: Number(e.target.value), total: Number(e.target.value) * item.unitPrice} : item))} />
+                         <div key={idx} className="bg-white p-6 rounded-[2.5rem] border shadow-sm space-y-4">
+                            <div className="flex justify-between items-start">
+                               <div className="flex-1 min-w-0 pr-4">
+                                  <p className="text-[11px] font-black uppercase italic truncate leading-none">{it.name}</p>
+                                  <p className="text-[8px] font-bold text-slate-400 uppercase mt-1">MRP: ৳{it.mrp}</p>
+                               </div>
                                <button onClick={() => setBookingCart(bookingCart.filter((_, i) => i !== idx))} className="text-red-400 text-xl font-black px-2">×</button>
+                            </div>
+                            
+                            <div className="grid grid-cols-2 gap-3">
+                               <div className="space-y-1">
+                                  <label className="text-[8px] font-black text-blue-400 uppercase ml-2 italic">বুকিং রেট (৳)</label>
+                                  <input type="number" className="w-full p-3 bg-blue-50 border border-blue-100 rounded-xl text-center font-black text-blue-600 outline-none" value={it.unitPrice} onChange={e => updateCartItem(idx, { unitPrice: Number(e.target.value) })} />
+                               </div>
+                               <div className="space-y-1">
+                                  <label className="text-[8px] font-black text-slate-400 uppercase ml-2 italic">পরিমাণ (Qty)</label>
+                                  <input type="number" className="w-full p-3 bg-slate-50 border border-slate-100 rounded-xl text-center font-black outline-none" value={it.qty} onChange={e => updateCartItem(idx, { qty: Number(e.target.value) })} />
+                               </div>
+                            </div>
+                            <div className="text-right">
+                               <p className="text-[9px] font-black text-slate-800 italic uppercase">আইটেম টোটাল: <span className="text-sm">৳{it.total.toLocaleString()}</span></p>
                             </div>
                          </div>
                        ))}
                     </div>
                     <div className="pt-8 border-t space-y-4">
-                       <div className="bg-white p-6 rounded-[2.5rem] border shadow-inner">
-                          <label className="text-[9px] font-black text-slate-400 uppercase italic block mb-2">অগ্রিম পেমেন্ট (৳)</label>
-                          <input type="number" className="w-full bg-transparent text-3xl font-black italic outline-none text-emerald-600" placeholder="0.00" value={form.advance} onChange={e => setForm({...form, advance: Number(e.target.value)})} />
+                       <div className="bg-white p-6 rounded-[2.5rem] border shadow-inner flex justify-between items-center">
+                          <div className="flex-1">
+                             <label className="text-[9px] font-black text-slate-400 uppercase italic block mb-1">অগ্রিম পেমেন্ট (৳)</label>
+                             <input type="number" className="w-full bg-transparent text-2xl font-black italic outline-none text-emerald-600" placeholder="0.00" value={form.advance} onChange={e => setForm({...form, advance: Number(e.target.value)})} />
+                          </div>
+                          <div className="text-right border-l pl-8">
+                             <p className="text-[9px] font-black text-slate-400 uppercase italic mb-1">গ্র্যান্ড টোটাল</p>
+                             <p className="text-2xl font-black italic text-slate-900">৳{bookingCart.reduce((s, i) => s + i.total, 0).toLocaleString()}</p>
+                          </div>
                        </div>
                        <button disabled={isSaving || bookingCart.length === 0 || !selectedCust} onClick={handleAddBooking} className="w-full bg-indigo-600 text-white py-6 rounded-[2.5rem] font-black uppercase text-xs tracking-[0.2em] shadow-2xl active:scale-95 transition-all">বুকিং সম্পন্ন করুন ➔</button>
                     </div>
@@ -545,7 +568,6 @@ const Bookings: React.FC<BookingsProps> = ({ company, role, user }) => {
         </div>
       )}
 
-      {/* 📄 HIDDEN FULL BOOKING INVOICE FOR PDF DOWNLOAD */}
       <div className="fixed -left-[2000px] top-0 no-print">
         <div ref={invoiceRef} className="bg-white w-[148mm] p-10 flex flex-col text-black font-sans shadow-none border-2 border-black">
            <div className="text-center border-b-4 border-black pb-4 mb-8">
@@ -571,8 +593,8 @@ const Bookings: React.FC<BookingsProps> = ({ company, role, user }) => {
                   <thead>
                      <tr className="bg-black text-white text-[10px] font-black uppercase italic">
                         <th className="p-3 border border-black text-left">Description</th>
-                        <th className="p-3 border border-black text-center w-24">Ordered</th>
-                        <th className="p-3 border border-black text-center w-24">Delivered</th>
+                        <th className="p-3 border border-black text-center w-24">Rate</th>
+                        <th className="p-3 border border-black text-center w-24">Qty</th>
                         <th className="p-3 border border-black text-right w-32">Total Price</th>
                      </tr>
                   </thead>
@@ -580,8 +602,8 @@ const Bookings: React.FC<BookingsProps> = ({ company, role, user }) => {
                      {selectedBooking.items.map((it, idx) => (
                         <tr key={idx} className="font-bold text-[12px] border-b border-black italic">
                            <td className="p-3 border border-black uppercase">{it.name}</td>
+                           <td className="p-3 border border-black text-center">৳{it.unitPrice}</td>
                            <td className="p-3 border border-black text-center">{it.qty}</td>
-                           <td className="p-3 border border-black text-center text-blue-600">{it.delivered_qty || 0}</td>
                            <td className="p-3 border border-black text-right">৳{(it.unitPrice * it.qty).toLocaleString()}</td>
                         </tr>
                      ))}

@@ -273,13 +273,13 @@ const Sales: React.FC<{ company: Company; role: UserRole; user: User }> = ({ com
             )}
           </div>
           
-          <div className="flex-1 overflow-y-auto grid grid-cols-2 md:grid-cols-4 gap-4 pr-2 custom-scroll">
+          <div className="flex-1 overflow-y-auto grid grid-cols-3 md:grid-cols-5 gap-3 pr-2 custom-scroll">
             {productList.filter(p => p.name.toLowerCase().includes(search.toLowerCase())).map(p => (
-              <div key={p.id} onClick={() => p.stock > 0 && addToCart(p)} className={`bg-white p-6 rounded-[2.5rem] border border-slate-100 shadow-sm hover:shadow-xl transition-all cursor-pointer flex flex-col justify-between group ${p.stock <= 0 ? 'opacity-30 pointer-events-none' : 'active:scale-95'}`}>
-                 <h4 className="text-[11px] font-black uppercase italic text-slate-400 mb-2 truncate">{p.name}</h4>
-                 <div className="flex justify-between items-end">
-                    <p className="font-black text-2xl text-slate-600 italic tracking-tighter leading-none">৳{p.tp}</p>
-                    <span className={`text-[8px] font-black px-2 py-0.5 rounded-lg ${p.stock < 10 ? 'bg-red-50 text-red-600' : 'bg-blue-50 text-blue-600'}`}>STOCK: {p.stock}</span>
+              <div key={p.id} onClick={() => p.stock > 0 && addToCart(p)} className={`bg-white p-3 rounded-2xl border border-slate-100 shadow-sm hover:shadow-lg transition-all cursor-pointer flex flex-col justify-between group ${p.stock <= 0 ? 'opacity-30 pointer-events-none' : 'active:scale-95'}`}>
+                 <h4 className="text-[10px] font-bold uppercase italic text-slate-500 mb-1.5 leading-tight truncate">{p.name}</h4>
+                 <div className="flex justify-between items-center">
+                    <p className="font-black text-lg text-slate-800 italic tracking-tighter leading-none">৳{p.tp}</p>
+                    <span className={`text-[7px] font-black px-1.5 py-0.5 rounded ${p.stock < 10 ? 'bg-red-50 text-red-500' : 'bg-blue-50 text-blue-500'}`}>S: {p.stock}</span>
                  </div>
               </div>
             ))}
