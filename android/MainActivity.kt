@@ -1,3 +1,4 @@
+
 package com.ifzaerp.app
 
 import android.Manifest
@@ -34,7 +35,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var webView: WebView
     private val PERMISSION_REQUEST_CODE = 1001
     private val NOTIFICATION_ID = 101
-    private val CHANNEL_ID = "ifza_tracking_channel"
+    private val CHANNEL_ID = "ifza_logistics_v1"
 
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -79,6 +80,7 @@ class MainActivity : AppCompatActivity() {
                 origin: String,
                 callback: GeolocationPermissions.Callback
             ) {
+                // Always allow location requests within the app context
                 callback.invoke(origin, true, true)
             }
 
@@ -119,25 +121,18 @@ class MainActivity : AppCompatActivity() {
                 if (webView.canGoBack()) {
                     webView.goBack()
                 } else {
-                    finish()
+                    // Move to background instead of finishing to keep JS running for auto-complete
+                    moveTaskToBack(true)
                 }
             }
         })
-    }
-
-    private fun hasNotificationPermission(): Boolean {
-        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
-        } else {
-            true
-        }
     }
 
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val serviceChannel = NotificationChannel(
                 CHANNEL_ID,
-                "IFZA Tracking Service",
+                "IFZA Logistics Background Tracking",
                 NotificationManager.IMPORTANCE_LOW
             )
             val manager = getSystemService(NotificationManager::class.java)
@@ -146,8 +141,6 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun startServiceNotification() {
-        if (!hasNotificationPermission()) return
-
         val notificationIntent = Intent(this, MainActivity::class.java)
         val pendingIntent = PendingIntent.getActivity(
             this, 0, notificationIntent,
@@ -155,11 +148,11 @@ class MainActivity : AppCompatActivity() {
         )
 
         val notification = NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle("ifza. tracking active")
-            .setContentText("লোকেশন ট্র্যাকিং সচল আছে। অ্যাপ বন্ধ করলেও এটি কাজ করবে।")
+            .setContentTitle("IFZA Logistics Terminal Active")
+            .setContentText("লোকেশন ট্র্যাকিং এবং অটো-ডেলিভারি সিস্টেম ব্যাকগ্রাউন্ডে সচল আছে।")
             .setSmallIcon(R.mipmap.ic_launcher)
             .setContentIntent(pendingIntent)
-            .setOngoing(true)
+            .setOngoing(true) // Makes it sticky
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .build()
 
@@ -182,9 +175,13 @@ class MainActivity : AppCompatActivity() {
     private fun requestRequiredPermissions() {
         val permissions = mutableListOf(
             Manifest.permission.ACCESS_FINE_LOCATION,
-            Manifest.permission.RECORD_AUDIO,
-            Manifest.permission.MODIFY_AUDIO_SETTINGS
+            Manifest.permission.ACCESS_COARSE_LOCATION
         )
+        
+        // Background location permission is required for Android 10+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            permissions.add(Manifest.permission.ACCESS_BACKGROUND_LOCATION)
+        }
         
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             permissions.add(Manifest.permission.POST_NOTIFICATIONS)
@@ -208,9 +205,7 @@ class MainActivity : AppCompatActivity() {
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         if (requestCode == PERMISSION_REQUEST_CODE) {
-            if (hasNotificationPermission()) {
-                startServiceNotification()
-            }
+            startServiceNotification()
             webView.reload()
         }
     }
