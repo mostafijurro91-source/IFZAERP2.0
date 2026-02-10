@@ -14,7 +14,7 @@ interface ReportsProps {
   user?: any;
 }
 
-type ReportType = 'MAIN' | 'CUSTOMER_DUES' | 'STOCK_REPORT' | 'DELIVERY_LOG_A4' | 'PURCHASE_HISTORY' | 'MARKET_ORDERS' | 'MASTER_LOG_ALL' | 'BOOKING_LOG';
+type ReportType = 'MAIN' | 'CUSTOMER_DUES' | 'STOCK_REPORT' | 'DELIVERY_LOG_A4' | 'PURCHASE_HISTORY' | 'MARKET_ORDERS' | 'MASTER_LOG_ALL' | 'BOOKING_LOG' | 'REPLACEMENT_SUMMARY';
 
 const Reports: React.FC<ReportsProps> = ({ company, userRole, userName, user }) => {
   const [activeReport, setActiveReport] = useState<ReportType>('MAIN');
@@ -57,6 +57,26 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName, user }) 
         const { data } = await supabase.from('products').select('*').eq('company', dbCompany).order('name');
         setReportData(data || []);
       } 
+      else if (type === 'REPLACEMENT_SUMMARY') {
+        const { data } = await supabase
+          .from('replacements')
+          .select('*')
+          .eq('company', dbCompany);
+        
+        // Grouping by product name to sum up quantities
+        const groupedMap: Record<string, any> = {};
+        data?.forEach(r => {
+          const key = r.product_name || 'Unknown Product';
+          if (!groupedMap[key]) {
+            groupedMap[key] = { name: key, qty: 0, pending: 0, received: 0, sent: 0 };
+          }
+          groupedMap[key].qty += Number(r.qty || 0);
+          if (r.status === 'PENDING') groupedMap[key].pending += Number(r.qty || 0);
+          if (r.status === 'RECEIVED') groupedMap[key].received += Number(r.qty || 0);
+          if (r.status === 'SENT_TO_COMPANY') groupedMap[key].sent += Number(r.qty || 0);
+        });
+        setReportData(Object.values(groupedMap).sort((a,b) => b.qty - a.qty));
+      }
       else if (type === 'MARKET_ORDERS') {
         const { data } = await supabase.from('market_orders').select('*, customers(name, address, phone)').eq('company', dbCompany).gte('created_at', startOfDay).lte('created_at', endOfDay).order('created_at', { ascending: false });
         setReportData(data || []);
@@ -174,6 +194,9 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName, user }) 
         stockValue += (Number(item.stock) || 0) * (Number(item.tp) || 0);
         totalQty += (Number(item.stock) || 0);
       }
+      else if (activeReport === 'REPLACEMENT_SUMMARY') {
+        totalQty += (Number(item.qty) || 0);
+      }
       else if (activeReport === 'DELIVERY_LOG_A4' || activeReport === 'MASTER_LOG_ALL') {
         const amt = Number(item.amount || 0);
         if (item.log_type === 'আদায়') collections += amt; 
@@ -195,6 +218,7 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName, user }) 
 
   const isLog = activeReport === 'DELIVERY_LOG_A4' || activeReport === 'MASTER_LOG_ALL';
   const isBooking = activeReport === 'BOOKING_LOG';
+  const isRepl = activeReport === 'REPLACEMENT_SUMMARY';
   const isCombined = activeReport === 'MASTER_LOG_ALL';
   const isDue = activeReport === 'CUSTOMER_DUES';
 
@@ -215,6 +239,7 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName, user }) 
         {[
           { id: 'DELIVERY_LOG_A4', title: 'DIVISION LOG', icon: '🚚', desc: 'ডেলিভারি ও আদায় শিট', color: 'bg-slate-900', anim: 'hover-truck' },
           { id: 'BOOKING_LOG', title: 'BOOKING LOG', icon: '📅', desc: 'বুকিং ডেলিভারি হিস্টোরি', color: 'bg-indigo-600', anim: 'hover-pulse' },
+          { id: 'REPLACEMENT_SUMMARY', title: 'REPLACEMENT LOG', icon: '🔄', desc: 'রিপ্লেসমেন্ট স্টকের রিপোর্ট', color: 'bg-rose-500', anim: 'hover-pulse' },
           { id: 'MARKET_ORDERS', title: 'MARKET ORDERS', icon: '🛍️', desc: 'অপেক্ষমাণ মার্কেট অর্ডার', color: 'bg-orange-600', anim: 'hover-sway' },
           { id: 'STOCK_REPORT', title: 'STOCK LIST', icon: '📦', desc: 'ইনভেন্টরি রিপোর্ট', color: 'bg-slate-800', anim: 'hover-pulse' },
           { id: 'CUSTOMER_DUES', title: 'DUE REPORT', icon: '💸', desc: 'মার্কেট বকেয়া হিসাব', color: 'bg-red-600', anim: 'hover-float' },
@@ -241,14 +266,14 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName, user }) 
       <div className="flex justify-between items-center mb-12 no-print flex-wrap gap-6">
         <button onClick={() => setActiveReport('MAIN')} className="bg-slate-900 text-white px-10 py-5 rounded-[2rem] font-black text-[11px] uppercase shadow-2xl active:scale-95 transition-all">← ফিরে যান</button>
         <div className="flex gap-4 flex-wrap items-center">
-          {!isBooking && (
+          {!isBooking && !isRepl && (
             <div className="flex flex-col">
               <label className="text-[8px] font-black uppercase text-slate-400 ml-3 mb-1">তারিখ বাছাই</label>
               <input type="date" className="p-4 border-2 border-slate-100 rounded-[2rem] text-[10px] font-black outline-none bg-slate-50" value={selectedDate} onChange={e => setSelectedDate(e.target.value)} />
             </div>
           )}
           <div className="flex flex-col">
-            <label className="text-[8px] font-black uppercase text-slate-400 ml-3 mb-1">সার্চ (দোকান/ঠিকানা)</label>
+            <label className="text-[8px] font-black uppercase text-slate-400 ml-3 mb-1">সার্চ ({isRepl ? 'প্রোডাক্ট' : 'দোকান'})</label>
             <input className="p-4 border-2 border-slate-100 rounded-[2rem] text-[10px] font-black outline-none bg-slate-50 min-w-[180px]" placeholder="Search..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
           </div>
           <div className="flex gap-2 self-end">
@@ -292,13 +317,20 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName, user }) 
                <thead>
                   <tr className="bg-slate-50 text-[9px] font-black uppercase italic border-b-2 border-black text-black">
                      <th className="p-2 border-r border-black text-center w-8">#</th>
-                     <th className="p-2 border-r border-black text-left">বিবরণ ও ঠিকানা</th>
+                     <th className="p-2 border-r border-black text-left">{isRepl ? 'পণ্যের নাম' : 'বিবরণ ও ঠিকানা'}</th>
                      {isBooking ? (
                        <>
                         <th className="p-2 border-r border-black text-center w-14">অর্ডার</th>
                         <th className="p-2 border-r border-black text-center w-14">গেছে</th>
                         <th className="p-2 border-r border-black text-center w-14">বাকি</th>
                         <th className="p-2 no-print-col text-center w-16">অ্যাকশন</th>
+                       </>
+                     ) : isRepl ? (
+                       <>
+                        <th className="p-2 border-r border-black text-center w-12">পেন্ডিং</th>
+                        <th className="p-2 border-r border-black text-center w-12">প্রাপ্ত</th>
+                        <th className="p-2 border-r border-black text-center w-12">প্রেরিত</th>
+                        <th className="p-2 border-r border-black text-center w-16">মোট</th>
                        </>
                      ) : (
                        <>
@@ -320,17 +352,28 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName, user }) 
                   ) : filteredData.length === 0 ? (
                     <tr><td colSpan={6} className="p-10 text-center">কোনো ডাটা পাওয়া যায়নি</td></tr>
                   ) : filteredData.map((item, idx) => {
-                     const amount = item.amount || item.balance || item.total_amount || (item.stock * item.tp) || 0;
+                     const amount = Number(item.amount || item.balance || item.total_amount || (item.stock * item.tp) || 0);
+                     // সঠিক ডাটা কল করা (মাস্টার লগ এবং ট্রানজ্যাকশনের জন্য)
+                     const shopName = item.customers?.name || item.customer_name || item.name || item.product_name;
+                     const shopAddress = item.customers?.address || item.address || '—';
+                     const displayCompany = item.company ? `[${item.company}]` : '';
+                     const isCollection = item.payment_type === 'COLLECTION' || item.log_type === 'আদায়';
+
                      return (
                         <tr key={idx} className="border-b border-black text-black">
                            <td className="p-2 border-r border-black text-center">{idx + 1}</td>
                            <td className="p-2 border-r border-black">
-                              <div className="flex justify-between items-start">
-                                 <p className="font-black uppercase text-black truncate max-w-[120px]">{item.customer_name || item.name || item.product_name}</p>
+                              <div className="flex flex-col">
+                                 <p className="font-black uppercase text-black">
+                                    {isCombined ? <span className="text-blue-700 mr-1">{displayCompany}</span> : ''}
+                                    {shopName}
+                                 </p>
+                                 {!isRepl && (
+                                   <p className="text-[7px] font-bold italic opacity-80 leading-none mt-0.5">
+                                     {isBooking ? `${item.name} | ` : ''} 📍 {shopAddress}
+                                   </p>
+                                 )}
                               </div>
-                              <p className="text-[7px] font-bold italic opacity-80 truncate max-w-[150px]">
-                                {isBooking ? `${item.name} | ` : ''} 📍 {item.address || '—'}
-                              </p>
                            </td>
                            
                            {isBooking ? (
@@ -342,10 +385,17 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName, user }) 
                                   <button onClick={() => { setSelectedSlipData(item); setShowSlipModal(true); }} className="bg-slate-900 text-white px-2 py-1 rounded text-[7px] font-black uppercase">স্লিপ 🖨️</button>
                                </td>
                              </>
+                           ) : isRepl ? (
+                             <>
+                               <td className="p-2 border-r border-black text-center text-slate-400">{item.pending}</td>
+                               <td className="p-2 border-r border-black text-center text-blue-600">{item.received}</td>
+                               <td className="p-2 border-r border-black text-center text-rose-500">{item.sent}</td>
+                               <td className="p-2 border-r border-black text-center font-black">{item.qty}</td>
+                             </>
                            ) : (
                              <>
-                               <td className={`p-2 border-r border-black text-right font-black italic ${amount < 0 ? 'text-red-600' : ''}`}>
-                                  ৳{Math.abs(amount).toLocaleString()}
+                               <td className={`p-2 border-r border-black text-right font-black italic ${isCollection ? 'text-emerald-600' : (amount < 0 ? 'text-red-600' : '')}`}>
+                                  {isCollection ? '-' : ''}৳{Math.abs(amount).toLocaleString()}
                                </td>
                                {!isLog && <td className="p-2 border-r border-black text-center">{isDue ? '—' : (item.stock || item.total_qty || 0)}</td>}
                                {isLog && (
@@ -372,10 +422,12 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName, user }) 
                      <span>TOTAL QTY:</span>
                      <span>{totals.totalQty}</span>
                   </div>
-                  <div className="flex justify-between text-[14px] font-black text-black">
-                     <span>G. TOTAL:</span>
-                     <span>৳{(totals.sales || totals.totalDue || totals.stockValue).toLocaleString()}</span>
-                  </div>
+                  {!isRepl && (
+                    <div className="flex justify-between text-[14px] font-black text-black">
+                      <span>G. TOTAL:</span>
+                      <span>৳{(totals.sales || totals.totalDue || totals.stockValue).toLocaleString()}</span>
+                    </div>
+                  )}
                </div>
             </div>
          </div>
