@@ -50,7 +50,7 @@ class MainActivity : AppCompatActivity() {
             javaScriptEnabled = true
             domStorageEnabled = true
             setGeolocationEnabled(true)
-            mediaPlaybackRequiresUserGesture = false // অটোমেটিক ভয়েস প্লেব্যাকের জন্য
+            mediaPlaybackRequiresUserGesture = false 
             
             loadWithOverviewMode = true
             useWideViewPort = true
@@ -74,7 +74,6 @@ class MainActivity : AppCompatActivity() {
                 callback.invoke(origin, true, true)
             }
 
-            // এই ফাংশনটি মাইক্রোফোন এবং ভয়েস রিকোয়েস্ট হ্যান্ডেল করে
             override fun onPermissionRequest(request: PermissionRequest?) {
                 request?.grant(request.resources)
             }
@@ -104,7 +103,8 @@ class MainActivity : AppCompatActivity() {
 
         requestRequiredPermissions()
 
-        webView.loadUrl("https://ifzaerp-2-0-git-main-ifzas-projects-aa99d642.vercel.app/")
+        // আপডেট করা ডোমেইন লিঙ্ক
+        webView.loadUrl("https://www.ifzaerp.com/")
 
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
