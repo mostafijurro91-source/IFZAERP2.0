@@ -14,7 +14,7 @@ interface ReportsProps {
   user?: any;
 }
 
-type ReportType = 'MAIN' | 'CUSTOMER_DUES' | 'STOCK_REPORT' | 'DELIVERY_LOG_A4' | 'PURCHASE_HISTORY' | 'MARKET_ORDERS';
+type ReportType = 'MAIN' | 'CUSTOMER_DUES' | 'STOCK_REPORT' | 'DELIVERY_LOG_A4' | 'PURCHASE_HISTORY' | 'MARKET_ORDERS' | 'MASTER_LOG_ALL' | 'BOOKING_LOG';
 
 const Reports: React.FC<ReportsProps> = ({ company, userRole, userName, user }) => {
   const [activeReport, setActiveReport] = useState<ReportType>('MAIN');
@@ -26,7 +26,12 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName, user }) 
   const [selectedRoute, setSelectedRoute] = useState("");
   const [routes, setRoutes] = useState<string[]>([]);
   
+  // States for individual row printing
+  const [showSlipModal, setShowSlipModal] = useState(false);
+  const [selectedSlipData, setSelectedSlipData] = useState<any>(null);
+
   const reportRef = useRef<HTMLDivElement>(null);
+  const slipRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => { fetchRoutes(); }, []);
   useEffect(() => { 
@@ -56,24 +61,50 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName, user }) 
         const { data } = await supabase.from('market_orders').select('*, customers(name, address, phone)').eq('company', dbCompany).gte('created_at', startOfDay).lte('created_at', endOfDay).order('created_at', { ascending: false });
         setReportData(data || []);
       }
-      else if (type === 'DELIVERY_LOG_A4') {
-        const { data: txs, error } = await supabase.from('transactions')
-          .select('*, customers(id, name, address)')
+      else if (type === 'BOOKING_LOG') {
+        const { data: bookings, error } = await supabase
+          .from('bookings')
+          .select('*, customers(name, address, phone)')
           .eq('company', dbCompany)
-          .gte('created_at', startOfDay)
-          .lte('created_at', endOfDay)
-          .order('created_at', { ascending: true });
+          .order('created_at', { ascending: false });
         
+        if (error) throw error;
+        
+        const flatBookings: any[] = [];
+        bookings?.forEach(b => {
+          b.items.forEach((item: any) => {
+            if (item.delivered_qty > 0) {
+              flatBookings.push({
+                ...item,
+                customer_name: b.customers?.name,
+                address: b.customers?.address,
+                phone: b.customers?.phone,
+                booking_id: b.id,
+                status: b.status,
+                booking_created_at: b.created_at
+              });
+            }
+          });
+        });
+        setReportData(flatBookings);
+      }
+      else if (type === 'DELIVERY_LOG_A4' || type === 'MASTER_LOG_ALL') {
+        let query = supabase.from('transactions')
+          .select('*, customers(id, name, address)')
+          .gte('created_at', startOfDay)
+          .lte('created_at', endOfDay);
+        
+        if (type === 'DELIVERY_LOG_A4') {
+          query = query.eq('company', dbCompany);
+        }
+
+        const { data: txs, error } = await query.order('created_at', { ascending: true });
         if (error) throw error;
 
         const list = (txs || []).map(t => {
           const items = t.items || [];
           const totalQty = items.reduce((acc: number, item: any) => acc + (Number(item.qty) || 0), 0);
-          return { 
-            ...t, 
-            total_qty: totalQty, 
-            log_type: t.payment_type === 'COLLECTION' ? 'আদায়' : 'মেমো' 
-          };
+          return { ...t, total_qty: totalQty, log_type: t.payment_type === 'COLLECTION' ? 'আদায়' : 'মেমো' };
         });
         setReportData(list);
       } 
@@ -100,47 +131,25 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName, user }) 
         setReportData(list);
       }
     } catch (err) { 
-      console.error("Report Fetch Error:", err);
+      console.error(err);
       alert("ডাটা লোড করতে সমস্যা হয়েছে।");
     } finally { setLoading(false); }
   };
 
-  const handleDownloadPDF = async () => {
-    if (!reportRef.current || isDownloading) return;
+  const handleDownloadPDF = async (ref: React.RefObject<HTMLDivElement>, filename: string) => {
+    if (!ref.current || isDownloading) return;
     setIsDownloading(true);
     try {
-      const element = reportRef.current;
-      const canvas = await html2canvas(element, { 
-        scale: 2.5, 
-        useCORS: true, 
-        backgroundColor: '#ffffff' 
-      });
+      const element = ref.current;
+      const canvas = await html2canvas(element, { scale: 2.5, useCORS: true, backgroundColor: '#ffffff' });
       const imgData = canvas.toDataURL('image/jpeg', 0.95);
       const pdf = new jsPDF('p', 'mm', 'a5');
       const pdfWidth = pdf.internal.pageSize.getWidth();
-      const pdfHeight = pdf.internal.pageSize.getHeight();
-      
-      const imgWidth = pdfWidth;
-      const imgHeight = (canvas.height * imgWidth) / canvas.width;
-      
-      let heightLeft = imgHeight;
-      let position = 0;
-
-      pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight);
-      heightLeft -= pdfHeight;
-
-      while (heightLeft >= 0) {
-        position = heightLeft - imgHeight;
-        pdf.addPage();
-        pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight);
-        heightLeft -= pdfHeight;
-      }
-
-      const fileName = `${company}_${activeReport}_${selectedDate}.pdf`.replace(/ /g, '_');
-      pdf.save(fileName);
+      const imgHeight = (canvas.height * pdfWidth) / canvas.width;
+      pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, imgHeight);
+      pdf.save(`${filename}_${new Date().getTime()}.pdf`);
     } catch (err) {
-      console.error("PDF Generation Error:", err);
-      alert("PDF ডাউনলোড করতে সমস্যা হয়েছে।");
+      alert("PDF ডাউনলোড ব্যর্থ হয়েছে।");
     } finally {
       setIsDownloading(false);
     }
@@ -149,7 +158,7 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName, user }) 
   const filteredData = useMemo(() => {
     return reportData.filter(item => {
       const q = searchQuery.toLowerCase().trim();
-      const name = item.customers?.name || item.name || "";
+      const name = item.customers?.name || item.customer_name || item.name || "";
       const addr = item.customers?.address || item.address || "";
       const matchesSearch = !q || name.toLowerCase().includes(q) || addr.toLowerCase().includes(q);
       const matchesRoute = selectedRoute ? addr.trim() === selectedRoute.trim() : true;
@@ -165,11 +174,15 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName, user }) 
         stockValue += (Number(item.stock) || 0) * (Number(item.tp) || 0);
         totalQty += (Number(item.stock) || 0);
       }
-      else if (activeReport === 'DELIVERY_LOG_A4') {
+      else if (activeReport === 'DELIVERY_LOG_A4' || activeReport === 'MASTER_LOG_ALL') {
         const amt = Number(item.amount || 0);
         if (item.log_type === 'আদায়') collections += amt; 
         else if (item.log_type === 'মেমো') sales += amt;
         totalQty += (Number(item.total_qty) || 0);
+      }
+      else if (activeReport === 'BOOKING_LOG') {
+        totalQty += (item.delivered_qty || 0);
+        sales += (item.delivered_qty || 0) * (item.unitPrice || 0);
       }
       else {
         const amt = Number(item.amount || item.total_amount || 0);
@@ -180,24 +193,38 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName, user }) 
     return { sales, collections, totalDue, stockValue, totalQty };
   }, [filteredData, activeReport]);
 
-  const isLog = activeReport === 'DELIVERY_LOG_A4';
+  const isLog = activeReport === 'DELIVERY_LOG_A4' || activeReport === 'MASTER_LOG_ALL';
+  const isBooking = activeReport === 'BOOKING_LOG';
+  const isCombined = activeReport === 'MASTER_LOG_ALL';
   const isDue = activeReport === 'CUSTOMER_DUES';
 
   if (activeReport === 'MAIN') {
     return (
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 pb-32">
+        <div 
+          onClick={() => setActiveReport('MASTER_LOG_ALL')} 
+          className="col-span-full bg-blue-600 p-10 rounded-[3.5rem] shadow-xl hover:shadow-2xl cursor-pointer border-2 border-white/10 flex flex-col items-center group transition-all duration-500 hover:-translate-y-2 animate-reveal relative overflow-hidden">
+          <div className="absolute top-[-20%] left-[-10%] w-60 h-60 bg-white/5 rounded-full blur-3xl animate-pulse"></div>
+          <div className="relative z-10 flex flex-col items-center">
+             <div className="w-20 h-20 bg-white rounded-full flex items-center justify-center text-4xl mb-6 shadow-2xl">🚛</div>
+             <h3 className="text-2xl font-black uppercase italic tracking-tighter text-white leading-none">MASTER LOG (3-IN-1)</h3>
+             <p className="text-[10px] font-bold text-white/60 mt-4 uppercase tracking-[0.4em] italic">তিন কোম্পানির রিপোর্ট এক সাথে দেখুন</p>
+          </div>
+        </div>
+
         {[
-          { id: 'DELIVERY_LOG_A4', title: 'DIVISION LOG', icon: '🚚', desc: 'ডেলিভারি ও আদায় শিট', color: 'bg-blue-600', anim: 'hover-truck' },
+          { id: 'DELIVERY_LOG_A4', title: 'DIVISION LOG', icon: '🚚', desc: 'ডেলিভারি ও আদায় শিট', color: 'bg-slate-900', anim: 'hover-truck' },
+          { id: 'BOOKING_LOG', title: 'BOOKING LOG', icon: '📅', desc: 'বুকিং ডেলিভারি হিস্টোরি', color: 'bg-indigo-600', anim: 'hover-pulse' },
           { id: 'MARKET_ORDERS', title: 'MARKET ORDERS', icon: '🛍️', desc: 'অপেক্ষমাণ মার্কেট অর্ডার', color: 'bg-orange-600', anim: 'hover-sway' },
-          { id: 'STOCK_REPORT', title: 'STOCK LIST', icon: '📦', desc: 'ইনভেন্টরি রিপোর্ট', color: 'bg-slate-900', anim: 'hover-pulse' },
+          { id: 'STOCK_REPORT', title: 'STOCK LIST', icon: '📦', desc: 'ইনভেন্টরি রিপোর্ট', color: 'bg-slate-800', anim: 'hover-pulse' },
           { id: 'CUSTOMER_DUES', title: 'DUE REPORT', icon: '💸', desc: 'মার্কেট বকেয়া হিসাব', color: 'bg-red-600', anim: 'hover-float' },
           { id: 'PURCHASE_HISTORY', title: 'PURCHASE LOG', icon: '📥', desc: 'কোম্পানি কেনাকাটা', color: 'bg-emerald-600', anim: 'hover-bounce' },
         ].map((item, idx) => (
           <div key={item.id} 
-               style={{ animationDelay: `${idx * 0.1}s` }}
+               style={{ animationDelay: `${(idx + 1) * 0.1}s` }}
                onClick={() => setActiveReport(item.id as ReportType)} 
                className={`bg-white p-10 rounded-[3.5rem] shadow-sm hover:shadow-2xl cursor-pointer border-2 border-slate-50 flex flex-col items-center group transition-all duration-500 hover:-translate-y-2 animate-reveal ${item.anim}`}>
-            <div className={`w-24 h-24 rounded-[2.5rem] ${item.color} flex items-center justify-center text-5xl mb-8 shadow-xl transition-all duration-500 group-hover:scale-110 group-hover:shadow-blue-500/20 text-white relative overflow-hidden`}>
+            <div className={`w-20 h-20 rounded-[2rem] ${item.color} flex items-center justify-center text-4xl mb-8 shadow-xl transition-all duration-500 group-hover:scale-110 group-hover:shadow-blue-500/20 text-white relative overflow-hidden`}>
               <div className="icon-inner relative z-10">{item.icon}</div>
               <div className="absolute inset-0 bg-white/10 opacity-0 group-hover:opacity-100 animate-shimmer"></div>
             </div>
@@ -210,33 +237,33 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName, user }) 
   }
 
   return (
-    <div className="bg-white p-6 md:p-12 rounded-[4rem] shadow-2xl min-h-[85vh] border relative animate-reveal">
+    <div className="bg-white p-6 md:p-12 rounded-[4rem] shadow-2xl min-h-[85vh] border relative animate-reveal text-black">
       <div className="flex justify-between items-center mb-12 no-print flex-wrap gap-6">
         <button onClick={() => setActiveReport('MAIN')} className="bg-slate-900 text-white px-10 py-5 rounded-[2rem] font-black text-[11px] uppercase shadow-2xl active:scale-95 transition-all">← ফিরে যান</button>
         <div className="flex gap-4 flex-wrap items-center">
+          {!isBooking && (
+            <div className="flex flex-col">
+              <label className="text-[8px] font-black uppercase text-slate-400 ml-3 mb-1">তারিখ বাছাই</label>
+              <input type="date" className="p-4 border-2 border-slate-100 rounded-[2rem] text-[10px] font-black outline-none bg-slate-50" value={selectedDate} onChange={e => setSelectedDate(e.target.value)} />
+            </div>
+          )}
           <div className="flex flex-col">
-            <label className="text-[8px] font-black uppercase text-slate-400 ml-3 mb-1">তারিখ বাছাই</label>
-            <input type="date" className="p-4 border-2 border-slate-100 rounded-[2rem] text-[10px] font-black outline-none bg-slate-50" value={selectedDate} onChange={e => setSelectedDate(e.target.value)} />
-          </div>
-          <div className="flex flex-col">
-            <label className="text-[8px] font-black uppercase text-slate-400 ml-3 mb-1">এরিয়া/রুট</label>
-            <select className="p-4 border-2 border-slate-100 rounded-[2rem] text-[10px] font-black outline-none bg-slate-50" value={selectedRoute} onChange={e => setSelectedRoute(e.target.value)}>
-              <option value="">সকল রুট</option>
-              {routes.map(r => <option key={r} value={r}>{r}</option>)}
-            </select>
+            <label className="text-[8px] font-black uppercase text-slate-400 ml-3 mb-1">সার্চ (দোকান/ঠিকানা)</label>
+            <input className="p-4 border-2 border-slate-100 rounded-[2rem] text-[10px] font-black outline-none bg-slate-50 min-w-[180px]" placeholder="Search..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
           </div>
           <div className="flex gap-2 self-end">
-            <button disabled={isDownloading || loading} onClick={handleDownloadPDF} className="bg-emerald-600 text-white px-8 py-5 rounded-[2rem] font-black text-[11px] uppercase shadow-2xl active:scale-95 transition-all">
-              {isDownloading ? "ডাউনলোড..." : "PDF (A5) ⬇"}
+            <button disabled={isDownloading || loading} onClick={() => handleDownloadPDF(reportRef, 'Full_Report')} className="bg-emerald-600 text-white px-8 py-5 rounded-[2rem] font-black text-[11px] uppercase shadow-2xl active:scale-95 transition-all">
+              {isDownloading ? "ডাউনলোড..." : "Full Report PDF ⬇"}
             </button>
-            <button onClick={() => window.print()} className="bg-blue-600 text-white px-8 py-5 rounded-[2rem] font-black text-[11px] uppercase shadow-2xl active:scale-95">প্রিন্ট (A5) ⎙</button>
+            <button onClick={() => window.print()} className="bg-blue-600 text-white px-8 py-5 rounded-[2rem] font-black text-[11px] uppercase shadow-2xl active:scale-95">প্রিন্ট শিট ⎙</button>
           </div>
         </div>
       </div>
 
+      {/* Main Report Container */}
       <div className="max-w-[148mm] mx-auto border-2 border-slate-100 p-2 overflow-hidden bg-slate-50 rounded-2xl shadow-inner no-print">
-         <p className="text-[8px] font-black text-center text-slate-400 mb-2 uppercase tracking-widest italic">A5 Page Preview (148mm x 210mm)</p>
-         <div ref={reportRef} className="print-area printable-content p-4 bg-white text-black min-h-fit flex flex-col">
+         <p className="text-[8px] font-black text-center text-slate-400 mb-2 uppercase tracking-widest italic">A5 Page Preview</p>
+         <div ref={reportRef} className="print-area printable-content p-8 bg-white text-black min-h-fit flex flex-col border-2 border-black">
             <style>{`
                @media print {
                   @page { size: A5; margin: 8mm; }
@@ -249,98 +276,174 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName, user }) 
                   }
                   .printable-content { position: static !important; width: 100% !important; padding: 0 !important; border: none !important; box-shadow: none !important; display: block !important; }
                   table { font-size: 8px !important; border: 1.2px solid #000 !important; border-collapse: collapse !important; width: 100% !important; }
-                  th, td { padding: 4px 2px !important; border: 1px solid #000 !important; }
-                  .footer-section { page-break-inside: avoid; margin-top: 10mm; }
+                  th, td { padding: 5px 3px !important; border: 1px solid #000 !important; }
+                  .no-print-col { display: none !important; }
                }
             `}</style>
-            <div className="text-center border-b-4 border-black pb-3 mb-4 relative">
-               <h1 className="text-2xl font-black uppercase italic mb-1 tracking-tighter text-black leading-none">IFZA ELECTRONICS</h1>
-               <p className="text-[9px] font-black uppercase tracking-[0.3em] mb-1 text-black">{company} DIVISION</p>
-               <div className="inline-block px-4 py-1 bg-black text-white text-[7px] font-black uppercase rounded-full italic">
-                  {isLog ? 'DIVISION LOG (A5)' : activeReport.replace(/_/g, ' ')}
+            <div className="text-center border-b-4 border-black pb-4 mb-4 relative">
+               <h1 className="text-4xl font-black uppercase italic mb-1 tracking-tighter text-black leading-none">IFZA ELECTRONICS</h1>
+               <p className="text-[12px] font-black uppercase tracking-[0.3em] mb-1 text-black">{isCombined ? 'ALL' : company} DIVISIONS</p>
+               <div className="inline-block px-6 py-1.5 bg-black text-white text-[9px] font-black uppercase rounded-full italic tracking-widest">
+                  {activeReport.replace(/_/g, ' ')}
                </div>
-               <p className="mt-2 text-[8px] font-black uppercase italic text-black">তারিখ: {new Date(selectedDate).toLocaleDateString('bn-BD')}</p>
             </div>
 
             <table className="w-full border-collapse border-2 border-black flex-1">
                <thead>
-                  <tr className="bg-slate-100 text-[7px] font-black uppercase italic border-b-2 border-black text-black">
-                     <th className="p-1.5 border-r border-black text-center w-6">#</th>
-                     <th className="p-1.5 border-r border-black text-left">বিবরণ ও ঠিকানা</th>
-                     <th className="p-1.5 border-r border-black text-right w-16">টাকা</th>
-                     {isLog && (
+                  <tr className="bg-slate-50 text-[9px] font-black uppercase italic border-b-2 border-black text-black">
+                     <th className="p-2 border-r border-black text-center w-8">#</th>
+                     <th className="p-2 border-r border-black text-left">বিবরণ ও ঠিকানা</th>
+                     {isBooking ? (
                        <>
-                        <th className="p-1.5 border-r border-black text-center w-20">ডেলিভারি নোট</th>
-                        <th className="p-1.5 border-r border-black text-center w-16">স্বাক্ষর</th>
+                        <th className="p-2 border-r border-black text-center w-14">অর্ডার</th>
+                        <th className="p-2 border-r border-black text-center w-14">গেছে</th>
+                        <th className="p-2 border-r border-black text-center w-14">বাকি</th>
+                        <th className="p-2 no-print-col text-center w-16">অ্যাকশন</th>
                        </>
-                     )}
-                     {!isLog && (
-                       <th className="p-1.5 border-r border-black text-center w-14">
-                         {isDue ? 'বকেয়া' : 'পরিমাণ'}
-                       </th>
+                     ) : (
+                       <>
+                        <th className="p-2 border-r border-black text-right w-20">টাকা</th>
+                        {!isLog && <th className="p-2 border-r border-black text-center w-16">{isDue ? 'বকেয়া' : 'পরিমাণ'}</th>}
+                        {isLog && (
+                          <>
+                            <th className="p-2 border-r border-black text-center w-24">নোট</th>
+                            <th className="p-2 border-r border-black text-center w-20">স্বাক্ষর</th>
+                          </>
+                        )}
+                       </>
                      )}
                   </tr>
                </thead>
-               <tbody className="divide-y divide-black/30 text-[8px] font-bold">
+               <tbody className="divide-y divide-black/30 text-[9px] font-bold">
                   {loading ? (
-                  <tr><td colSpan={isLog ? 5 : 4} className="p-10 text-center animate-pulse text-black uppercase font-black">লোডিং...</td></tr>
+                    <tr><td colSpan={6} className="p-10 text-center animate-pulse">লোডিং...</td></tr>
                   ) : filteredData.length === 0 ? (
-                  <tr><td colSpan={isLog ? 5 : 4} className="p-10 text-center text-black uppercase italic font-black">কোনো লেনদেন নেই</td></tr>
-                  ) : filteredData.map((item, idx) => (
-                  <tr key={idx} className="border-b border-black text-black">
-                     <td className="p-1.5 border-r border-black text-center">{idx + 1}</td>
-                     <td className="p-1.5 border-r border-black">
-                        <p className="font-black uppercase text-black truncate max-w-[150px]">{item.customers?.name || item.name || item.note}</p>
-                        <p className="text-[6px] font-bold italic text-black opacity-80 truncate max-w-[150px]">{item.customers?.address || item.address || item.date || '—'}</p>
-                     </td>
-                     <td className="p-1.5 border-r border-black text-right font-black italic">
-                        ৳{(item.amount || item.balance || item.total_amount || (item.stock * item.tp) || 0).toLocaleString()}
-                     </td>
-                     {isLog && (
-                       <>
-                        <td className="p-1.5 border-r border-black text-center h-12"></td>
-                        <td className="p-1.5 border-r border-black text-center h-12"></td>
-                       </>
-                     )}
-                     {!isLog && (
-                       <td className="p-1.5 border-r border-black text-center italic">
-                         {isDue ? '—' : `${item.stock || item.total_qty || 0}`}
-                       </td>
-                     )}
-                  </tr>
-                  ))}
+                    <tr><td colSpan={6} className="p-10 text-center">কোনো ডাটা পাওয়া যায়নি</td></tr>
+                  ) : filteredData.map((item, idx) => {
+                     const amount = item.amount || item.balance || item.total_amount || (item.stock * item.tp) || 0;
+                     return (
+                        <tr key={idx} className="border-b border-black text-black">
+                           <td className="p-2 border-r border-black text-center">{idx + 1}</td>
+                           <td className="p-2 border-r border-black">
+                              <div className="flex justify-between items-start">
+                                 <p className="font-black uppercase text-black truncate max-w-[120px]">{item.customer_name || item.name || item.product_name}</p>
+                              </div>
+                              <p className="text-[7px] font-bold italic opacity-80 truncate max-w-[150px]">
+                                {isBooking ? `${item.name} | ` : ''} 📍 {item.address || '—'}
+                              </p>
+                           </td>
+                           
+                           {isBooking ? (
+                             <>
+                               <td className="p-2 border-r border-black text-center">{item.qty}</td>
+                               <td className="p-2 border-r border-black text-center text-blue-600">{item.delivered_qty}</td>
+                               <td className="p-2 border-r border-black text-center text-red-600">{item.qty - item.delivered_qty}</td>
+                               <td className="p-1 text-center no-print-col">
+                                  <button onClick={() => { setSelectedSlipData(item); setShowSlipModal(true); }} className="bg-slate-900 text-white px-2 py-1 rounded text-[7px] font-black uppercase">স্লিপ 🖨️</button>
+                               </td>
+                             </>
+                           ) : (
+                             <>
+                               <td className={`p-2 border-r border-black text-right font-black italic ${amount < 0 ? 'text-red-600' : ''}`}>
+                                  ৳{Math.abs(amount).toLocaleString()}
+                               </td>
+                               {!isLog && <td className="p-2 border-r border-black text-center">{isDue ? '—' : (item.stock || item.total_qty || 0)}</td>}
+                               {isLog && (
+                               <>
+                                  <td className="p-2 border-r border-black h-12"></td>
+                                  <td className="p-2 border-r border-black h-12"></td>
+                               </>
+                               )}
+                             </>
+                           )}
+                        </tr>
+                     );
+                  })}
                </tbody>
             </table>
 
-            <div className="footer-section mt-8 border-t-[2.5px] border-black pt-3">
-               <div className="flex justify-between items-start gap-4 mb-12">
-                  <div className="flex-1 text-[6px] font-black uppercase text-black italic">
-                     <p>* জেনারেট টাইম: {new Date().toLocaleString('bn-BD')}</p>
-                     <p>* রিপোর্ট মেকার: {userName || 'ERP System'}</p>
-                     <p className="mt-1">* অফিস কপি (Office Copy)</p>
-                  </div>
-                  <div className="w-40 space-y-1">
-                     <div className="flex justify-between items-center text-[7px] font-black italic text-black">
-                        <span className="uppercase">TOTAL ITEMS:</span>
-                        <span>{filteredData.length}</span>
-                     </div>
-                     <div className="flex justify-between items-center text-lg font-black italic text-black leading-none pt-1 border-t border-black/20">
-                        <span className="text-[7px] uppercase">G. TOTAL:</span>
-                        <span>৳{(totals.sales || totals.totalDue || totals.stockValue).toLocaleString()}</span>
-                     </div>
-                  </div>
+            <div className="mt-8 border-t-2 border-black pt-4 flex justify-between items-end">
+               <div className="text-[8px] font-black uppercase italic space-y-1">
+                  <p>* জেনারেট টাইম: {new Date().toLocaleString('bn-BD')}</p>
+                  <p>* রিপোর্ট মেকার: {userName || 'SYSTEM'}</p>
                </div>
-
-               <div className="flex justify-between items-end text-[8px] font-black uppercase italic text-black px-2 pb-4">
-                  <div className="text-center w-28 border-t-[1.2px] border-black pt-1">ডেলিভারি স্বাক্ষর</div>
-                  <div className="text-center w-36 border-t-[1.2px] border-black pt-1">
-                     <p className="text-[6px] font-bold">IFZA ELECTRONICS</p>
-                     <p className="text-[8px]">কর্তৃপক্ষের স্বাক্ষর</p>
+               <div className="w-48 space-y-1 text-right">
+                  <div className="flex justify-between text-[10px] font-black border-b border-black">
+                     <span>TOTAL QTY:</span>
+                     <span>{totals.totalQty}</span>
+                  </div>
+                  <div className="flex justify-between text-[14px] font-black text-black">
+                     <span>G. TOTAL:</span>
+                     <span>৳{(totals.sales || totals.totalDue || totals.stockValue).toLocaleString()}</span>
                   </div>
                </div>
             </div>
          </div>
       </div>
+
+      {/* 🧾 INDIVIDUAL DELIVERY SLIP MODAL */}
+      {showSlipModal && selectedSlipData && (
+        <div className="fixed inset-0 bg-slate-950/95 backdrop-blur-xl z-[5000] flex flex-col items-center p-4 overflow-y-auto no-print">
+           <div className="w-full max-w-[148mm] flex justify-between gap-6 mb-8 sticky top-0 z-[5001] bg-slate-900/90 p-6 rounded-3xl border border-white/10 shadow-2xl items-center">
+              <button onClick={() => setShowSlipModal(false)} className="text-white font-black uppercase text-[10px] px-6">← ফিরে যান</button>
+              <button disabled={isDownloading} onClick={() => handleDownloadPDF(slipRef, 'Booking_Slip')} className="bg-emerald-600 text-white px-10 py-4 rounded-xl font-black text-[10px] uppercase shadow-xl active:scale-95 transition-all">
+                 {isDownloading ? "ডাউনলোড..." : "স্লিপ ডাউনলোড করুন ⬇"}
+              </button>
+           </div>
+
+           <div ref={slipRef} className="bg-white w-[148mm] min-h-[210mm] p-10 flex flex-col font-sans text-black shadow-2xl border-[3px] border-black">
+              <div className="text-center mb-10 border-b-4 border-black pb-6">
+                 <h1 className="text-[42px] font-black uppercase italic tracking-tighter leading-none mb-1">IFZA ELECTRONICS</h1>
+                 <p className="text-2xl font-black uppercase italic">{company} DIVISION</p>
+                 <div className="mt-4 inline-block px-8 py-1.5 bg-black text-white text-[10px] font-black uppercase rounded-full italic">DELIVERY CHALLAN (স্লিপ)</div>
+              </div>
+
+              <div className="flex justify-between items-start mb-10 text-[12px] font-bold">
+                 <div>
+                    <p className="text-[10px] font-black border-b border-black w-fit mb-2 uppercase opacity-60">ক্রেতা (Customer):</p>
+                    <p className="text-3xl font-black uppercase italic leading-none">{selectedSlipData.customer_name}</p>
+                    <p className="text-[13px] font-bold mt-2">📍 {selectedSlipData.address}</p>
+                    <p className="text-[13px] font-bold">📱 {selectedSlipData.phone || '—'}</p>
+                 </div>
+                 <div className="text-right">
+                    <p className="text-[10px] font-black border-b border-black w-fit ml-auto mb-2 uppercase opacity-60">চালান তথ্য:</p>
+                    <p className="text-[14px] font-black">বুকিং আইডি: #{selectedSlipData.booking_id.slice(-6).toUpperCase()}</p>
+                    <p className="text-[14px] font-black">তারিখ: {new Date().toLocaleDateString('bn-BD')}</p>
+                 </div>
+              </div>
+
+              <div className="flex-1">
+                 <p className="text-[10px] font-black uppercase mb-4 italic text-slate-500">সরবরাহকৃত মালের বিবরণ:</p>
+                 <table className="w-full border-collapse border-2 border-black">
+                    <thead>
+                       <tr className="bg-black text-white text-[11px] font-black uppercase italic">
+                          <th className="p-3 text-left border border-black">পণ্যের নাম (Description)</th>
+                          <th className="p-3 text-center border border-black w-24">অর্ডার</th>
+                          <th className="p-3 text-center border border-black w-24">গেছে (Qty)</th>
+                       </tr>
+                    </thead>
+                    <tbody>
+                       <tr className="border-b border-black text-[18px] font-black italic">
+                          <td className="p-4 uppercase border-r border-black">{selectedSlipData.name}</td>
+                          <td className="p-4 text-center border-r border-black">{selectedSlipData.qty}</td>
+                          <td className="p-4 text-center text-blue-600">{selectedSlipData.delivered_qty}</td>
+                       </tr>
+                    </tbody>
+                 </table>
+                 <div className="mt-8 p-6 bg-slate-50 border-2 border-black rounded-2xl italic font-black text-[12px] leading-relaxed">
+                    দ্রষ্টব্য: এই স্লিপটি শুধুমাত্র বুকিংয়ের বিপরীতে পাঠানো মালের হিসাব নিশ্চিত করার জন্য। মালের কোনো ত্রুটি থাকলে তৎক্ষণাৎ কর্তৃপক্ষকে জানান।
+                 </div>
+              </div>
+
+              <div className="mt-20 flex justify-between items-end px-4 mb-4">
+                 <div className="text-center w-48 border-t-2 border-black pt-2 font-black italic text-[14px]">ক্রেতার স্বাক্ষর</div>
+                 <div className="text-center w-60 border-t-2 border-black pt-2 text-right">
+                    <p className="text-[18px] font-black uppercase italic tracking-tighter">কর্তৃপক্ষের স্বাক্ষর</p>
+                 </div>
+              </div>
+           </div>
+        </div>
+      )}
     </div>
   );
 };

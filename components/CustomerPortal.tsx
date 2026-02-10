@@ -29,11 +29,9 @@ const CustomerPortal: React.FC<PortalProps> = ({ type, user }) => {
   const [multiStats, setMultiStats] = useState<Record<string, CompanyStats>>({
     'Transtec': { balance: 0, totalBill: 0, totalPaid: 0, lastPurchase: '—', lastPayment: '—' },
     'SQ Light': { balance: 0, totalBill: 0, totalPaid: 0, lastPurchase: '—', lastPayment: '—' },
-    // Fix: Changed 'SQ Cable' to 'SQ Cables' to match Company type
     'SQ Cables': { balance: 0, totalBill: 0, totalPaid: 0, lastPurchase: '—', lastPayment: '—' }
   });
 
-  // Fix: Changed 'SQ Cable' to 'SQ Cables' to match Company type
   const companies: Company[] = ['Transtec', 'SQ Light', 'SQ Cables'];
 
   useEffect(() => {
@@ -97,7 +95,6 @@ const CustomerPortal: React.FC<PortalProps> = ({ type, user }) => {
       const stats: Record<string, CompanyStats> = {
         'Transtec': { balance: 0, totalBill: 0, totalPaid: 0, lastPurchase: '—', lastPayment: '—' },
         'SQ Light': { balance: 0, totalBill: 0, totalPaid: 0, lastPurchase: '—', lastPayment: '—' },
-        // Fix: Changed 'SQ Cable' to 'SQ Cables' to match Company type
         'SQ Cables': { balance: 0, totalBill: 0, totalPaid: 0, lastPurchase: '—', lastPayment: '—' }
       };
 
@@ -127,14 +124,12 @@ const CustomerPortal: React.FC<PortalProps> = ({ type, user }) => {
   const brandStyles: Record<string, string> = {
     'Transtec': 'bg-amber-500',
     'SQ Light': 'bg-cyan-500',
-    // Fix: Changed 'SQ Cable' to 'SQ Cables' to match Company type
     'SQ Cables': 'bg-rose-600'
   };
 
   const brandGradients: Record<string, string> = {
     'Transtec': 'from-amber-400 to-amber-600',
     'SQ Light': 'from-cyan-400 to-blue-500',
-    // Fix: Changed 'SQ Cable' to 'SQ Cables' to match Company type
     'SQ Cables': 'from-rose-500 to-red-600'
   };
 
@@ -317,8 +312,10 @@ const CustomerPortal: React.FC<PortalProps> = ({ type, user }) => {
               </div>
            </div>
            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-6">
-              {products.filter(p => !search || p.name.toLowerCase().includes(search.toLowerCase())).map(p => (
-                 <div key={p.id} className="bg-white p-8 rounded-[3rem] border border-slate-100 shadow-sm group hover:shadow-2xl transition-all">
+              {products
+                .filter(p => p.stock > 0 && (!search || p.name.toLowerCase().includes(search.toLowerCase()))) // HIDES OUT OF STOCK FOR CUSTOMERS
+                .map(p => (
+                 <div key={p.id} className="bg-white p-8 rounded-[3rem] border border-slate-100 shadow-sm group hover:shadow-xl transition-all">
                     <h4 className="text-[14px] font-black uppercase italic text-slate-800 leading-tight mb-8 h-10 line-clamp-2">{p.name}</h4>
                     <div className="border-t pt-8 flex justify-between items-end">
                        <div>

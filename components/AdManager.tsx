@@ -54,7 +54,7 @@ const AdManager: React.FC = () => {
         img.src = event.target?.result as string;
         img.onload = () => {
           const canvas = document.createElement('canvas');
-          const MAX_WIDTH = 500; // Aggressive compression for stability
+          const MAX_WIDTH = 500; 
           let width = img.width;
           let height = img.height;
 
@@ -83,7 +83,7 @@ const AdManager: React.FC = () => {
       const compressedString = await compressImage(file);
       setFormData(prev => ({ ...prev, image_url: compressedString }));
     } catch (err) {
-      alert("ছবি প্রসেস করা যায়নি। ছোট ছবি ট্রাই করুন।");
+      alert("ছবি প্রসেস করা যায়নি।");
     } finally {
       setIsUploading(false);
     }
@@ -93,11 +93,6 @@ const AdManager: React.FC = () => {
     e.preventDefault();
     if (isSaving || isUploading) return;
     
-    if (!formData.title) {
-      alert("শিরোনাম (Title) দিন।");
-      return;
-    }
-
     setIsSaving(true);
     try {
       const payload = {
@@ -116,11 +111,7 @@ const AdManager: React.FC = () => {
         res = await supabase.from('advertisements').insert([payload]);
       }
 
-      if (res.error) {
-        alert(`পাবলিশ করা সম্ভব হয়নি!\n\nকারণ: ${res.error.message}\nটিপস: SQL Editor-এ টেবিল তৈরি করা হয়েছে তো?`);
-        console.error("Supabase Error:", res.error);
-        return;
-      }
+      if (res.error) throw res.error;
 
       alert("সফলভাবে পাবলিশ হয়েছে! ✅");
       setShowModal(false);
@@ -128,7 +119,7 @@ const AdManager: React.FC = () => {
       setEditingAd(null);
       fetchAds();
     } catch (err: any) {
-      alert("সিস্টেম এরর: " + err.message);
+      alert("ত্রুটি: " + err.message);
     } finally {
       setIsSaving(false);
     }
@@ -141,24 +132,22 @@ const AdManager: React.FC = () => {
           <div className="flex items-center gap-3">
             <h3 className="text-3xl font-black text-white uppercase italic tracking-tighter leading-none">ক্যাটালগ হাব</h3>
             <span className={`px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-widest ${dbStatus === 'CONNECTED' ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20' : 'bg-red-500/10 text-red-500 border border-red-500/20'}`}>
-              {dbStatus === 'CHECKING' ? 'Checking Cloud...' : dbStatus === 'CONNECTED' ? 'Cloud Sync: Active' : 'Cloud Error'}
+              {dbStatus === 'CONNECTED' ? 'Cloud Sync: Active' : 'Cloud Error'}
             </span>
           </div>
           <p className="text-[10px] text-blue-400 font-black uppercase tracking-[0.4em] mt-3">Product Marketing & Catalog Control</p>
         </div>
         <button 
           onClick={() => { setEditingAd(null); setFormData({title:'', content:'', company:'Transtec', type:'OFFICIAL_CATALOG', image_url:'', external_url:''}); setShowModal(true); }} 
-          className="bg-white text-slate-900 px-12 py-5 rounded-[2rem] font-black uppercase text-[11px] tracking-widest shadow-xl active:scale-95 transition-all hover:bg-blue-600 hover:text-white"
+          className="bg-white text-slate-900 px-12 py-5 rounded-[2rem] font-black uppercase text-[11px] tracking-widest shadow-xl active:scale-95 transition-all"
         >
-          নতুন পোস্ট তৈরি করুন +
+          নতুন পোস্ট +
         </button>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
         {loading ? (
           <div className="col-span-full py-40 text-center animate-pulse text-slate-300 font-black uppercase italic">সার্ভার সিঙ্ক হচ্ছে...</div>
-        ) : ads.length === 0 ? (
-          <div className="col-span-full py-40 text-center bg-white rounded-[4rem] border-2 border-dashed border-slate-100 italic font-black text-slate-300 uppercase">কোনো ক্যাটালগ পোস্ট করা হয়নি</div>
         ) : ads.map(ad => (
           <div key={ad.id} className="bg-white rounded-[4rem] overflow-hidden border shadow-sm group hover:shadow-2xl transition-all duration-700 animate-reveal">
              <div className="h-72 overflow-hidden bg-slate-50 relative">
@@ -190,65 +179,52 @@ const AdManager: React.FC = () => {
           <div className="bg-white rounded-[5rem] w-full max-w-2xl shadow-2xl animate-reveal max-h-[95vh] overflow-y-auto custom-scroll text-black">
             <div className="p-10 md:p-14 space-y-10">
               <div className="flex justify-between items-center border-b pb-8">
-                <h3 className="text-2xl font-black text-slate-900 uppercase italic tracking-tighter leading-none">{editingAd ? 'পোস্ট আপডেট করুন' : 'নতুন পোস্ট পাবলিশ'}</h3>
-                <button onClick={() => setShowModal(false)} className="text-4xl text-slate-300 font-black hover:text-slate-900">✕</button>
+                <h3 className="text-2xl font-black text-slate-900 uppercase italic tracking-tighter leading-none">{editingAd ? 'পোস্ট আপডেট' : 'নতুন পোস্ট পাবলিশ'}</h3>
+                <button onClick={() => setShowModal(false)} className="text-4xl text-slate-300 font-black">✕</button>
               </div>
 
               <form onSubmit={handleSave} className="space-y-8">
-                <div className="space-y-3">
-                   <label className="text-[10px] font-black text-slate-400 uppercase ml-6 italic tracking-widest">ওয়েবসাইট লিঙ্ক (External URL)</label>
-                   <input className="w-full p-8 bg-blue-50/50 border-none rounded-[2.5rem] font-bold outline-none text-blue-600 text-sm italic shadow-inner" placeholder="যেমন: https://transteclighting.com/..." value={formData.external_url} onChange={e => setFormData({...formData, external_url: e.target.value})} />
+                <div className="space-y-2">
+                   <label className="text-[10px] font-black text-slate-400 uppercase ml-6 italic">সিরিজ বা শিরোনাম</label>
+                   <input required className="w-full p-8 bg-slate-50 border-none rounded-[2.5rem] font-black outline-none uppercase italic text-sm shadow-inner" placeholder="যেমন: White Gold Switch" value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} />
+                </div>
+                
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                     <label className="text-[10px] font-black text-slate-400 uppercase ml-6 italic">কোম্পানি</label>
+                     <select className="w-full p-6 bg-slate-50 border-none rounded-[2rem] font-black text-[11px] uppercase outline-none shadow-inner" value={formData.company} onChange={e => setFormData({...formData, company: e.target.value as Company})}>
+                        <option value="Transtec">TRANSTEC</option>
+                        <option value="SQ Light">SQ LIGHT</option>
+                        <option value="SQ Cables">SQ CABLES</option>
+                     </select>
+                  </div>
+                  <div className="space-y-2">
+                     <label className="text-[10px] font-black text-slate-400 uppercase ml-6 italic">টাইপ</label>
+                     <select className="w-full p-6 bg-slate-50 border-none rounded-[2rem] font-black text-[11px] uppercase outline-none shadow-inner" value={formData.type} onChange={e => setFormData({...formData, type: e.target.value as any})}>
+                        <option value="OFFICIAL_CATALOG">OFFICIAL CATALOG</option>
+                        <option value="NEW_PRODUCT">NEW PRODUCT</option>
+                        <option value="OFFER">SPECIAL OFFER</option>
+                     </select>
+                  </div>
                 </div>
 
                 <div className="space-y-4">
-                   <label className="text-[10px] font-black text-slate-400 uppercase ml-6 italic tracking-widest">ব্যানার ছবি আপলোড</label>
+                   <label className="text-[10px] font-black text-slate-400 uppercase ml-6 italic">ছবি আপলোড</label>
                    <div className="flex gap-6 items-center">
-                      <div className="w-32 h-32 bg-slate-50 border-2 border-dashed border-slate-200 rounded-[2.5rem] flex items-center justify-center overflow-hidden relative shadow-inner">
-                         {isUploading && <div className="absolute inset-0 bg-white/80 flex items-center justify-center"><div className="w-6 h-6 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div></div>}
-                         {formData.image_url ? <img src={formData.image_url} className="w-full h-full object-cover" /> : <span className="text-4xl">📸</span>}
+                      <div className="w-24 h-24 bg-slate-50 border-2 border-dashed border-slate-200 rounded-[2.5rem] flex items-center justify-center overflow-hidden">
+                         {formData.image_url ? <img src={formData.image_url} className="w-full h-full object-cover" /> : <span className="text-2xl">📸</span>}
                       </div>
-                      <button type="button" onClick={() => fileInputRef.current?.click()} className="bg-slate-900 text-white px-10 py-5 rounded-3xl font-black uppercase text-[10px] tracking-widest shadow-xl active:scale-95 transition-all hover:bg-blue-600">গ্যালারি থেকে নিন</button>
+                      <button type="button" onClick={() => fileInputRef.current?.click()} className="bg-slate-900 text-white px-8 py-4 rounded-3xl font-black uppercase text-[10px] tracking-widest active:scale-95 transition-all">গ্যালারি ➔</button>
                       <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleImageUpload} />
                    </div>
                 </div>
 
-                <div className="space-y-6">
-                  <div className="space-y-2">
-                     <label className="text-[10px] font-black text-slate-400 uppercase ml-6 italic">সিরিজ বা শিরোনাম</label>
-                     <input required className="w-full p-8 bg-slate-50 border-none rounded-[2.5rem] font-black outline-none uppercase italic text-sm shadow-inner" placeholder="যেমন: White Gold Switch" value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} />
-                  </div>
-                  
-                  <div className="space-y-2">
-                     <label className="text-[10px] font-black text-slate-400 uppercase ml-6 italic">বিস্তারিত বিবরণ (Description)</label>
-                     <textarea className="w-full p-8 bg-slate-50 border-none rounded-[2.5rem] font-bold h-32 outline-none text-sm italic shadow-inner" placeholder="বিস্তারিত লিখুন..." value={formData.content} onChange={e => setFormData({...formData, content: e.target.value})} />
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                       <label className="text-[10px] font-black text-slate-400 uppercase ml-6 italic">কোম্পানি</label>
-                       <select className="w-full p-6 bg-slate-50 border-none rounded-[2rem] font-black text-[11px] uppercase outline-none shadow-inner" value={formData.company} onChange={e => setFormData({...formData, company: e.target.value as Company})}>
-                          <option value="Transtec">TRANSTEC</option>
-                          <option value="SQ Light">SQ LIGHT</option>
-                          <option value="SQ Cable">SQ CABLE</option>
-                       </select>
-                    </div>
-                    <div className="space-y-2">
-                       <label className="text-[10px] font-black text-slate-400 uppercase ml-6 italic">টাইপ</label>
-                       <select className="w-full p-6 bg-slate-50 border-none rounded-[2rem] font-black text-[11px] uppercase outline-none shadow-inner" value={formData.type} onChange={e => setFormData({...formData, type: e.target.value as any})}>
-                          <option value="OFFICIAL_CATALOG">OFFICIAL CATALOG</option>
-                          <option value="NEW_PRODUCT">NEW PRODUCT</option>
-                          <option value="OFFER">SPECIAL OFFER</option>
-                       </select>
-                    </div>
-                  </div>
-                </div>
-
                 <button 
-                  disabled={isSaving || isUploading || dbStatus === 'ERROR'} 
+                  disabled={isSaving || isUploading} 
                   type="submit" 
-                  className={`w-full text-white py-10 rounded-[3rem] font-black uppercase text-sm tracking-[0.4em] shadow-2xl active:scale-95 transition-all ${isSaving ? 'bg-slate-400 animate-pulse' : 'bg-[#2563eb] hover:bg-blue-700 disabled:opacity-50'}`}
+                  className={`w-full text-white py-10 rounded-[3rem] font-black uppercase text-sm tracking-[0.4em] shadow-2xl active:scale-95 transition-all bg-[#2563eb] hover:bg-blue-700 disabled:opacity-50`}
                 >
-                  {dbStatus === 'ERROR' ? 'Database Disconnected' : isSaving ? "পাবলিশ হচ্ছে..." : "এখনই পাবলিশ করুন ➔"}
+                  {isSaving ? "পাবলিশ হচ্ছে..." : "এখনই পাবলিশ করুন ➔"}
                 </button>
               </form>
             </div>

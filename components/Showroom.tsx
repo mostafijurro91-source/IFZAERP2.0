@@ -31,7 +31,6 @@ const Showroom: React.FC = () => {
   const brandColors: Record<string, string> = {
     'Transtec': 'from-amber-400 to-orange-600',
     'SQ Light': 'from-cyan-400 to-blue-600',
-    // Fix: Changed 'SQ Cable' to 'SQ Cables'
     'SQ Cables': 'from-rose-500 to-red-700'
   };
 
@@ -42,11 +41,10 @@ const Showroom: React.FC = () => {
          <div className="relative z-10 max-w-3xl">
             <h2 className="text-4xl md:text-6xl font-black text-white uppercase italic tracking-tighter leading-none mb-6">Digital <br/> Showroom</h2>
             <p className="text-sm md:text-lg text-blue-400 font-medium italic opacity-80 leading-relaxed mb-10">
-               আপনার ব্যবসার জন্য লেটেস্ট ক্যাটালগ এবং অফিসিয়াল প্রোডাক্ট গাইড এখন ডিজিটাল ফরমেটে। Transtec-এর অফিসিয়াল সাইট এবং আমাদের নিজস্ব কালেকশন এক জায়গায়।
+               আপনার ব্যবসার জন্য লেটেস্ট ক্যাটালগ এবং অফিসিয়াল প্রোডাক্ট গাইড এখন ডিজিটাল ফরমেটে। Transtec, SQ Light এবং SQ Cables-এর নিজস্ব কালেকশন এক জায়গায়।
             </p>
             
             <div className="flex gap-2 flex-wrap">
-               {/* Fix: Changed 'SQ Cable' to 'SQ Cables' */}
                {['ALL', 'Transtec', 'SQ Light', 'SQ Cables'].map(b => (
                   <button key={b} onClick={() => setFilter(b)} className={`px-8 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${filter === b ? 'bg-white text-slate-900 shadow-xl' : 'bg-white/10 text-white/50 hover:bg-white/20'}`}>
                      {b}
@@ -61,7 +59,7 @@ const Showroom: React.FC = () => {
            <div className="flex-1">
               <div className="flex items-center gap-4 mb-4">
                  <span className="w-12 h-12 bg-orange-500 rounded-2xl flex items-center justify-center text-white text-2xl font-black italic">T</span>
-                 <h3 className="text-2xl font-black uppercase italic tracking-tighter">Official Transtec Website</h3>
+                 <h3 className="text-2xl font-black uppercase italic tracking-tighter">Official Transtec Resources</h3>
               </div>
               <p className="text-slate-500 font-medium italic">ট্র্যানটেকের অফিসিয়াল ওয়েবসাইটের প্রোডাক্ট ক্যাটালগ এবং টেকনিক্যাল স্পেসিফিকেশন সরাসরি ব্রাউজ করুন।</p>
            </div>

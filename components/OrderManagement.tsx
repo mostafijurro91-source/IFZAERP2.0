@@ -54,13 +54,13 @@ const OrderManagement: React.FC<OrderManagementProps> = ({ company, user }) => {
     if (existing) {
       setCart(cart.map(i => i.id === p.id ? { ...i, qty: i.qty + 1 } : i));
     } else {
-      setCart([...cart, { id: p.id, name: p.name, price: p.tp, qty: 1, mrp: p.mrp }]);
+      setCart([...cart, { id: p.id, name: p.name, price: p.tp, qty: 1, mrp: p.mrp, company: p.company }]);
     }
     if (navigator.vibrate) navigator.vibrate(10);
   };
 
   const updateCartItem = (id: string, updates: any) => {
-    setCart(prev => prev.map(item => item.id === id ? { ...item, ...updates } : item));
+    setCart(prev => prev.map(item => item.id === id ? { ...item, ...updates } : item).filter(item => item.qty > 0));
   };
 
   const calculateTotal = () => cart.reduce((acc, i) => acc + (Number(i.price) * Number(i.qty)), 0);
@@ -77,7 +77,7 @@ const OrderManagement: React.FC<OrderManagementProps> = ({ company, user }) => {
         status: 'PENDING', 
         items: cart, 
         created_by: user.name,
-        area: selectedCust.address // এরিয়া সেভ করা হচ্ছে
+        area: selectedCust.address
       }]);
       if (error) throw error;
       alert("অর্ডার সফলভাবে সেভ হয়েছে!");
@@ -112,14 +112,14 @@ const OrderManagement: React.FC<OrderManagementProps> = ({ company, user }) => {
   const filteredModalCustomers = useMemo(() => {
     return customers.filter(c => {
       const q = modalCustSearch.toLowerCase().trim();
-      const matchesSearch = c.name.toLowerCase().includes(q) || c.phone.includes(q);
+      const matchesSearch = !q || c.name.toLowerCase().includes(q) || c.phone.includes(q);
       const matchesArea = !modalAreaFilter || c.address === modalAreaFilter;
       return matchesSearch && matchesArea;
     });
   }, [customers, modalCustSearch, modalAreaFilter]);
 
   const filteredProducts = useMemo(() => {
-    return products.filter(p => p.name.toLowerCase().includes(search.toLowerCase()));
+    return products.filter(p => p.stock > 0 && p.name.toLowerCase().includes(search.toLowerCase()));
   }, [products, search]);
 
   return (
@@ -164,7 +164,6 @@ const OrderManagement: React.FC<OrderManagementProps> = ({ company, user }) => {
         ))}
       </div>
 
-      {/* Full Screen Step-by-Step Order Modal */}
       {showAddModal && (
         <div className="fixed inset-0 bg-white z-[3000] flex flex-col h-screen overflow-hidden text-black animate-reveal">
            <div className="bg-slate-900 text-white p-6 md:p-10 flex justify-between items-center shrink-0">
@@ -174,42 +173,44 @@ const OrderManagement: React.FC<OrderManagementProps> = ({ company, user }) => {
                  </button>
                  <div>
                     <h3 className="text-xl md:text-3xl font-black uppercase italic tracking-tighter leading-none">
-                       {currentStep === 1 ? "১. এরিয়া ও দোকান বাছাই" : "২. প্রোডাক্ট নির্বাচন ও কার্ট"}
+                       {currentStep === 1 ? "১. দোকান খুঁজুন" : "২. পণ্য নির্বাচন ও কার্ট"}
                     </h3>
-                    <p className="text-[10px] font-black text-slate-400 uppercase mt-2 tracking-widest italic">অর্ডার ক্রিয়েশন প্রসেস Step {currentStep} of 2</p>
+                    <p className="text-[10px] font-black text-slate-400 uppercase mt-2 tracking-widest italic">Order Step {currentStep} of 2</p>
                  </div>
               </div>
-              {currentStep === 1 && selectedCust && (
-                 <button onClick={() => setCurrentStep(2)} className="bg-blue-600 text-white px-10 py-4 rounded-[1.5rem] font-black uppercase text-[11px] shadow-2xl animate-pulse tracking-widest">পরবর্তী ধাপ ➔</button>
-              )}
            </div>
 
            <div className="flex-1 overflow-y-auto custom-scroll p-6 md:p-12 pb-40">
               {currentStep === 1 ? (
                  <div className="max-w-4xl mx-auto space-y-8">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                       <div className="space-y-2">
-                          <label className="text-[10px] font-black text-slate-400 uppercase ml-4 italic">এরিয়া ফিল্টার</label>
-                          <select className="w-full p-5 bg-slate-100 rounded-[2rem] font-black text-[11px] uppercase outline-none border-2 border-transparent focus:border-blue-500" value={modalAreaFilter} onChange={e => setModalAreaFilter(e.target.value)}>
+                    <div className="bg-slate-50 p-8 rounded-[3rem] border border-slate-100 shadow-inner grid grid-cols-1 md:grid-cols-2 gap-6 items-end">
+                       <div className="space-y-3">
+                          <label className="text-[10px] font-black text-blue-600 uppercase ml-4 italic tracking-widest">১. এরিয়া ফিল্টার (ঐচ্ছিক)</label>
+                          <select className="w-full p-6 bg-white rounded-3xl font-black text-sm uppercase outline-none border-2 border-transparent focus:border-blue-500 shadow-sm transition-all" value={modalAreaFilter} onChange={e => { setModalAreaFilter(e.target.value); setSelectedCust(null); }}>
                             <option value="">সকল এরিয়া</option>
                             {uniqueAreas.map(area => <option key={area} value={area}>{area}</option>)}
                           </select>
                        </div>
-                       <div className="space-y-2">
-                          <label className="text-[10px] font-black text-slate-400 uppercase ml-4 italic">দোকান সার্চ</label>
-                          <input className="w-full p-5 bg-slate-100 rounded-[2rem] font-black text-[11px] uppercase outline-none border-2 border-transparent focus:border-blue-500" placeholder="নাম বা মোবাইল লিখুন..." value={modalCustSearch} onChange={e => setModalCustSearch(e.target.value)} />
+                       <div className="space-y-3">
+                          <label className="text-[10px] font-black text-blue-600 uppercase ml-4 italic tracking-widest">২. দ্রুত সার্চ (নাম বা মোবাইল)</label>
+                          <div className="relative">
+                            <input autoFocus className="w-full p-6 bg-white rounded-3xl font-black text-sm uppercase outline-none border-2 border-transparent focus:border-blue-500 shadow-sm transition-all" placeholder="দোকানের নাম লিখুন..." value={modalCustSearch} onChange={e => setModalCustSearch(e.target.value)} />
+                            <span className="absolute right-6 top-1/2 -translate-y-1/2 opacity-20">🔍</span>
+                          </div>
                        </div>
                     </div>
                     
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                       {filteredModalCustomers.map(c => (
-                          <div key={c.id} onClick={() => { setSelectedCust(c); setCurrentStep(2); }} className={`p-8 rounded-[2.5rem] border-2 transition-all flex justify-between items-center cursor-pointer ${selectedCust?.id === c.id ? 'bg-slate-900 text-white border-slate-900 shadow-2xl scale-[1.02]' : 'bg-white border-slate-100 hover:border-blue-200'}`}>
-                             <div>
-                                <p className="text-[14px] font-black uppercase italic leading-none mb-2">{c.name}</p>
-                                <p className="text-[10px] font-black uppercase opacity-50 tracking-[0.2em]">📍 এরিয়া: {c.address || '—'}</p>
-                                <p className="text-[10px] font-bold mt-1 text-blue-500 uppercase">📱 {c.phone}</p>
+                       {filteredModalCustomers.length === 0 ? (
+                         <div className="col-span-full py-20 text-center opacity-10 font-black italic uppercase">কোনো দোকান খুঁজে পাওয়া যায়নি</div>
+                       ) : filteredModalCustomers.map(c => (
+                          <div key={c.id} onClick={() => { setSelectedCust(c); setCurrentStep(2); }} className={`p-8 rounded-[2.5rem] border-2 transition-all flex justify-between items-center cursor-pointer ${selectedCust?.id === c.id ? 'bg-slate-900 text-white border-slate-900 shadow-2xl scale-[1.02]' : 'bg-white border-slate-100 hover:border-blue-600 hover:shadow-xl'}`}>
+                             <div className="min-w-0 pr-6">
+                                <p className="text-lg font-black uppercase italic leading-none mb-3 truncate">{c.name}</p>
+                                <p className="text-[10px] font-black uppercase opacity-50 tracking-widest">📍 {c.address || '—'}</p>
+                                <p className="text-[10px] font-bold mt-2 text-blue-500 uppercase italic">📱 {c.phone}</p>
                              </div>
-                             {selectedCust?.id === c.id ? <span className="text-blue-400 text-2xl font-black">✓</span> : <span className="opacity-20 text-3xl italic">➔</span>}
+                             {selectedCust?.id === c.id ? <span className="text-blue-400 text-3xl font-black">✓</span> : <span className="opacity-10 text-4xl italic group-hover:opacity-40 transition-all">➔</span>}
                           </div>
                        ))}
                     </div>
@@ -228,7 +229,7 @@ const OrderManagement: React.FC<OrderManagementProps> = ({ company, user }) => {
                                    <p className="text-[11px] font-black uppercase italic leading-none mb-3 truncate">{p.name}</p>
                                    <div className="flex items-center gap-3">
                                       <span className="text-lg font-black text-slate-900 italic leading-none">৳{p.tp}</span>
-                                      <span className={`text-[8px] font-black px-2 py-0.5 rounded uppercase ${p.stock < 10 ? 'bg-red-50 text-red-500' : 'bg-blue-50 text-blue-600'}`}>Stock: {p.stock}</span>
+                                      <span className={`text-[8px] font-black px-2 py-0.5 rounded uppercase ${p.stock < 10 ? 'bg-red-50 text-red-600' : 'bg-blue-50 text-blue-600'}`}>Stock: {p.stock}</span>
                                    </div>
                                 </div>
                                 <button className="w-12 h-12 bg-slate-900 text-white rounded-2xl flex items-center justify-center text-xl font-black shadow-lg hover:bg-blue-600">+</button>
@@ -243,7 +244,9 @@ const OrderManagement: React.FC<OrderManagementProps> = ({ company, user }) => {
                           {cart.map((item, idx) => (
                              <div key={idx} className="bg-white p-6 rounded-[2rem] border shadow-sm animate-reveal">
                                 <div className="flex justify-between items-start mb-4">
-                                   <p className="text-[12px] font-black uppercase italic text-slate-800 leading-tight pr-10">{item.name}</p>
+                                   <p className="text-[12px] font-black uppercase italic text-slate-800 leading-tight pr-10">
+                                     <span className="text-blue-600 mr-1">[{item.company}]</span> {item.name}
+                                   </p>
                                    <button onClick={() => setCart(cart.filter((_, i) => i !== idx))} className="text-red-400 font-black text-2xl leading-none">✕</button>
                                 </div>
                                 <div className="flex items-center gap-4">
@@ -252,17 +255,15 @@ const OrderManagement: React.FC<OrderManagementProps> = ({ company, user }) => {
                                       <input type="number" className="w-full bg-transparent font-black text-xs outline-none" value={item.price} onChange={e => updateCartItem(item.id, { price: e.target.value })} />
                                    </div>
                                    <div className="flex items-center gap-4 bg-slate-900 text-white rounded-2xl px-4 py-2 shadow-lg">
-                                      <button onClick={() => updateCartItem(item.id, { qty: Math.max(1, item.qty - 1) })} className="text-xl font-black px-2 opacity-50 hover:opacity-100">-</button>
-                                      <span className="w-8 text-center font-black text-xs">{item.qty}</span>
+                                      <button onClick={() => updateCartItem(item.id, { qty: item.qty - 1 })} className="w-10 h-10 flex items-center justify-center bg-rose-600 text-white rounded-xl font-black text-xl hover:bg-rose-700 transition-all shadow-sm active:scale-90">−</button>
+                                      <input type="number" className="w-10 bg-transparent text-center font-black text-xs text-white outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" value={item.qty} onChange={e => updateCartItem(item.id, { qty: Number(e.target.value) })} />
                                       <button onClick={() => updateCartItem(item.id, { qty: item.qty + 1 })} className="text-xl font-black px-2 opacity-50 hover:opacity-100">+</button>
                                    </div>
                                 </div>
                              </div>
                           ))}
                        </div>
-                       {cart.length === 0 && (
-                         <div className="py-20 text-center opacity-10 font-black italic uppercase">কার্ট খালি</div>
-                       )}
+                       {cart.length === 0 && <div className="py-20 text-center opacity-10 font-black italic uppercase">কার্ট খালি</div>}
                     </div>
                  </div>
               )}
@@ -283,14 +284,13 @@ const OrderManagement: React.FC<OrderManagementProps> = ({ company, user }) => {
                     <p className="text-4xl font-black italic text-slate-900 tracking-tighter leading-none">{formatCurrency(calculateTotal())}</p>
                  </div>
               </div>
-              <button disabled={isSaving || cart.length === 0 || !selectedCust} onClick={handleSubmitOrder} className="w-full md:w-auto bg-slate-900 text-white px-20 py-7 rounded-[2.5rem] font-black uppercase text-[13px] tracking-[0.3em] shadow-2xl active:scale-95 transition-all flex items-center justify-center gap-4 disabled:opacity-20 hover:bg-blue-600">
+              <button disabled={isSaving || cart.length === 0 || !selectedCust} onClick={handleSubmitOrder} className="w-full md:w-auto bg-blue-600 text-white px-20 py-7 rounded-[2.5rem] font-black uppercase text-[13px] tracking-[0.3em] shadow-2xl active:scale-95 transition-all flex items-center justify-center gap-4 disabled:opacity-20 hover:bg-blue-700">
                  {isSaving ? "প্রসেসিং..." : "অর্ডার সেভ করুন ➔"}
               </button>
            </div>
         </div>
       )}
 
-      {/* Detail View Modal */}
       {showDetailModal && selectedOrder && (
         <div className="fixed inset-0 bg-slate-950/95 backdrop-blur-3xl z-[4000] flex items-center justify-center p-4">
            <div className="bg-white rounded-[4rem] w-full max-w-3xl h-[85vh] overflow-hidden flex flex-col shadow-2xl animate-reveal">
@@ -319,7 +319,11 @@ const OrderManagement: React.FC<OrderManagementProps> = ({ company, user }) => {
                     <div className="divide-y border rounded-[2.5rem] overflow-hidden bg-slate-50 shadow-inner">
                        {selectedOrder.items.map((item: any, idx: number) => (
                          <div key={idx} className="p-6 flex justify-between items-center bg-white/50 hover:bg-white transition-colors">
-                            <div className="flex-1"><p className="text-[13px] font-black uppercase italic text-slate-800 leading-tight">{item.name}</p></div>
+                            <div className="flex-1">
+                               <p className="text-[13px] font-black uppercase italic text-slate-800 leading-tight">
+                                 <span className="text-blue-600 mr-1">[{item.company}]</span> {item.name}
+                               </p>
+                            </div>
                             <div className="text-right">
                                <p className="text-[10px] font-bold text-slate-400 italic">{item.qty} পিস x ৳{item.price}</p>
                                <p className="text-[14px] font-black text-blue-600 italic mt-1">৳{ (item.price * item.qty).toLocaleString() }</p>
