@@ -32,7 +32,6 @@ const App: React.FC = () => {
   const [dbError, setDbError] = useState(false);
 
   useEffect(() => {
-    // Register Service Worker for PWA support
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {
         navigator.serviceWorker.register('./sw.js').catch(err => console.log('SW registration failed:', err));
@@ -59,7 +58,6 @@ const App: React.FC = () => {
       } catch (e) {
         setDbError(true);
       } finally {
-        // Aesthetic delay for the boot screen
         setTimeout(() => setInitialized(true), 2500);
       }
     };
@@ -94,14 +92,14 @@ const App: React.FC = () => {
 
   if (!initialized) {
     return (
-      <div className="h-screen flex flex-col items-center justify-center bg-[#05070a] text-white overflow-hidden">
+      <div className="h-screen flex flex-col items-center justify-center bg-[#05070a] text-white overflow-hidden font-sans">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(59,130,246,0.1),transparent_70%)] pointer-events-none"></div>
         <div className="relative mb-12">
             <div className="w-32 h-32 border-[8px] border-blue-500/10 border-t-blue-600 rounded-full animate-spin shadow-[0_0_60px_rgba(37,99,235,0.3)]"></div>
-            <div className="absolute inset-0 flex items-center justify-center font-black text-3xl italic text-blue-500">if</div>
+            <div className="absolute inset-0 flex items-center justify-center font-black text-4xl italic text-blue-500">ই</div>
         </div>
         <div className="text-center space-y-4 relative z-10">
-          <p className="font-black uppercase text-[14px] tracking-[1em] text-blue-500 animate-pulse">IFZA ELECTRONICS</p>
+          <p className="font-black uppercase text-[14px] tracking-[1em] text-blue-500 animate-pulse">ইফজা ইলেকট্রনিক্স</p>
           <div className="flex flex-col gap-1">
              <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">TRANSTEC • SQ LIGHT • SQ CABLES</p>
              <p className="text-[8px] font-medium text-slate-700 uppercase tracking-[0.5em] mt-1 italic">Enterprise Cloud Terminal v4.6.8</p>
@@ -166,21 +164,33 @@ const App: React.FC = () => {
       />
       
       <main className="flex-1 flex flex-col md:ml-[320px] overflow-hidden relative">
-        <header className="h-24 bg-white/80 backdrop-blur-xl border-b border-slate-200 flex justify-between items-center px-6 md:px-12 shrink-0 z-40">
-          <div className="flex items-center gap-4">
-            <button onClick={() => setIsSidebarOpen(true)} className="md:hidden p-3 bg-slate-900 text-white rounded-2xl shadow-lg active:scale-90 transition-transform">☰</button>
-            <div className="hidden sm:block">
-              <h1 className="text-xl font-black text-slate-900 uppercase italic tracking-tighter leading-none">{activeTab.replace(/_/g, ' ')}</h1>
-              <p className="text-[9px] font-black text-blue-600 uppercase tracking-[0.3em] mt-2 italic">• {selectedCompany} Node Active</p>
+        <header className="h-20 bg-white/80 backdrop-blur-xl border-b border-slate-200 flex justify-between items-center px-6 md:px-12 shrink-0 z-40">
+          <div className="flex items-center gap-6">
+            <button onClick={() => setIsSidebarOpen(true)} className="md:hidden p-2.5 bg-slate-900 text-white rounded-xl shadow-lg active:scale-90 transition-transform">☰</button>
+            <div className="flex items-center gap-3 group cursor-pointer animate-reveal">
+              <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white font-black italic shadow-md animate-glow transition-transform group-hover:scale-110">
+                <span className="text-sm">ই</span>
+              </div>
+              <div className="hidden lg:block overflow-hidden">
+                <div className="text-xl font-black italic tracking-tighter leading-none animate-brand-text">ইফজা<span className="text-blue-600">.</span></div>
+                <p className="text-[7px] font-black text-slate-400 uppercase tracking-widest mt-0.5 italic leading-none">Enterprise Hub</p>
+              </div>
+            </div>
+            <div className="h-8 w-px bg-slate-200 hidden md:block"></div>
+            <div className="hidden sm:block overflow-hidden">
+              <h1 className="text-xs font-black text-slate-900 uppercase italic tracking-widest leading-none">{activeTab.replace(/_/g, ' ')}</h1>
+              <p className="text-[7px] font-black text-blue-600 uppercase tracking-[0.2em] mt-1 italic animate-pulse leading-none">• Node: {selectedCompany}</p>
             </div>
           </div>
           
-          <div className="flex items-center gap-5">
+          <div className="flex items-center gap-4">
             <div className="text-right hidden sm:block">
-              <p className="text-[11px] font-black text-slate-900 leading-none truncate max-w-[150px] uppercase italic">{user.name}</p>
-              <p className="text-[8px] font-black text-slate-400 mt-1 uppercase tracking-widest">{user.role} ACCESS</p>
+              <p className="text-[10px] font-black text-slate-900 leading-none truncate max-w-[150px] uppercase italic">{user.name}</p>
+              <p className="text-[7px] font-black text-slate-400 mt-1 uppercase tracking-widest">{user.role} ACCESS</p>
             </div>
-            <div className="w-12 h-12 bg-blue-600 rounded-2xl flex items-center justify-center text-white font-black italic shadow-xl border-2 border-white ring-4 ring-blue-500/5">{user.name.charAt(0)}</div>
+            <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center text-white font-black italic shadow-lg border-2 border-white ring-4 ring-blue-500/5 group hover:rotate-12 transition-all text-sm">
+              {user.name.charAt(0)}
+            </div>
           </div>
         </header>
 
