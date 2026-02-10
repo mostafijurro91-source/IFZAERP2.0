@@ -6,10 +6,14 @@ const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 
 export const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
+/**
+ * Normalizes company names to match the strict 'Company' type.
+ * Ensures consistent plural naming for SQ Cables.
+ */
 export const mapToDbCompany = (company: string): string => {
-  if (company === 'SQ Light' || company === 'SQ Cables') return company;
-  // If the input is old 'SQ Cable', return 'SQ Cables'
-  if (company === 'SQ Cable') return 'SQ Cables';
+  const c = company.trim().toLowerCase();
+  if (c.includes('light')) return 'SQ Light';
+  if (c.includes('cable') || c.includes('cables')) return 'SQ Cables';
   return 'Transtec';
 };
 
