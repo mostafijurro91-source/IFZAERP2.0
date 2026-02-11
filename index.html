@@ -15,19 +15,12 @@
         body { font-family: 'Plus Jakarta Sans', 'Hind Siliguri', sans-serif; overflow-x: hidden; font-weight: 500; }
         #root { min-height: 100%; }
         
-        * { color: inherit; }
-        .text-black { color: #000000 !important; }
-        .text-slate-900 { color: #0f172a !important; }
-        .text-slate-950 { color: #020617 !important; }
-        .text-white, .text-white * { color: #ffffff !important; }
-        .text-blue-600, .text-blue-600 * { color: #2563eb !important; }
-        .text-emerald-600, .text-emerald-600 * { color: #059669 !important; }
-        .text-red-600, .text-red-600 * { color: #dc2626 !important; }
+        /* Typography overrides for Web */
+        .text-blue-600 { color: #2563eb !important; }
 
         .custom-scroll::-webkit-scrollbar { width: 4px; }
         .custom-scroll::-webkit-scrollbar-track { background: transparent; }
         .custom-scroll::-webkit-scrollbar-thumb { background: rgba(0, 0, 0, 0.1); border-radius: 20px; }
-        .custom-scroll::-webkit-scrollbar-thumb:hover { background: rgba(0, 0, 0, 0.3); }
 
         @keyframes reveal {
             from { opacity: 0; transform: translateY(15px) scale(0.98); }
@@ -35,45 +28,53 @@
         }
         .animate-reveal { animation: reveal 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
 
-        @keyframes float-slow {
-            0%, 100% { transform: translateY(0); }
-            50% { transform: translateY(-8px); }
-        }
-        .animate-float-slow { animation: float-slow 4s ease-in-out infinite; }
-
-        @keyframes glow-pulse {
-            0%, 100% { box-shadow: 0 0 5px rgba(37, 99, 235, 0.2); }
-            50% { box-shadow: 0 0 25px rgba(37, 99, 235, 0.6); }
-        }
-        .animate-glow { animation: glow-pulse 3s infinite; }
-
-        @keyframes text-shimmer {
-            0% { background-position: -200% center; }
-            100% { background-position: 200% center; }
-        }
-        .animate-brand-text {
-            background: linear-gradient(90deg, #0f172a, #2563eb, #0f172a);
-            background-size: 200% auto;
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            animation: text-shimmer 4s linear infinite;
-        }
-
-        @keyframes shimmer {
-            0% { transform: translateX(-100%); }
-            100% { transform: translateX(100%); }
-        }
-        .shimmer-effect { position: relative; overflow: hidden; }
-        .shimmer-effect::after {
-            content: ""; position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
-            animation: shimmer 2s infinite;
-        }
-
         @media print { 
+            @page {
+                size: A5;
+                margin: 5mm;
+            }
+            body { background: white !important; }
             .no-print { display: none !important; } 
-            .printable-content { display: block !important; width: 100% !important; } 
-            body { background: white !important; color: black !important; }
+            
+            /* High Contrast Print Mode */
+            .printable-content { 
+                display: block !important; 
+                width: 100% !important; 
+                color: #000000 !important;
+                background: #ffffff !important;
+                position: static !important;
+                padding: 0 !important;
+                margin: 0 !important;
+                box-shadow: none !important;
+                border: none !important;
+            }
+            
+            .printable-content * {
+                color: #000000 !important; /* Force all text to absolute black */
+                background-color: transparent !important;
+                border-color: #000000 !important; /* Force all borders to black */
+                text-shadow: none !important;
+                box-shadow: none !important;
+            }
+
+            table { 
+                width: 100% !important;
+                border-collapse: collapse !important; 
+                page-break-inside: auto;
+            }
+            tr { 
+                page-break-inside: avoid; 
+                page-break-after: auto; 
+            }
+            thead { display: table-header-group; }
+            tfoot { display: table-footer-group; }
+            
+            /* Remove decorative rounded corners in print to save ink and look sharper */
+            .printable-content .rounded-xl, 
+            .printable-content .rounded-2xl, 
+            .printable-content .rounded-3xl {
+                border-radius: 0 !important;
+            }
         }
     </style>
 <script type="importmap">
