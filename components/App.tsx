@@ -1,26 +1,26 @@
 
 import React, { useState, useEffect } from 'react';
-import Sidebar from './components/Sidebar';
-import Dashboard from './components/Dashboard';
-import Sales from './components/Sales';
-import Inventory from './components/Inventory';
-import Customers from './components/Customers';
-import Bookings from './components/Bookings';
-import Replacements from './components/Replacements';
-import Reports from './components/Reports';
-import Team from './components/Team';
-import CompanyLedger from './components/CompanyLedger';
-import Collections from './components/Collections';
-import DeliveryHub from './components/DeliveryHub';
-import OrderManagement from './components/OrderManagement';
-import AdManager from './components/AdManager';
-import Login from './components/Login';
-import MarketingPage from './components/MarketingPage';
-import CustomerPortal from './components/CustomerPortal';
-import Showroom from './components/Showroom';
-import Tracking from './components/Tracking';
-import { User, Company } from './types';
-import { checkSupabaseConnection } from './lib/supabase';
+import Sidebar from './Sidebar';
+import Dashboard from './Dashboard';
+import Sales from './Sales';
+import Inventory from './Inventory';
+import Customers from './Customers';
+import Bookings from './Bookings';
+import Replacements from './Replacements';
+import Reports from './Reports';
+import Team from './Team';
+import CompanyLedger from './CompanyLedger';
+import Collections from './Collections';
+import DeliveryHub from './DeliveryHub';
+import OrderManagement from './OrderManagement';
+import AdManager from './AdManager';
+import Login from './Login';
+import MarketingPage from './MarketingPage';
+import CustomerPortal from './CustomerPortal';
+import Showroom from './Showroom';
+import Tracking from './Tracking';
+import { User, Company } from '../types';
+import { checkSupabaseConnection } from '../lib/supabase';
 
 const App: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
@@ -32,19 +32,10 @@ const App: React.FC = () => {
   const [dbError, setDbError] = useState(false);
 
   useEffect(() => {
-    // Register Service Worker for PWA support
-    if ('serviceWorker' in navigator) {
-      window.addEventListener('load', () => {
-        navigator.serviceWorker.register('./sw.js').catch(err => console.log('SW registration failed:', err));
-      });
-    }
-
     const boot = async () => {
       try {
         const isConnected = await checkSupabaseConnection();
-        if (!isConnected) {
-          setDbError(true);
-        }
+        if (!isConnected) setDbError(true);
 
         const saved = localStorage.getItem('ifza_user');
         if (saved) {
@@ -59,8 +50,7 @@ const App: React.FC = () => {
       } catch (e) {
         setDbError(true);
       } finally {
-        // Aesthetic delay for the boot screen
-        setTimeout(() => setInitialized(true), 2500);
+        setTimeout(() => setInitialized(true), 2000);
       }
     };
     boot();
@@ -76,11 +66,7 @@ const App: React.FC = () => {
   const handleLogin = (u: User) => {
     setUser(u);
     setShowLogin(false);
-    if (u.role === 'CUSTOMER') {
-      setActiveTab('portal_dashboard');
-    } else {
-      setActiveTab('dashboard');
-    }
+    setActiveTab(u.role === 'CUSTOMER' ? 'portal_dashboard' : 'dashboard');
     setSelectedCompany(u.company);
     localStorage.setItem('ifza_user', JSON.stringify(u));
   };
@@ -95,17 +81,13 @@ const App: React.FC = () => {
   if (!initialized) {
     return (
       <div className="h-screen flex flex-col items-center justify-center bg-[#05070a] text-white overflow-hidden">
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(59,130,246,0.1),transparent_70%)] pointer-events-none"></div>
-        <div className="relative mb-12">
-            <div className="w-32 h-32 border-[8px] border-blue-500/10 border-t-blue-600 rounded-full animate-spin shadow-[0_0_60px_rgba(37,99,235,0.3)]"></div>
-            <div className="absolute inset-0 flex items-center justify-center font-black text-3xl italic text-blue-500">if</div>
+        <div className="relative mb-8">
+            <div className="w-24 h-24 border-[6px] border-blue-500/10 border-t-blue-600 rounded-full animate-spin shadow-2xl"></div>
+            <div className="absolute inset-0 flex items-center justify-center font-black text-2xl italic text-blue-500">if</div>
         </div>
-        <div className="text-center space-y-4 relative z-10">
-          <p className="font-black uppercase text-[14px] tracking-[1em] text-blue-500 animate-pulse">IFZA ELECTRONICS</p>
-          <div className="flex flex-col gap-1">
-             <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">TRANSTEC • SQ LIGHT • SQ CABLES</p>
-             <p className="text-[8px] font-medium text-slate-700 uppercase tracking-[0.5em] mt-1 italic">Enterprise Cloud Terminal v4.6.8</p>
-          </div>
+        <div className="text-center">
+          <p className="font-black uppercase text-[12px] tracking-[0.8em] text-blue-500 animate-pulse">IFZA ELECTRONICS</p>
+          <p className="text-[8px] font-medium text-slate-700 uppercase tracking-[0.4em] mt-2 italic">Enterprise Terminal v4.6.8</p>
         </div>
       </div>
     );
@@ -114,17 +96,14 @@ const App: React.FC = () => {
   if (dbError) {
     return (
       <div className="h-screen flex flex-col items-center justify-center bg-[#0a0f1d] text-white p-10 text-center">
-        <div className="text-8xl mb-8 animate-bounce">🛰️</div>
-        <h1 className="text-4xl font-black mb-4 uppercase italic tracking-tighter text-white">Connection Lost</h1>
-        <p className="text-slate-500 mb-10 max-w-sm mx-auto text-sm leading-relaxed font-medium">ক্লাউড সার্ভারের সাথে যোগাযোগ করা যাচ্ছে না। দয়া করে আপনার ইন্টারনেট চেক করুন অথবা আপনার হোস্টিং অ্যাডমিনকে জানান।</p>
-        <button onClick={() => window.location.reload()} className="bg-blue-600 text-white px-16 py-6 rounded-[2rem] font-black uppercase text-xs shadow-2xl active:scale-95 transition-all hover:bg-blue-700">Try Reconnecting 🔄</button>
+        <h1 className="text-4xl font-black mb-4 uppercase italic tracking-tighter">Connection Lost</h1>
+        <button onClick={() => window.location.reload()} className="bg-blue-600 px-12 py-5 rounded-2xl font-black uppercase text-xs">Reconnect 🔄</button>
       </div>
     );
   }
 
   if (!user) {
-    if (showLogin) return <Login onLogin={handleLogin} onBack={() => setShowLogin(false)} />;
-    return <MarketingPage onEnterERP={() => setShowLogin(true)} />;
+    return showLogin ? <Login onLogin={handleLogin} onBack={() => setShowLogin(false)} /> : <MarketingPage onEnterERP={() => setShowLogin(true)} />;
   }
 
   const renderContent = () => {
@@ -153,7 +132,7 @@ const App: React.FC = () => {
   };
 
   return (
-    <div className="flex h-screen bg-[#f1f5f9] overflow-hidden font-sans selection:bg-blue-600/20">
+    <div className="flex h-screen bg-[#f1f5f9] overflow-hidden">
       <Sidebar 
         activeTab={activeTab} 
         setActiveTab={setActiveTab} 
@@ -165,22 +144,24 @@ const App: React.FC = () => {
         onClose={() => setIsSidebarOpen(false)} 
       />
       
-      <main className="flex-1 flex flex-col md:ml-[320px] overflow-hidden relative">
-        <header className="h-24 bg-white/80 backdrop-blur-xl border-b border-slate-200 flex justify-between items-center px-6 md:px-12 shrink-0 z-40">
+      <main className="flex-1 flex flex-col md:ml-[300px] overflow-hidden relative">
+        <header className="h-20 bg-white border-b border-slate-200 flex justify-between items-center px-6 md:px-10 shrink-0 z-40 shadow-sm">
           <div className="flex items-center gap-4">
-            <button onClick={() => setIsSidebarOpen(true)} className="md:hidden p-3 bg-slate-900 text-white rounded-2xl shadow-lg active:scale-90 transition-transform">☰</button>
-            <div className="hidden sm:block">
-              <h1 className="text-xl font-black text-slate-900 uppercase italic tracking-tighter leading-none">{activeTab.replace(/_/g, ' ')}</h1>
-              <p className="text-[9px] font-black text-blue-600 uppercase tracking-[0.3em] mt-2 italic">• {selectedCompany} Node Active</p>
+            <button onClick={() => setIsSidebarOpen(true)} className="md:hidden p-2.5 bg-slate-900 text-white rounded-xl shadow-lg">☰</button>
+            <div>
+              <h1 className="text-sm font-black text-slate-900 uppercase italic tracking-widest leading-none">{activeTab.replace(/_/g, ' ')}</h1>
+              <p className="text-[8px] font-black text-blue-600 uppercase tracking-[0.2em] mt-1.5 italic">• Node: {selectedCompany}</p>
             </div>
           </div>
           
-          <div className="flex items-center gap-5">
+          <div className="flex items-center gap-4">
             <div className="text-right hidden sm:block">
-              <p className="text-[11px] font-black text-slate-900 leading-none truncate max-w-[150px] uppercase italic">{user.name}</p>
-              <p className="text-[8px] font-black text-slate-400 mt-1 uppercase tracking-widest">{user.role} ACCESS</p>
+              <p className="text-[10px] font-black text-slate-900 uppercase italic leading-none">{user.name}</p>
+              <p className="text-[7px] font-bold text-slate-400 mt-1 uppercase tracking-widest">{user.role} ACCESS</p>
             </div>
-            <div className="w-12 h-12 bg-blue-600 rounded-2xl flex items-center justify-center text-white font-black italic shadow-xl border-2 border-white ring-4 ring-blue-500/5">{user.name.charAt(0)}</div>
+            <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center text-white font-black italic shadow-lg">
+              {user.name.charAt(0)}
+            </div>
           </div>
         </header>
 

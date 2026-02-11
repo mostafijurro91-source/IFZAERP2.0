@@ -44,11 +44,10 @@ const Sales: React.FC<{ company: Company; role: UserRole; user: User }> = ({ com
   const invoiceRef = useRef<HTMLDivElement>(null);
   const dbCo = mapToDbCompany(company);
 
-  // কোম্পানির ফোন নম্বর ম্যাপ
   const companyPhones: Record<string, string> = {
     'Transtec': '01701551690',
     'SQ Light': '01774105970',
-    'SQ Cables': '+8801709643451'
+    'SQ Cables': '01709643451'
   };
 
   useEffect(() => { loadData(); }, [company]);
@@ -98,18 +97,33 @@ const Sales: React.FC<{ company: Company; role: UserRole; user: User }> = ({ com
     try {
       const element = invoiceRef.current;
       const canvas = await html2canvas(element, {
-        scale: 3,
+        scale: 2.5,
         useCORS: true,
-        backgroundColor: '#ffffff'
+        backgroundColor: '#ffffff',
+        logging: false
       });
       const imgData = canvas.toDataURL('image/jpeg', 1.0);
       const pdf = new jsPDF('p', 'mm', 'a5');
       const pdfWidth = pdf.internal.pageSize.getWidth();
       const imgHeight = (canvas.height * pdfWidth) / canvas.width;
-      pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, imgHeight);
-      pdf.save(`Invoice_${tempInvoiceId}_${new Date().getTime()}.pdf`);
+      
+      let heightLeft = imgHeight;
+      let position = 0;
+      let pdfHeight = pdf.internal.pageSize.getHeight();
+
+      pdf.addImage(imgData, 'JPEG', 0, position, pdfWidth, imgHeight);
+      heightLeft -= pdfHeight;
+
+      while (heightLeft >= 0) {
+        position = heightLeft - imgHeight;
+        pdf.addPage();
+        pdf.addImage(imgData, 'JPEG', 0, position, pdfWidth, imgHeight);
+        heightLeft -= pdfHeight;
+      }
+
+      pdf.save(`IFZA_Invoice_${tempInvoiceId}.pdf`);
     } catch (err) {
-      alert("পিডিএফ ডাউনলোড করা যায়নি।");
+      alert("পিডিএফ জেনারেট করা যায়নি। সরাসরি প্রিন্ট ব্যবহার করুন।");
     } finally {
       setIsDownloading(false);
     }
@@ -173,85 +187,48 @@ const Sales: React.FC<{ company: Company; role: UserRole; user: User }> = ({ com
         type: i.type 
       }));
 
-      const { data: insertData, error } = await supabase.from('transactions').insert([{
+      const { error } = await supabase.from('transactions').insert([{
         customer_id: selectedCustomer.id,
         company: dbCo,
         amount: netTotal,
         payment_type: 'DUE',
         items: itemsToSave,
         submitted_by: user.name
-      }]).select();
+      }]);
 
       if (error) throw error;
       
       for (const item of cart) {
-        let amt = 0;
-        if (item.type === 'SALE' || item.type === 'REPLACE') amt = -item.qty;
-        if (item.type === 'RETURN') amt = item.qty;
-        
-        // স্টক আপডেট
-        await supabase.rpc('increment_stock', { row_id: item.product.id, amt });
-
-        // যদি রিপ্লেস হয় তবে রিপ্লেসমেন্ট টেবিলে ডাটা পাঠানো
-        if (item.type === 'REPLACE') {
-           await supabase.from('replacements').insert([{
-             customer_id: selectedCustomer.id,
-             product_id: item.product.id,
-             company: dbCo,
-             product_name: item.product.name,
-             qty: item.qty,
-             status: 'PENDING'
-           }]);
-        }
+        let amt = (item.type === 'SALE' || item.type === 'REPLACE') ? -item.qty : (item.type === 'RETURN' ? item.qty : 0);
+        if (amt !== 0) await supabase.rpc('increment_stock', { row_id: item.product.id, amt });
       }
 
-      // SMS Trigger
-      const currentDue = (companyDues[selectedCustomer.id] || 0) + netTotal;
-      const smsMsg = `IFZA Electronics: ${selectedCustomer.name}, আপনার #${tempInvoiceId} মেমোটি ${netTotal.toLocaleString()}৳ এ সেভ হয়েছে। বর্তমান বকেয়া (${company}): ${Math.round(currentDue).toLocaleString()}৳। ধন্যবাদ।`;
-      await sendSMS(selectedCustomer.phone, smsMsg, selectedCustomer.id);
-
-      alert("মেমো সফলভাবে সেভ হয়েছে এবং কাস্টমারকে এসএমএস পাঠানো হয়েছে!");
+      alert("সফলভাবে সেভ হয়েছে!");
       setShowPreview(false);
       setCart([]);
       setSelectedCustomer(null);
-      setUniversalDiscountPercent(0);
-      setUniversalDiscountAmount(0);
       loadData(); 
     } catch (e: any) { alert(e.message); } finally { setIsSaving(false); }
   };
 
   const handleDeleteMemo = async (memo: any) => {
-    if (user.role !== 'ADMIN') return alert("শুধুমাত্র এডমিন মেমো ডিলিট করতে পারবেন!");
-    if (!confirm("আপনি কি নিশ্চিত এই মেমোটি ডিলিট করতে চান? ডিলিট করলে মালের স্টক স্বয়ংক্রিয়ভাবে ফিরে আসবে।")) return;
-    
+    if (user.role !== 'ADMIN') return alert("শুধুমাত্র এডমিন ডিলিট করতে পারবেন!");
+    if (!confirm("নিশ্চিত ডিলিট করতে চান? স্টক স্বয়ংক্রিয়ভাবে ফিরে আসবে।")) return;
     setIsSaving(true);
     try {
-      const items = memo.items || [];
-      for (const item of items) {
-        let rollbackAmt = 0;
-        if (item.type === 'SALE' || item.type === 'REPLACE') rollbackAmt = Number(item.qty);
-        if (item.type === 'RETURN') rollbackAmt = -Number(item.qty);
-        
-        if (item.product_id) {
-          await supabase.rpc('increment_stock', { row_id: item.product_id, amt: rollbackAmt });
-        }
+      for (const item of (memo.items || [])) {
+        let rb = (item.type === 'SALE' || item.type === 'REPLACE') ? Number(item.qty) : (item.type === 'RETURN' ? -Number(item.qty) : 0);
+        if (rb !== 0 && item.product_id) await supabase.rpc('increment_stock', { row_id: item.product_id, amt: rb });
       }
-      
       const { error } = await supabase.from('transactions').delete().eq('id', memo.id);
       if (error) throw error;
-      
-      alert("মেমো ডিলিট হয়েছে এবং স্টক রোলব্যাক হয়েছে!");
+      alert("মেমো ডিলিট হয়েছে!");
       loadData();
-    } catch (e: any) {
-      alert("ডিলিট করতে সমস্যা হয়েছে।");
-    } finally {
-      setIsSaving(false);
-    }
+    } catch (e) { alert("সমস্যা হয়েছে।"); } finally { setIsSaving(false); }
   };
 
   const openPreview = () => {
-    if (!selectedCustomer) return alert("প্রথমে দোকান সিলেক্ট করুন!");
-    if (cart.length === 0) return alert("কার্ট খালি!");
+    if (!selectedCustomer || cart.length === 0) return;
     setTempInvoiceId(Math.floor(100000 + Math.random() * 900000).toString());
     fetchLastPayment(selectedCustomer.id);
     setShowPreview(true);
@@ -262,8 +239,8 @@ const Sales: React.FC<{ company: Company; role: UserRole; user: User }> = ({ com
 
   return (
     <div className="flex flex-col gap-8 pb-40 animate-reveal text-black">
-      <div className="flex flex-col lg:flex-row gap-8 h-fit lg:h-[calc(100vh-160px)] overflow-hidden">
-        {/* Left Side: Product Picker */}
+      <div className="flex flex-col lg:flex-row gap-8 h-fit lg:h-[calc(100vh-160px)] overflow-hidden no-print">
+        {/* Product Picker */}
         <div className="flex-1 flex flex-col gap-6 overflow-hidden">
           <div className="bg-white p-6 rounded-[2.5rem] border shadow-sm flex flex-col md:flex-row gap-4 shrink-0">
             <div className="flex-1 flex gap-2 items-center bg-slate-100 p-1.5 rounded-[1.8rem] shadow-inner border border-slate-200">
@@ -271,55 +248,19 @@ const Sales: React.FC<{ company: Company; role: UserRole; user: User }> = ({ com
                   <option value="">সকল এরিয়া</option>
                   {uniqueAreas.map(a => <option key={a} value={a}>{a}</option>)}
                </select>
-               <div onClick={() => { setIsDropdownOpen(true); setCustSearch(""); }} className="flex-1 p-3 bg-white rounded-2xl shadow-sm cursor-pointer font-bold text-[11px] uppercase italic text-slate-900 border border-slate-100 truncate flex justify-between items-center group hover:border-blue-300">
+               <div onClick={() => { setIsDropdownOpen(true); setCustSearch(""); }} className="flex-1 p-3 bg-white rounded-2xl shadow-sm cursor-pointer font-bold text-[11px] uppercase italic text-slate-900 border border-slate-100 truncate flex justify-between items-center hover:border-blue-300">
                   <span>{selectedCustomer ? selectedCustomer.name : "দোকান বাছাই করুন..."}</span>
                   <span className="text-slate-300">▼</span>
                </div>
                <input className="flex-1 p-3 bg-transparent border-none text-[12px] font-medium uppercase outline-none text-black" placeholder="পণ্য খুঁজুন..." value={search} onChange={e => setSearch(e.target.value)} />
             </div>
-
-            {isDropdownOpen && (
-              <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-md" onClick={() => setIsDropdownOpen(false)}>
-                 <div className="bg-white w-full max-w-lg rounded-[3rem] shadow-2xl p-6 flex flex-col h-[80vh] animate-reveal" onClick={e => e.stopPropagation()}>
-                    <div className="flex justify-between items-center mb-4 px-2">
-                       <h3 className="font-black uppercase italic text-sm text-slate-400">Shop Finder</h3>
-                       <button onClick={() => setIsDropdownOpen(false)} className="text-2xl text-slate-300 font-black">×</button>
-                    </div>
-                    <div className="relative mb-4">
-                      <input autoFocus placeholder="দোকানের নাম বা মোবাইল লিখুন..." className="w-full p-6 bg-slate-50 border-2 border-slate-100 outline-none font-black text-base uppercase rounded-3xl focus:border-blue-600 transition-all" value={custSearch} onChange={e => setCustSearch(e.target.value)} />
-                      <span className="absolute right-6 top-1/2 -translate-y-1/2 text-slate-300">🔍</span>
-                    </div>
-                    <div className="overflow-y-auto flex-1 custom-scroll pr-2">
-                      {filteredCustomers.map(c => (
-                        <div key={c.id} onClick={() => { setSelectedCustomer(c); setIsDropdownOpen(false); }} className="p-5 hover:bg-blue-600 hover:text-white rounded-[2rem] cursor-pointer border-b border-slate-50 flex justify-between items-center transition-all group text-black">
-                           <div>
-                             <p className="font-black text-[14px] uppercase italic leading-none mb-1 group-hover:text-white">{c.name}</p>
-                             <p className="text-[9px] font-bold text-slate-400 uppercase group-hover:text-white/70">📍 {c.address} • 📱 {c.phone}</p>
-                           </div>
-                           <div className="text-right">
-                              <p className="text-[14px] font-black group-hover:text-white">৳{(companyDues[c.id] || 0).toLocaleString()}</p>
-                           </div>
-                        </div>
-                      ))}
-                    </div>
-                 </div>
-              </div>
-            )}
           </div>
-          
           <div className="flex-1 overflow-y-auto grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-3 pr-2 custom-scroll">
             {productList.filter(p => p.name.toLowerCase().includes(search.toLowerCase())).map(p => (
-              <div key={p.id} onClick={() => p.stock > 0 && addToCart(p)} className={`bg-white p-4 rounded-[2rem] border border-slate-100 shadow-sm hover:shadow-xl transition-all cursor-pointer flex flex-col justify-between group h-full ${p.stock <= 0 ? 'opacity-30 pointer-events-none grayscale' : 'active:scale-95'}`}>
-                 <div className="mb-4">
-                    <h4 className="text-[13px] font-black uppercase text-slate-900 leading-tight line-clamp-2 h-8">{p.name}</h4>
-                    <p className="text-[8px] font-normal text-slate-400 mt-2 uppercase tracking-tighter italic">MRP: ৳{p.mrp}</p>
-                 </div>
-                 
-                 <div className="flex justify-between items-end border-t pt-3 border-slate-50">
-                    <div>
-                       <p className="text-[7px] text-slate-300 font-bold uppercase mb-0.5">Trade Price</p>
-                       <p className="font-medium text-base text-slate-800 tracking-tighter leading-none">৳{p.tp}</p>
-                    </div>
+              <div key={p.id} onClick={() => p.stock > 0 && addToCart(p)} className={`bg-white p-4 rounded-[2rem] border border-slate-100 shadow-sm hover:shadow-xl transition-all cursor-pointer flex flex-col justify-between h-full ${p.stock <= 0 ? 'opacity-30 pointer-events-none grayscale' : 'active:scale-95'}`}>
+                 <div><h4 className="text-[13px] font-black uppercase text-slate-900 leading-tight line-clamp-2">{p.name}</h4></div>
+                 <div className="flex justify-between items-end border-t pt-3 border-slate-50 mt-2">
+                    <p className="font-medium text-base text-slate-800 tracking-tighter">৳{p.tp}</p>
                     <span className={`text-[8px] font-medium px-2 py-1 rounded-lg italic ${p.stock < 10 ? 'bg-red-50 text-red-500' : 'bg-blue-50 text-blue-500'}`}>Stock: {p.stock}</span>
                  </div>
               </div>
@@ -327,188 +268,108 @@ const Sales: React.FC<{ company: Company; role: UserRole; user: User }> = ({ com
           </div>
         </div>
 
-        {/* Right Side: Cart Hub */}
-        <div className="w-full lg:w-[480px] bg-slate-50 rounded-[4rem] border shadow-2xl overflow-hidden flex flex-col shrink-0 h-fit lg:h-full">
+        {/* Cart Hub */}
+        <div className="w-full lg:w-[480px] bg-white rounded-[4rem] border shadow-2xl overflow-hidden flex flex-col shrink-0 h-fit lg:h-full">
           <div className="p-6 bg-slate-900 text-white flex flex-col gap-4 shrink-0">
-             <div className="flex justify-between items-center">
-                <h3 className="text-sm font-black italic uppercase tracking-tighter">মেমো কার্ট ({cart.length})</h3>
-                <div className="flex gap-2">
-                   <div className="bg-white/10 px-3 py-1 rounded-lg border border-white/5 flex items-center gap-2">
-                      <span className="text-[7px] font-black uppercase opacity-60">Disc %</span>
-                      <input type="number" className="bg-transparent w-8 font-black text-[11px] outline-none text-blue-400 text-center" value={universalDiscountPercent || ""} onChange={e => setUniversalDiscountPercent(Number(e.target.value))} />
-                   </div>
-                   <div className="bg-white/10 px-3 py-1 rounded-lg border border-white/5 flex items-center gap-2">
-                      <span className="text-[7px] font-black uppercase opacity-60">Flat ৳</span>
-                      <input type="number" className="bg-transparent w-12 font-black text-[11px] outline-none text-emerald-400 text-center" value={universalDiscountAmount || ""} onChange={e => setUniversalDiscountAmount(Number(e.target.value))} />
-                   </div>
-                </div>
+             <div className="flex justify-between items-center"><h3 className="text-sm font-black italic uppercase">মেমো কার্ট ({cart.length})</h3>
+                <div className="bg-white/10 px-3 py-1 rounded-lg border flex items-center gap-2"><span className="text-[7px] font-black uppercase opacity-60">Disc %</span><input type="number" className="bg-transparent w-8 font-black text-[11px] outline-none text-blue-400 text-center" value={universalDiscountPercent || ""} onChange={e => setUniversalDiscountPercent(Number(e.target.value))} /></div>
              </div>
-             <div className="flex justify-between items-baseline pt-2 border-t border-white/5">
-                <span className="text-[10px] font-black uppercase opacity-40 italic">নিট বিল:</span>
-                <span className="text-3xl font-black italic text-blue-400 tracking-tighter">৳{Math.round(calculateNetTotal()).toLocaleString()}</span>
-             </div>
+             <div className="flex justify-between items-baseline pt-2 border-t border-white/5"><span className="text-[10px] font-black uppercase opacity-40 italic">নিট বিল:</span><span className="text-3xl font-black italic text-blue-400 tracking-tighter">৳{Math.round(calculateNetTotal()).toLocaleString()}</span></div>
           </div>
-          
           <div className="flex-1 overflow-y-auto p-6 space-y-6 custom-scroll min-h-[300px]">
-            {cart.length === 0 ? (
-               <div className="py-20 text-center opacity-10 font-black uppercase italic">কার্ট সম্পূর্ণ খালি</div>
-            ) : cart.map((item) => (
-              <div key={item.cartId} className={`bg-white p-8 rounded-[3rem] border shadow-sm relative group animate-reveal ${item.type === 'RETURN' ? 'border-red-100' : item.type === 'REPLACE' ? 'border-purple-100' : 'border-slate-50'}`}>
-                 <button onClick={() => removeFromCart(item.cartId)} className="absolute top-6 right-8 text-slate-200 hover:text-red-500 text-2xl font-bold transition-all">✕</button>
-                 
-                 <h4 className="text-[13px] font-black uppercase italic text-slate-800 leading-tight mb-6 pr-10">{item.product.name}</h4>
-
+            {cart.map((item) => (
+              <div key={item.cartId} className={`bg-slate-50 p-6 rounded-[3rem] border relative group animate-reveal ${item.type === 'RETURN' ? 'border-red-100 bg-red-50/10' : item.type === 'REPLACE' ? 'border-purple-100 bg-purple-50/10' : 'border-slate-100'}`}>
+                 <button onClick={() => removeFromCart(item.cartId)} className="absolute top-6 right-8 text-slate-300 hover:text-red-500 text-xl font-bold">✕</button>
+                 <h4 className="text-[12px] font-black uppercase italic text-slate-800 leading-tight mb-6 pr-10">{item.product.name}</h4>
                  <div className="grid grid-cols-3 gap-2 mb-6">
-                    <button onClick={() => updateCartItem(item.cartId, { type: 'SALE' })} className={`py-3 rounded-2xl text-[10px] font-black uppercase transition-all ${item.type === 'SALE' ? 'bg-slate-900 text-white shadow-lg' : 'bg-slate-100 text-slate-400'}`}>বিক্রি</button>
-                    <button onClick={() => updateCartItem(item.cartId, { type: 'RETURN' })} className={`py-3 rounded-2xl text-[10px] font-black uppercase transition-all ${item.type === 'RETURN' ? 'bg-red-600 text-white shadow-lg' : 'bg-slate-100 text-slate-400'}`}>ফেরত</button>
-                    <button onClick={() => updateCartItem(item.cartId, { type: 'REPLACE' })} className={`py-3 rounded-2xl text-[10px] font-black uppercase transition-all ${item.type === 'REPLACE' ? 'bg-purple-600 text-white shadow-lg' : 'bg-slate-100 text-slate-400'}`}>রিপ্লেস</button>
+                    <button onClick={() => updateCartItem(item.cartId, { type: 'SALE' })} className={`py-2 rounded-xl text-[9px] font-black uppercase ${item.type === 'SALE' ? 'bg-slate-900 text-white shadow-md' : 'bg-white text-slate-400 border'}`}>বিক্রি</button>
+                    <button onClick={() => updateCartItem(item.cartId, { type: 'RETURN' })} className={`py-2 rounded-xl text-[9px] font-black uppercase ${item.type === 'RETURN' ? 'bg-red-600 text-white shadow-md' : 'bg-white text-slate-400 border'}`}>ফেরত</button>
+                    <button onClick={() => updateCartItem(item.cartId, { type: 'REPLACE' })} className={`py-2 rounded-xl text-[9px] font-black uppercase ${item.type === 'REPLACE' ? 'bg-purple-600 text-white shadow-md' : 'bg-white text-slate-400 border'}`}>রিপ্লেস</button>
                  </div>
-
                  <div className="grid grid-cols-12 gap-3 items-end">
-                    <div className="col-span-4">
-                       <p className="text-[7px] font-black text-slate-300 uppercase ml-2 mb-2 italic">Rate (TP)</p>
-                       <input disabled={item.type === 'REPLACE'} type="number" className="w-full p-4 bg-slate-50 rounded-2xl text-[13px] font-black outline-none shadow-inner disabled:opacity-20" value={item.customPrice} onChange={e => updateCartItem(item.cartId, { customPrice: Number(e.target.value) })} />
-                    </div>
-                    <div className="col-span-3">
-                       <p className="text-[7px] font-black text-blue-400 uppercase ml-2 mb-2 italic">Item %</p>
-                       <input disabled={item.type === 'REPLACE'} type="number" className="w-full p-4 bg-blue-50 border border-blue-100 rounded-2xl text-[13px] font-black outline-none shadow-inner text-blue-600" value={item.itemDiscountPercent || ""} onChange={e => updateCartItem(item.cartId, { itemDiscountPercent: Number(e.target.value) })} />
-                    </div>
-                    <div className="col-span-5">
-                       <p className="text-[7px] font-black text-slate-300 uppercase ml-2 mb-2 italic">Qty</p>
-                       <div className="flex items-center bg-slate-50 rounded-2xl p-1 shadow-inner border border-slate-100">
-                          <button onClick={() => updateCartItem(item.cartId, { qty: Math.max(1, item.qty - 1) })} className="flex-1 py-3 font-black text-xl text-slate-300 hover:text-black">−</button>
-                          <input type="number" className="w-8 bg-transparent text-center font-black text-sm outline-none" value={item.qty} onChange={e => updateCartItem(item.cartId, { qty: Number(e.target.value) })} />
-                          <button onClick={() => updateCartItem(item.cartId, { qty: item.qty + 1 })} className="flex-1 py-3 font-black text-xl text-slate-300 hover:text-black">+</button>
+                    <div className="col-span-4"><p className="text-[7px] font-black text-slate-300 uppercase italic">Rate (TP)</p><input disabled={item.type === 'REPLACE'} type="number" className="w-full p-3 bg-white border rounded-xl text-[12px] font-black outline-none" value={item.customPrice} onChange={e => updateCartItem(item.cartId, { customPrice: Number(e.target.value) })} /></div>
+                    <div className="col-span-3"><p className="text-[7px] font-black text-blue-400 uppercase italic">Item %</p><input disabled={item.type === 'REPLACE'} type="number" className="w-full p-3 bg-blue-50 border border-blue-100 rounded-xl text-[12px] font-black outline-none text-blue-600" value={item.itemDiscountPercent || ""} onChange={e => updateCartItem(item.cartId, { itemDiscountPercent: Number(e.target.value) })} /></div>
+                    <div className="col-span-5"><p className="text-[7px] font-black text-slate-300 uppercase italic text-center">Qty</p>
+                       <div className="flex items-center bg-white border rounded-xl p-1 shadow-sm">
+                          <button onClick={() => updateCartItem(item.cartId, { qty: Math.max(1, item.qty - 1) })} className="flex-1 py-2 font-black text-xl text-slate-300 hover:text-black">−</button>
+                          <input type="number" className="w-8 bg-transparent text-center font-black text-xs outline-none" value={item.qty} onChange={e => updateCartItem(item.cartId, { qty: Number(e.target.value) })} />
+                          <button onClick={() => updateCartItem(item.cartId, { qty: item.qty + 1 })} className="flex-1 py-2 font-black text-xl text-slate-300 hover:text-black">+</button>
                        </div>
                     </div>
                  </div>
               </div>
             ))}
           </div>
-
-          <div className="p-8 bg-white shrink-0 border-t">
-             <button disabled={cart.length === 0 || !selectedCustomer} onClick={openPreview} className="w-full bg-blue-600 text-white py-8 rounded-[2.5rem] font-black uppercase text-[12px] tracking-[0.2em] shadow-2xl active:scale-95 transition-all disabled:opacity-20">
-                মেমো প্রিভিউ ও প্রিন্ট
-             </button>
-          </div>
+          <div className="p-8 bg-white shrink-0 border-t"><button disabled={cart.length === 0 || !selectedCustomer} onClick={openPreview} className="w-full bg-blue-600 text-white py-6 rounded-[2rem] font-black uppercase text-[12px] tracking-[0.2em] shadow-xl active:scale-95 transition-all">মেমো প্রিভিউ ও প্রিন্ট</button></div>
         </div>
       </div>
 
-      {/* Recent Memos Section */}
-      <div className="mt-12 bg-white p-8 md:p-12 rounded-[3.5rem] border shadow-sm animate-reveal">
-         <div className="flex justify-between items-center mb-8 border-b pb-6">
-            <h3 className="text-xl font-black uppercase italic tracking-tighter">আজকের সাম্প্রতিক মেমোসমূহ</h3>
-            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{recentMemos.length}টি ইনভয়েস</span>
-         </div>
-         <div className="overflow-x-auto custom-scroll">
-            <table className="w-full text-left">
-               <thead>
-                  <tr className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] border-b">
-                     <th className="p-6">দোকানের নাম ও ঠিকানা</th>
-                     <th className="p-6 text-center">সময়</th>
-                     <th className="p-6 text-right">নিট বিল</th>
-                     <th className="p-6 text-right">অ্যাকশন</th>
-                  </tr>
-               </thead>
-               <tbody className="divide-y divide-slate-50">
-                  {recentMemos.length === 0 ? (
-                    <tr><td colSpan={4} className="p-20 text-center opacity-20 font-black uppercase italic tracking-widest">আজ কোনো মেমো সেভ হয়নি</td></tr>
-                  ) : recentMemos.map((memo) => (
-                    <tr key={memo.id} className="hover:bg-slate-50 transition-colors">
-                       <td className="p-6">
-                          <p className="font-black text-[13px] uppercase italic text-slate-800">{memo.customers?.name}</p>
-                          <p className="text-[9px] font-bold text-slate-400 mt-1 uppercase italic">📍 {memo.customers?.address}</p>
-                       </td>
-                       <td className="p-6 text-center text-[10px] font-black text-slate-400">
-                          {new Date(memo.created_at).toLocaleTimeString('bn-BD', { hour: '2-digit', minute: '2-digit' })}
-                       </td>
-                       <td className="p-6 text-right font-black italic text-base text-slate-900">
-                          ৳{Number(memo.amount).toLocaleString()}
-                       </td>
-                       <td className="p-6 text-right">
-                          {(user.role === 'ADMIN') && (
-                             <button disabled={isSaving} onClick={() => handleDeleteMemo(memo)} className="bg-red-50 text-red-500 px-5 py-2.5 rounded-xl font-black text-[10px] uppercase shadow-sm hover:bg-red-600 hover:text-white transition-all active:scale-90">
-                                ডিলিট 🗑️
-                             </button>
-                          )}
-                       </td>
-                    </tr>
-                  ))}
-               </tbody>
-            </table>
-         </div>
-      </div>
-
+      {/* Invoice Preview Modal */}
       {showPreview && selectedCustomer && (
-        <div className="fixed inset-0 bg-[#020617]/98 backdrop-blur-3xl z-[2000] flex flex-col items-center p-4 overflow-y-auto no-print">
-           <div className="w-full max-w-[148mm] flex justify-between gap-6 mb-8 sticky top-0 z-[2001] bg-slate-900/90 p-6 rounded-3xl border border-white/10 shadow-2xl items-center">
-              <button onClick={() => setShowPreview(false)} className="text-white font-black uppercase text-[10px] px-6 hover:underline">← Edit Contents</button>
-              <div className="flex gap-4">
-                 <button disabled={isDownloading} onClick={handleDownloadPDF} className="bg-emerald-600 text-white px-8 py-3 rounded-xl font-black text-[10px] uppercase shadow-lg hover:bg-emerald-700 transition-all">
-                    {isDownloading ? "Generating..." : "Download PDF ⬇"}
-                 </button>
-                 <button disabled={isSaving} onClick={handleSaveInvoice} className="bg-blue-600 text-white px-10 py-3 rounded-xl font-black text-[10px] uppercase shadow-xl animate-pulse active:scale-95 transition-all">
-                    {isSaving ? "Saving..." : "কনফার্ম ও সেভ করুন ➔"}
-                 </button>
+        <div className="fixed inset-0 bg-slate-900/98 backdrop-blur-xl z-[2000] flex flex-col items-center p-4 overflow-y-auto custom-scroll">
+           <div className="w-full max-w-[148mm] flex justify-between gap-4 mb-6 sticky top-0 z-[2001] bg-slate-800 p-4 rounded-[2.5rem] shadow-2xl items-center no-print">
+              <button onClick={() => setShowPreview(false)} className="bg-blue-600 text-white px-6 py-2.5 rounded-xl font-black text-[10px] uppercase shadow-lg">← ফিরে যান</button>
+              <div className="flex gap-2">
+                 <button disabled={isDownloading} onClick={handleDownloadPDF} className="bg-blue-600 text-white px-6 py-2.5 rounded-xl font-black text-[10px] uppercase shadow-lg">ডাউনলোড PDF ⬇</button>
+                 <button onClick={() => window.print()} className="bg-blue-600 text-white px-6 py-2.5 rounded-xl font-black text-[10px] uppercase shadow-lg">প্রিন্ট ⎙</button>
+                 <button disabled={isSaving} onClick={handleSaveInvoice} className="bg-blue-700 text-white px-8 py-2.5 rounded-xl font-black text-[10px] uppercase shadow-xl active:scale-95">সেভ করুন ➔</button>
               </div>
            </div>
 
-           <div ref={invoiceRef} className="bg-white w-[148mm] min-h-[210mm] p-10 flex flex-col font-sans text-black shadow-2xl relative border-[3px] border-black">
-              <div className="text-center mb-8 border-b-4 border-black pb-6">
-                 <h1 className="text-[48px] font-black uppercase italic tracking-tighter leading-none mb-1 text-black">IFZA ELECTRONICS</h1>
-                 <p className="text-2xl font-black uppercase italic text-black">{company} DIVISION</p>
-                 <div className="bg-black text-white px-6 py-2 rounded-xl inline-block mt-4">
-                    <p className="text-[12px] font-black uppercase tracking-widest italic">বিক্রয় ও ডিস্ট্রিবিউশন হাব</p>
+           {/* 📄 HIGH CONTRAST INK-EFFICIENT MEMO (A5) */}
+           <div ref={invoiceRef} className="printable-content bg-white w-[148mm] min-h-[210mm] p-8 flex flex-col font-sans text-black shadow-none relative border border-black/20">
+              {/* Header */}
+              <div className="text-center mb-4 border-b border-black pb-2">
+                 <h1 className="text-[26px] font-black uppercase italic leading-none mb-1 text-black">IFZA ELECTRONICS</h1>
+                 <p className="text-[10px] font-black uppercase italic tracking-widest text-black">{company} DIVISION</p>
+                 <p className="text-[8px] font-bold mt-1 uppercase text-black italic">☎ Hotline: {companyPhones[company] || '01701551690'}</p>
+              </div>
+
+              {/* Info Section */}
+              <div className="flex justify-between items-start mb-4 text-black border-b border-black pb-3">
+                 <div className="space-y-0.5">
+                    <p className="text-[7px] font-black uppercase italic opacity-60">ক্রেতা (Customer):</p>
+                    <p className="text-[15px] font-black uppercase italic leading-none">{selectedCustomer.name}</p>
+                    <p className="text-[9px] font-bold opacity-100">📍 {selectedCustomer.address} | 📱 {selectedCustomer.phone}</p>
                  </div>
-                 <div className="mt-4 flex flex-col gap-1 items-center">
-                    <p className="text-[14px] font-black border-2 border-black px-4 py-1 rounded-full uppercase">
-                       ☎ হটলাইন: {companyPhones[company] || '01701551690'}
-                    </p>
+                 <div className="text-right space-y-0.5">
+                    <p className="text-[7px] font-black uppercase italic opacity-60">ইনভয়েস তথ্য:</p>
+                    <p className="text-[10px] font-black">Memo ID: #{tempInvoiceId}</p>
+                    <p className="text-[10px] font-black">Date: {new Date().toLocaleDateString('bn-BD')}</p>
+                    <p className="text-[7px] font-bold">User: {user.name}</p>
                  </div>
               </div>
 
-              <div className="flex justify-between items-start mb-8 text-[12px] font-bold">
-                 <div className="space-y-1.5">
-                    <p className="text-[10px] font-black border-b border-black w-fit mb-2 uppercase italic tracking-widest opacity-60">ক্রেতার তথ্য (Customer):</p>
-                    <p className="text-2xl font-black uppercase italic leading-none">{selectedCustomer.name}</p>
-                    <p className="text-[12px] font-bold mt-2 italic">ঠিকানা: {selectedCustomer.address}</p>
-                    <p className="text-[12px] font-bold italic">মোবাইল: {selectedCustomer.phone}</p>
-                 </div>
-                 <div className="text-right space-y-1.5">
-                    <p className="text-[10px] font-black border-b border-black w-fit ml-auto mb-2 uppercase italic tracking-widest opacity-60">ইনভয়েস তথ্য:</p>
-                    <p className="text-[13px] font-black">ID: <span className="font-black">#{tempInvoiceId}</span></p>
-                    <p className="text-[13px] font-black">তারিখ: {new Date().toLocaleDateString('bn-BD')}</p>
-                    <p className="text-[10px] font-bold italic mt-1 opacity-70">প্রতিনিধি: {user.name}</p>
-                 </div>
-              </div>
-
+              {/* Table */}
               <div className="flex-1">
-                 <table className="w-full border-collapse border-2 border-black">
+                 <table className="w-full border-collapse">
                     <thead>
-                       <tr className="bg-black text-white text-[10px] font-black uppercase italic">
-                          <th className="p-3 text-left border border-black">বিবরণ (Products)</th>
-                          <th className="p-3 text-center border border-black w-16">MRP</th>
-                          <th className="p-3 text-center border border-black w-16">রেট</th>
-                          <th className="p-3 text-center border border-black w-14">ছাড় %</th>
-                          <th className="p-3 text-center border border-black w-12">QTY</th>
-                          <th className="p-3 text-right border border-black w-24">বিল</th>
+                       <tr className="border-y border-black text-[9px] font-black uppercase italic text-black">
+                          <th className="py-2 text-left w-6">#</th>
+                          <th className="py-2 text-left">বিবরণ (Products)</th>
+                          <th className="py-2 text-center w-12">MRP</th>
+                          <th className="py-2 text-center w-12">রেট</th>
+                          <th className="py-2 text-center w-10">ছাড়%</th>
+                          <th className="py-2 text-center w-8">QTY</th>
+                          <th className="py-2 text-right w-20">বিল</th>
                        </tr>
                     </thead>
-                    <tbody>
+                    <tbody className="divide-y divide-black/20">
                        {cart.map((it, idx) => {
                           const baseTotal = (it.type === 'REPLACE' ? 0 : it.customPrice) * it.qty;
                           const afterItemDisc = baseTotal * (1 - (it.itemDiscountPercent || 0) / 100);
                           return (
-                             <tr key={idx} className="border-b border-black text-[11px] font-black italic">
-                                <td className="p-3 uppercase leading-tight border-r border-black">
+                             <tr key={idx} className="text-[11px] font-bold italic text-black">
+                                <td className="py-1.5 opacity-60">{idx + 1}</td>
+                                <td className="py-1.5 uppercase leading-tight pr-2">
                                    {it.product.name}
-                                   {it.type !== 'SALE' && <span className="ml-2 px-1.5 bg-black text-white text-[8px] rounded uppercase font-black tracking-widest">({it.type})</span>}
+                                   {it.type !== 'SALE' && <span className="ml-1 text-[7px] font-black border border-black px-1">[{it.type}]</span>}
                                 </td>
-                                <td className="p-3 text-center border-r border-black">৳{it.product.mrp}</td>
-                                <td className="p-3 text-center border-r border-black">৳{it.type === 'REPLACE' ? 0 : it.customPrice}</td>
-                                <td className="p-3 text-center border-r border-black">{it.itemDiscountPercent > 0 ? `${it.itemDiscountPercent}%` : '—'}</td>
-                                <td className="p-3 text-center border-r border-black">{it.qty}</td>
-                                <td className="p-3 text-right">
+                                <td className="py-1.5 text-center">৳{it.mrp}</td>
+                                <td className="py-1.5 text-center">৳{it.type === 'REPLACE' ? 0 : it.customPrice}</td>
+                                <td className="py-1.5 text-center">{it.itemDiscountPercent > 0 ? `${it.itemDiscountPercent}%` : '—'}</td>
+                                <td className="py-1.5 text-center">{it.qty}</td>
+                                <td className="py-1.5 text-right font-black">
                                    {it.type === 'RETURN' ? '-' : ''}৳{Math.round(afterItemDisc).toLocaleString()}
                                 </td>
                              </tr>
@@ -518,47 +379,113 @@ const Sales: React.FC<{ company: Company; role: UserRole; user: User }> = ({ com
                  </table>
               </div>
 
-              <div className="flex justify-between items-start mt-8">
-                 <div className="w-[55%] space-y-6">
-                    <div className="bg-slate-50 border-2 border-black rounded-2xl p-6 min-h-24">
-                       <p className="text-[10px] font-black border-b border-black w-fit mb-3 uppercase italic opacity-60">সর্বশেষ পেমেন্ট:</p>
-                       {lastPayment ? (
-                          <div className="text-black space-y-0.5">
-                             <p className="text-lg font-black italic">৳{lastPayment.amount.toLocaleString()}</p>
-                             <p className="text-[10px] font-bold italic">📅 {lastPayment.date}</p>
-                          </div>
-                       ) : <p className="text-[11px] font-black italic">কোনো রেকর্ড নেই</p>}
+              {/* Summary */}
+              <div className="mt-4 pt-3 border-t border-black">
+                 <div className="flex justify-between items-start">
+                    <div className="w-[55%] space-y-4">
+                       <div className="border border-black p-2 bg-transparent rounded-lg">
+                          <p className="text-[7px] font-black uppercase opacity-60 mb-1 border-b border-black/20 pb-0.5 italic">সর্বশেষ পেমেন্ট (Last Receipt):</p>
+                          {lastPayment ? (
+                             <div className="text-black">
+                               <p className="text-[10px] font-black italic">৳{lastPayment.amount.toLocaleString()}</p>
+                               <p className="text-[7px] font-bold italic opacity-70">তারিখ: {lastPayment.date}</p>
+                             </div>
+                          ) : <p className="text-[8px] italic opacity-50 font-bold">কোনো রেকর্ড নেই</p>}
+                       </div>
+                       <p className="text-[7px] italic font-bold opacity-80 leading-tight">* "RETURN" মালের বিল কর্তন করা হয়েছে। মাল বুঝে স্বাক্ষর করুন।</p>
                     </div>
-                    <div className="text-[9px] font-black italic opacity-60 space-y-1 leading-tight">
-                       <p>• "RETURN" মালের টাকা বিল থেকে কর্তন করা হয়েছে।</p>
-                       <p>• সকল পণ্য "IFZA" এর বিক্রয় নীতি অনুযায়ী প্রযোজ্য।</p>
-                       <p>• মাল বুঝে নিয়ে স্বাক্ষর করুন।</p>
-                    </div>
-                 </div>
 
-                 <div className="w-[40%] space-y-2">
-                    <div className="flex justify-between items-center text-[13px] font-black italic px-4">
-                       <span className="uppercase opacity-60">PREV. DUE:</span>
-                       <span>৳{prevDue.toLocaleString()}</span>
-                    </div>
-                    <div className="flex justify-between items-center text-[13px] font-black italic px-4 pb-2 border-b-2 border-black">
-                       <span className="uppercase opacity-60">ITEM NET:</span>
-                       <span>৳{Math.round(itemNet).toLocaleString()}</span>
-                    </div>
-                    <div className="bg-black text-white p-5 rounded-xl flex justify-between items-center mt-4">
-                       <span className="text-[14px] font-black uppercase italic">TOTAL:</span>
-                       <span className="text-3xl font-black italic">৳{(prevDue + Math.round(itemNet)).toLocaleString()}</span>
+                    <div className="w-[40%] space-y-1">
+                       <div className="flex justify-between text-[9px] font-bold italic border-b border-black/10 pb-0.5">
+                          <span className="opacity-70 uppercase">PREV. DUE:</span>
+                          <span className="text-black font-black">৳{prevDue.toLocaleString()}</span>
+                       </div>
+                       <div className="flex justify-between text-[9px] font-bold italic border-b border-black/10 pb-0.5">
+                          <span className="opacity-70 uppercase">ITEM NET:</span>
+                          <span className="text-black font-black">৳{Math.round(itemNet).toLocaleString()}</span>
+                       </div>
+                       <div className="flex justify-between items-center pt-2 mt-1">
+                          <span className="text-[10px] font-black uppercase italic">GRAND TOTAL:</span>
+                          <span className="text-[20px] font-black italic tracking-tight text-black border-b-2 border-black">৳{(prevDue + Math.round(itemNet)).toLocaleString()}</span>
+                       </div>
                     </div>
                  </div>
               </div>
 
-              <div className="mt-16 flex justify-between items-end px-4 mb-4">
-                 <div className="text-center w-48 border-t-2 border-black pt-2 font-black italic text-[14px]">ক্রেতার স্বাক্ষর</div>
-                 <div className="text-center w-64 border-t-2 border-black pt-2 text-right">
-                    <p className="text-[14px] font-black uppercase italic leading-none text-black">এস এম মোস্তাফিজুর রহমান</p>
-                    <p className="text-[10px] font-black italic opacity-50 uppercase mt-1 mb-2">প্রোপ্রাইটর, ইফজা ইলেকট্রনিক্স</p>
-                    <p className="text-[18px] font-black uppercase italic tracking-tighter">কর্তৃপক্ষের স্বাক্ষর</p>
+              {/* Signature Area with Seal Effect */}
+              <div className="mt-16 flex justify-between items-end mb-6">
+                 <div className="text-center w-32 border-t border-black pt-1 font-bold italic text-[10px] opacity-100">ক্রেতার স্বাক্ষর</div>
+                 
+                 {/* Proprietor Seal Style */}
+                 <div className="flex flex-col items-center">
+                    <div className="border-[1.5px] border-black px-4 py-1.5 rounded-[1rem] mb-1">
+                       <p className="text-[8px] font-black uppercase italic tracking-tighter leading-none mb-0.5">Proprietor</p>
+                       <p className="text-[10px] font-black uppercase italic leading-none">S.M. Mostafizur Rahman</p>
+                    </div>
+                    <div className="w-48 border-t border-black pt-1 text-center">
+                       <p className="text-[10px] font-black uppercase italic leading-none">Authority / IFZA HUB</p>
+                    </div>
                  </div>
+              </div>
+              
+              {/* Massive Branding Footer */}
+              <div className="text-center mt-auto">
+                 <div className="border-t border-black pt-2 opacity-100">
+                    <h2 className="text-[18px] font-black uppercase italic tracking-[0.2em] text-black">IFZA ELECTRONICS</h2>
+                    <p className="text-[7px] font-black tracking-widest uppercase italic opacity-60">Enterprise Cloud Terminal • IFZAERP.COM</p>
+                 </div>
+              </div>
+           </div>
+        </div>
+      )}
+
+      {/* Recent Memos */}
+      <div className="mt-8 bg-white p-6 md:p-10 rounded-[3.5rem] border shadow-sm no-print animate-reveal">
+         <div className="flex justify-between items-center mb-6 border-b pb-4">
+            <h3 className="text-lg font-black uppercase italic tracking-tighter">আজকের ইনভয়েসসমূহ</h3>
+            <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{recentMemos.length}টি মেমো</span>
+         </div>
+         <div className="overflow-x-auto custom-scroll">
+            <table className="w-full text-left">
+               <thead>
+                  <tr className="text-[9px] font-black text-slate-400 uppercase border-b">
+                     <th className="p-4">দোকানের নাম</th>
+                     <th className="p-4 text-right">নিট বিল</th>
+                     <th className="p-4 text-right">অ্যাকশন</th>
+                  </tr>
+               </thead>
+               <tbody className="divide-y divide-slate-50">
+                  {recentMemos.map((memo) => (
+                    <tr key={memo.id} className="hover:bg-slate-50 transition-colors text-[12px]">
+                       <td className="p-4 font-black uppercase italic text-slate-800">{memo.customers?.name}</td>
+                       <td className="p-4 text-right font-black italic">৳{Number(memo.amount).toLocaleString()}</td>
+                       <td className="p-4 text-right">
+                          {user.role === 'ADMIN' && <button onClick={() => handleDeleteMemo(memo)} className="bg-red-50 text-red-500 px-3 py-1.5 rounded-lg text-[9px] font-black uppercase">মুছুন</button>}
+                       </td>
+                    </tr>
+                  ))}
+               </tbody>
+            </table>
+         </div>
+      </div>
+
+      {/* Dropdown Modal for Customer Select */}
+      {isDropdownOpen && (
+        <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-md no-print" onClick={() => setIsDropdownOpen(false)}>
+           <div className="bg-white w-full max-w-lg rounded-[3rem] shadow-2xl p-6 flex flex-col h-[70vh] animate-reveal" onClick={e => e.stopPropagation()}>
+              <div className="relative mb-4">
+                <input autoFocus placeholder="দোকানের নাম বা মোবাইল..." className="w-full p-5 bg-slate-50 border rounded-2xl outline-none font-black text-sm uppercase" value={custSearch} onChange={e => setCustSearch(e.target.value)} />
+              </div>
+              <div className="overflow-y-auto flex-1 custom-scroll pr-2">
+                {filteredCustomers.map(c => (
+                  <div key={c.id} onClick={() => { setSelectedCustomer(c); setIsDropdownOpen(false); }} className="p-4 hover:bg-blue-600 hover:text-white rounded-2xl cursor-pointer border-b border-slate-50 flex justify-between items-center transition-all group text-black">
+                     <div>
+                       <p className="font-black text-xs uppercase italic leading-none mb-1 group-hover:text-white">{c.name}</p>
+                       <p className="text-[8px] font-bold text-slate-400 uppercase group-hover:text-white/70">📍 {c.address}</p>
+                     </div>
+                     <p className="text-[12px] font-black group-hover:text-white">৳{(companyDues[c.id] || 0).toLocaleString()}</p>
+                  </div>
+                ))}
               </div>
            </div>
         </div>
