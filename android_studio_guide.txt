@@ -34,7 +34,7 @@ class MainActivity : AppCompatActivity() {
         webSettings.databaseEnabled = true
 
         // আপনার ডেপ্লয় করা ওয়েবসাইটের URL দিন
-        myWebView.loadUrl("YOUR_WEBSITE_URL_HERE")
+        myWebView.loadUrl("https://www.ifzaerp.com/")
     }
 
     // ব্যাক বাটন চাপলে অ্যাপ বন্ধ না হয়ে আগের পেজে যাবে
