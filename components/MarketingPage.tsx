@@ -12,10 +12,33 @@ const MarketingPage: React.FC<MarketingPageProps> = ({ onEnterERP }) => {
   const [loading, setLoading] = useState(true);
   const [activeBrand, setActiveBrand] = useState<string>('ALL');
   const [selectedAd, setSelectedAd] = useState<Advertisement | null>(null);
+  const [canInstall, setCanInstall] = useState(false);
 
   useEffect(() => {
     fetchCatalogs();
+    
+    // Listen for the custom event from index.html
+    const handleInstallable = () => setCanInstall(true);
+    window.addEventListener('pwa-installable', handleInstallable);
+    
+    // Check if already in standalone mode
+    if (window.matchMedia('(display-mode: standalone)').matches) {
+        setCanInstall(false);
+    }
+
+    return () => window.removeEventListener('pwa-installable', handleInstallable);
   }, []);
+
+  const handleInstallClick = async () => {
+    const promptEvent = (window as any).deferredPrompt;
+    if (!promptEvent) return;
+    
+    promptEvent.prompt();
+    const { outcome } = await promptEvent.userChoice;
+    console.log(`User response to install prompt: ${outcome}`);
+    (window as any).deferredPrompt = null;
+    setCanInstall(false);
+  };
 
   const fetchCatalogs = async () => {
     try {
@@ -46,7 +69,25 @@ const MarketingPage: React.FC<MarketingPageProps> = ({ onEnterERP }) => {
 
   return (
     <div className="min-h-screen bg-[#020408] text-white font-sans selection:bg-blue-500/30 overflow-x-hidden custom-scroll">
-      <nav className="fixed top-0 inset-x-0 h-24 bg-black/40 backdrop-blur-2xl z-[1000] border-b border-white/5 flex justify-between items-center px-6 md:px-20">
+      
+      {/* 📱 PWA SMART INSTALL BANNER */}
+      {canInstall && (
+        <div className="fixed top-0 inset-x-0 z-[2000] bg-blue-600 p-4 md:px-20 flex justify-between items-center shadow-2xl animate-reveal border-b border-white/20">
+           <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-blue-600 text-xl font-black italic shadow-lg">ই</div>
+              <div className="hidden sm:block">
+                 <p className="text-white font-black text-[12px] uppercase italic leading-none">ইফজা ইআরপি অ্যাপ</p>
+                 <p className="text-white/60 text-[8px] font-bold uppercase tracking-widest mt-1">দ্রুত ব্যবহারের জন্য ইন্সটল করুন</p>
+              </div>
+           </div>
+           <div className="flex items-center gap-3">
+              <button onClick={() => setCanInstall(false)} className="text-white/40 font-black text-xs px-4 hover:text-white transition-colors">পরে</button>
+              <button onClick={handleInstallClick} className="bg-white text-blue-600 px-6 py-2.5 rounded-full font-black uppercase text-[10px] tracking-widest shadow-xl active:scale-95 transition-all">ইন্সটল করুন ➔</button>
+           </div>
+        </div>
+      )}
+
+      <nav className={`fixed ${canInstall ? 'top-[72px]' : 'top-0'} inset-x-0 h-24 bg-black/40 backdrop-blur-2xl z-[1000] border-b border-white/5 flex justify-between items-center px-6 md:px-20 transition-all duration-500`}>
         <div className="flex items-center gap-4 group cursor-pointer">
           <div className="w-12 h-12 bg-blue-600 rounded-2xl flex items-center justify-center font-black italic shadow-[0_0_30px_rgba(37,99,235,0.4)] group-hover:scale-110 transition-transform text-white">if</div>
           <div className="text-2xl font-black italic tracking-tighter uppercase leading-none text-white">
@@ -54,7 +95,6 @@ const MarketingPage: React.FC<MarketingPageProps> = ({ onEnterERP }) => {
             <p className="text-[7px] tracking-[0.6em] text-slate-500 mt-1 font-bold uppercase">Official Enterprise Hub</p>
           </div>
         </div>
-        {/* Updated Nav Button to Blue */}
         <button onClick={onEnterERP} className="bg-blue-600 text-white px-8 py-3.5 rounded-full font-black uppercase text-[10px] tracking-widest shadow-[0_0_20px_rgba(37,99,235,0.3)] active:scale-95 transition-all hover:bg-blue-700 hover:shadow-blue-500/40">
           Staff Portal ➔
         </button>
@@ -76,7 +116,6 @@ const MarketingPage: React.FC<MarketingPageProps> = ({ onEnterERP }) => {
                   <button 
                     key={b} 
                     onClick={() => setActiveBrand(b)} 
-                    // Updated active state to solid blue and inactive to ghost-blue
                     className={`px-10 py-5 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all border ${
                       activeBrand === b 
                       ? 'bg-blue-600 text-white border-blue-600 shadow-[0_0_30px_rgba(37,99,235,0.4)] scale-105' 
