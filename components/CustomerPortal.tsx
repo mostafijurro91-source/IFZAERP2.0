@@ -143,7 +143,7 @@ const CustomerPortal: React.FC<PortalProps> = ({ type, user }) => {
               </div>
               <div>
                  <h2 className="text-3xl font-black text-slate-900 uppercase italic tracking-tighter leading-none">{user.name}</h2>
-                 <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-3 italic">প্রোপ্রাইটর: {shopInfo?.proprietor_name || '...'}</p>
+                 <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-3 italic">SHOP ID: {user.username}</p>
                  <div className="flex gap-2 mt-2">
                     <span className="px-3 py-1 bg-blue-50 text-blue-600 rounded-lg text-[8px] font-black uppercase tracking-widest">📍 {shopInfo?.address}</span>
                     <span className="px-3 py-1 bg-slate-900 text-white rounded-lg text-[8px] font-black uppercase tracking-widest italic">IFZA HUB ACCESS</span>

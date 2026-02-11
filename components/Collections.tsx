@@ -44,6 +44,7 @@ const Collections: React.FC<CollectionsProps> = ({ company, user }) => {
 
   const fetchData = async () => {
     try {
+      setLoading(true);
       const today = new Date();
       today.setHours(0,0,0,0);
       const todayIso = today.toISOString();
@@ -82,6 +83,8 @@ const Collections: React.FC<CollectionsProps> = ({ company, user }) => {
       setAllCompanyDues(dues);
       setPendingRequests(pendRes.data || []);
       setUniqueRoutes(Array.from(new Set((custRes.data || []).map(c => c.address?.trim()).filter(Boolean))).sort() as string[]);
+    } catch (err) {
+      console.error(err);
     } finally { setLoading(false); }
   };
 
@@ -95,20 +98,40 @@ const Collections: React.FC<CollectionsProps> = ({ company, user }) => {
         company: dbCo, 
         amount: Number(req.amount),
         payment_type: 'COLLECTION', 
-        items: [{ note: `Approved collection by ${user.name}` }], 
+        items: [{ note: `নগদ আদায়: ${req.amount} টাকা` }], 
         submitted_by: req.submitted_by
       }]);
       if (txErr) throw txErr;
-      await supabase.from('collection_requests').update({ status: 'APPROVED' }).eq('id', req.id);
+      
+      await supabase.from('collection_requests').delete().eq('id', req.id);
       
       const dues = allCompanyDues[req.customer_id] || { 'Transtec': 0, 'SQ Light': 0, 'SQ Cables': 0 };
-      const currentBalance = dues[req.company] - Number(req.amount);
+      const currentBalance = (dues[req.company] || 0) - Number(req.amount);
       
       const smsMsg = `IFZA Electronics: ${req.customers?.name}, আপনার ${Number(req.amount).toLocaleString()} টাকা পেমেন্ট গৃহীত হয়েছে। বর্তমান বকেয়া (${req.company}): ${Math.round(currentBalance).toLocaleString()} টাকা। ধন্যবাদ।`;
       await sendSMS(req.customers?.phone, smsMsg, req.customer_id);
+      
       alert("কালেকশন এপ্রুভ হয়েছে এবং কাস্টমারকে এসএমএস পাঠানো হয়েছে!");
       await fetchData();
-    } catch (err: any) { alert(err.message); } finally { setIsSaving(false); }
+    } catch (err: any) { alert("Approve Error: " + err.message); } finally { setIsSaving(false); }
+  };
+
+  const handleDeleteRequest = async (id: string) => {
+    if (!isAdmin || isSaving) return;
+    if (!confirm("আপনি কি নিশ্চিত এই রিকোয়েস্টটি ডিলিট করতে চান? এটি রিজেক্ট হিসেবে গণ্য হবে।")) return;
+    
+    setIsSaving(true);
+    try {
+      const { error } = await supabase.from('collection_requests').delete().eq('id', id);
+      if (error) throw error;
+      
+      alert("সফলভাবে ডিলিট করা হয়েছে!");
+      await fetchData();
+    } catch (err: any) {
+      alert("ডিলিট করা যায়নি: " + err.message);
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const filteredCustomers = useMemo(() => {
@@ -249,10 +272,19 @@ const Collections: React.FC<CollectionsProps> = ({ company, user }) => {
             <button disabled={isSaving || !selectedCust || !amount} onClick={async () => {
               setIsSaving(true);
               try {
-                await supabase.from('collection_requests').insert([{ customer_id: selectedCust.id, amount: Number(amount), company: targetCompany, submitted_by: user.name, status: 'PENDING' }]);
-                setAmount(""); setSelectedCust(null); fetchData();
+                const { error } = await supabase.from('collection_requests').insert([{ 
+                    customer_id: selectedCust.id, 
+                    amount: Number(amount), 
+                    company: targetCompany, 
+                    submitted_by: user.name, 
+                    status: 'PENDING' 
+                }]);
+                if (error) throw error;
+                setAmount(""); 
+                setSelectedCust(null); 
+                await fetchData();
                 alert("কালেকশন রিকোয়েস্ট পাঠানো হয়েছে!");
-              } catch (err: any) { alert(err.message); } finally { setIsSaving(false); }
+              } catch (err: any) { alert("Error: " + err.message); } finally { setIsSaving(false); }
             }} className="w-full bg-blue-600 text-white py-8 rounded-[3.5rem] font-bold uppercase text-sm tracking-[0.3em] shadow-xl active:scale-95 transition-all">কালেকশন পোস্টিং পাঠান ➔</button>
          </div>
 
@@ -278,8 +310,8 @@ const Collections: React.FC<CollectionsProps> = ({ company, user }) => {
                       <div className="flex items-center justify-between pt-8 border-t border-slate-50">
                          <p className="text-[10px] font-bold text-slate-400 uppercase italic leading-none">কালেক্টর: {req.submitted_by}</p>
                          <div className="flex gap-3">
-                            <button disabled={isSaving} onClick={() => handleApprove(req)} className="bg-blue-600 text-white px-10 py-4 rounded-2xl text-[11px] font-bold uppercase shadow-xl active:scale-95 transition-all hover:bg-emerald-600">Approve ✅</button>
-                            <button onClick={async () => { if(confirm("ডিলিট করবেন?")) { await supabase.from('collection_requests').delete().eq('id', req.id); fetchData(); } }} className="text-red-600 hover:text-red-700 font-bold text-2xl px-4 transition-colors">×</button>
+                            <button disabled={isSaving} onClick={() => handleApprove(req)} className="bg-blue-600 text-white px-10 py-4 rounded-2xl text-[11px] font-bold uppercase shadow-xl active:scale-95 transition-all hover:bg-emerald-600">APPROVE ✅</button>
+                            <button disabled={isSaving} onClick={() => handleDeleteRequest(req.id)} className="text-red-600 hover:text-red-700 font-bold text-2xl px-4 transition-colors">×</button>
                          </div>
                       </div>
                    </div>
