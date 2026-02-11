@@ -238,30 +238,31 @@ const Bookings: React.FC<BookingsProps> = ({ company, role, user }) => {
   const uniqueAreas = useMemo(() => Array.from(new Set(customers.map(c => c.address?.trim()).filter(Boolean))).sort(), [customers]);
 
   return (
-    <div className="space-y-6 pb-40 font-sans text-black animate-reveal">
+    <div className="space-y-6 pb-24 font-sans text-black animate-reveal">
       
-      {/* Summary Row */}
+      {/* Visual Header Summary */}
       <div className="grid grid-cols-2 md:grid-cols-3 gap-3 no-print">
-        <div className="bg-white p-5 rounded-[1.8rem] border shadow-sm">
+        <div className="bg-white p-5 md:p-8 rounded-[2.2rem] border shadow-sm">
            <p className="text-[10px] font-black text-slate-400 uppercase italic mb-1">বুকিং ভ্যালু</p>
-           <p className="text-xl font-black italic text-slate-900 leading-none">{formatCurrency(filteredBookings.reduce((s, b) => s + Number(b.total_amount), 0))}</p>
+           <p className="text-xl md:text-3xl font-black italic text-slate-900 leading-none tracking-tighter">{formatCurrency(filteredBookings.reduce((s, b) => s + Number(b.total_amount), 0))}</p>
         </div>
-        <div className="bg-white p-5 rounded-[1.8rem] border shadow-sm">
+        <div className="bg-white p-5 md:p-8 rounded-[2.2rem] border shadow-sm">
            <p className="text-[10px] font-black text-slate-400 uppercase italic mb-1">মোট জমা</p>
-           <p className="text-xl font-black italic text-emerald-600 leading-none">{formatCurrency(filteredBookings.reduce((s, b) => s + Number(b.advance_amount), 0))}</p>
+           <p className="text-xl md:text-3xl font-black italic text-emerald-600 leading-none tracking-tighter">{formatCurrency(filteredBookings.reduce((s, b) => s + Number(b.advance_amount), 0))}</p>
         </div>
-        <div className="bg-slate-900 p-5 rounded-[1.8rem] shadow-xl text-white col-span-2 md:col-span-1">
+        <div className="bg-slate-900 p-5 md:p-8 rounded-[2.2rem] shadow-xl text-white col-span-2 md:col-span-1">
            <p className="text-[10px] font-black text-slate-500 uppercase italic mb-1">বাকি টাকা</p>
-           <p className="text-xl font-black italic text-red-400 leading-none">{formatCurrency(filteredBookings.reduce((s, b) => s + (Number(b.total_amount) - Number(b.advance_amount)), 0))}</p>
+           <p className="text-xl md:text-3xl font-black italic text-red-400 leading-none tracking-tighter">{formatCurrency(filteredBookings.reduce((s, b) => s + (Number(b.total_amount) - Number(b.advance_amount)), 0))}</p>
         </div>
       </div>
 
-      <div className="bg-white p-5 rounded-[2rem] border shadow-sm flex flex-col md:flex-row justify-between items-center gap-4 no-print">
+      {/* Terminal Title & Controls */}
+      <div className="bg-white p-4 md:p-6 rounded-[2.5rem] border shadow-sm flex flex-col md:flex-row justify-between items-center gap-4 no-print">
         <div className="flex items-center gap-4">
-           <div className="w-12 h-12 bg-indigo-600 rounded-xl flex items-center justify-center text-white text-2xl font-black italic shadow-lg">B</div>
+           <div className="w-12 h-12 bg-indigo-600 rounded-2xl flex items-center justify-center text-white text-2xl font-black italic shadow-lg">B</div>
            <div>
               <h3 className="text-lg font-black uppercase italic tracking-tighter leading-none">বুকিং টার্মিনাল</h3>
-              <p className="text-[9px] text-slate-400 font-black uppercase mt-1 tracking-widest">{company}</p>
+              <p className="text-[9px] text-slate-400 font-black uppercase mt-1 tracking-widest">{company} Division Hub</p>
            </div>
         </div>
         <div className="flex gap-2 w-full md:w-auto">
@@ -275,51 +276,58 @@ const Bookings: React.FC<BookingsProps> = ({ company, role, user }) => {
         </div>
       </div>
 
+      {/* Booking Cards Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 no-print pt-2">
         {loading ? (
           <div className="col-span-full py-20 text-center animate-pulse font-black uppercase italic opacity-20">লোড হচ্ছে...</div>
         ) : filteredBookings.map(b => (
-            <div key={b.id} onClick={() => { setSelectedBooking(b); setShowDetailModal(true); }} className="bg-white p-5 rounded-[2rem] border border-slate-100 shadow-sm hover:shadow-xl transition-all cursor-pointer group relative overflow-hidden">
-               <div className="flex justify-between items-start mb-4">
-                  <span className={`px-3 py-1 rounded-lg text-[8px] font-black uppercase tracking-widest ${
-                    b.status === 'COMPLETED' ? 'bg-emerald-50 text-emerald-600' : b.status === 'PARTIAL' ? 'bg-orange-50 text-orange-600' : 'bg-blue-50 text-blue-600'
-                  }`}>{b.status === 'PARTIAL' ? 'অংশিক' : b.status}</span>
-                  <p className="text-[8px] font-bold text-slate-200 uppercase">ID: {b.id.slice(-4).toUpperCase()}</p>
+            <div key={b.id} onClick={() => { setSelectedBooking(b); setShowDetailModal(true); }} className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm hover:shadow-xl transition-all cursor-pointer group relative overflow-hidden flex flex-col justify-between">
+               <div className="mb-4">
+                  <div className="flex justify-between items-start mb-4">
+                     <span className={`px-3 py-1 rounded-lg text-[8px] font-black uppercase tracking-widest ${
+                       b.status === 'COMPLETED' ? 'bg-emerald-50 text-emerald-600' : b.status === 'PARTIAL' ? 'bg-orange-50 text-orange-600' : 'bg-blue-50 text-blue-600'
+                     }`}>{b.status === 'PARTIAL' ? 'অংশিক' : b.status}</span>
+                     <p className="text-[8px] font-bold text-slate-200 uppercase">ID: {b.id.slice(-4).toUpperCase()}</p>
+                  </div>
+                  <h4 className="font-black text-slate-900 text-base md:text-lg uppercase italic leading-none truncate mb-1">{b.customer_name}</h4>
+                  <p className="text-[9px] text-slate-400 font-black uppercase truncate italic">📍 {b.customer_address}</p>
                </div>
-               <h4 className="font-black text-slate-900 text-base uppercase italic leading-none truncate mb-1">{b.customer_name}</h4>
-               <p className="text-[9px] text-slate-400 font-black uppercase truncate mb-4 italic">📍 {b.customer_address}</p>
-               <div className="flex justify-between items-end border-t pt-4">
-                  <div><p className="text-[8px] font-black text-slate-400 uppercase mb-1">বিল</p><p className="text-lg font-black italic text-slate-900 leading-none">{formatCurrency(b.total_amount)}</p></div>
+               <div className="flex justify-between items-end border-t pt-4 mt-auto">
+                  <div><p className="text-[8px] font-black text-slate-400 uppercase mb-1">বিল</p><p className="text-base md:text-lg font-black italic text-slate-900 leading-none">{formatCurrency(b.total_amount)}</p></div>
                   <div className="text-right">
                      <p className="text-[8px] font-black text-red-300 uppercase mb-1">বাকি</p>
-                     <p className="text-lg font-black italic text-red-600 leading-none">{formatCurrency(b.total_amount - b.advance_amount)}</p>
+                     <p className="text-base md:text-lg font-black italic text-red-600 leading-none">{formatCurrency(b.total_amount - b.advance_amount)}</p>
                   </div>
                </div>
             </div>
         ))}
       </div>
 
-      {/* 🧾 ADD NEW BOOKING MODAL - FULL HEIGHT FIXED */}
+      {/* 🧾 ADD NEW BOOKING MODAL - TRUE FULL SCREEN ON ALL DEVICES */}
       {showAddModal && (
         <div className="fixed inset-0 bg-slate-950/98 backdrop-blur-xl z-[3000] flex flex-col h-screen overflow-hidden text-slate-900 animate-reveal">
            {/* Header - Sticky */}
-           <div className="p-6 md:p-10 bg-slate-900 text-white flex justify-between items-center shrink-0 border-b border-white/5">
+           <div className="p-6 md:p-8 bg-slate-900 text-white flex justify-between items-center shrink-0 border-b border-white/10">
               <div className="flex items-center gap-5">
-                 <button onClick={() => setShowAddModal(false)} className="w-12 h-12 bg-white/10 rounded-2xl flex items-center justify-center text-xl hover:bg-white/20">✕</button>
+                 <button onClick={() => setShowAddModal(false)} className="w-12 h-12 bg-white/10 rounded-2xl flex items-center justify-center text-xl hover:bg-white/20 transition-all">✕</button>
                  <div>
-                    <h3 className="text-xl md:text-3xl font-black uppercase italic tracking-tighter leading-none">নতুন বুকিং এন্ট্রি</h3>
-                    <p className="text-[10px] font-black text-slate-500 uppercase mt-2 tracking-widest italic">Create New Booking Order</p>
+                    <h3 className="text-xl md:text-2xl font-black uppercase italic tracking-tighter leading-none">নতুন বুকিং এন্ট্রি</h3>
+                    <p className="text-[9px] font-black text-slate-500 uppercase mt-1.5 tracking-widest italic hidden md:block">IFZA Enterprise Cloud Hub</p>
                  </div>
+              </div>
+              <div className="text-right hidden md:block">
+                 <p className="text-[9px] font-black text-slate-500 uppercase italic">Operator: {user.name}</p>
+                 <p className="text-sm font-black italic">{new Date().toLocaleDateString('bn-BD')}</p>
               </div>
            </div>
 
-           {/* Scrollable Body */}
-           <div className="flex-1 flex flex-col lg:flex-row overflow-hidden min-h-0">
-              {/* Left Side: Shop & Product Selection */}
-              <div className="w-full lg:w-1/2 p-6 md:p-12 border-r overflow-y-auto custom-scroll space-y-8 bg-slate-50/30 overscroll-contain">
+           {/* Full Screen Scrollable Body with Panels */}
+           <div className="flex-1 flex flex-col lg:flex-row overflow-hidden min-h-0 bg-white">
+              {/* Left Panel: Shop & Product Selection */}
+              <div className="w-full lg:w-1/2 p-6 md:p-10 border-r overflow-y-auto custom-scroll space-y-8 bg-slate-50/50 overscroll-contain">
                  <div className="space-y-3">
-                    <label className="text-[10px] font-black text-indigo-600 uppercase italic ml-4 block tracking-widest">১. এরিয়া বাছাই করুন</label>
-                    <select className="w-full p-6 bg-white border-2 border-slate-100 rounded-[2.2rem] font-black text-base uppercase outline-none shadow-sm focus:border-indigo-500 transition-all" value={modalAreaSelection} onChange={e => { setModalAreaSelection(e.target.value); setSelectedCust(null); }}>
+                    <label className="text-[10px] font-black text-indigo-600 uppercase italic ml-4 block tracking-widest">১. এরিয়া/রুট বাছাই</label>
+                    <select className="w-full p-5 bg-white border-2 border-slate-100 rounded-[2.2rem] font-black text-base uppercase outline-none shadow-sm focus:border-indigo-500 transition-all" value={modalAreaSelection} onChange={e => { setModalAreaSelection(e.target.value); setSelectedCust(null); }}>
                        <option value="">সকল এরিয়া</option>
                        {uniqueAreas.map(area => <option key={area} value={area}>{area}</option>)}
                     </select>
@@ -327,16 +335,16 @@ const Bookings: React.FC<BookingsProps> = ({ company, role, user }) => {
 
                  <div className="relative">
                     <label className="text-[10px] font-black text-indigo-600 uppercase italic ml-4 mb-2 block tracking-widest">২. দোকান নির্বাচন</label>
-                    <div onClick={() => setShowCustList(!showCustList)} className="p-6 bg-white border-2 border-slate-100 rounded-[2.2rem] font-black text-base uppercase italic cursor-pointer flex justify-between items-center shadow-sm hover:border-indigo-400">
-                       {selectedCust ? selectedCust.name : "দোকান বেছে নিন..."}
+                    <div onClick={() => setShowCustList(!showCustList)} className="p-6 bg-white border-2 border-slate-100 rounded-[2.2rem] font-black text-base uppercase italic cursor-pointer flex justify-between items-center shadow-sm hover:border-indigo-400 transition-all">
+                       {selectedCust ? selectedCust.name : "দোকান বেছে নিন (Select Shop)..."}
                        <span className="opacity-20 text-xl">▼</span>
                     </div>
                     {showCustList && (
-                      <div className="absolute z-[100] w-full mt-2 bg-white border shadow-2xl rounded-[2.5rem] max-h-80 overflow-hidden flex flex-col p-2">
+                      <div className="absolute z-[100] w-full mt-2 bg-white border shadow-2xl rounded-[2.5rem] max-h-80 overflow-hidden flex flex-col p-2 animate-reveal">
                          <input autoFocus className="w-full p-5 border-b outline-none font-bold italic text-base bg-slate-50 rounded-t-[2.5rem]" placeholder="দোকান সার্চ..." value={custSearch} onChange={e => setCustSearch(e.target.value)} />
                          <div className="overflow-y-auto custom-scroll flex-1 p-2">
                            {customers.filter(c => (!custSearch || c.name.toLowerCase().includes(custSearch.toLowerCase())) && (!modalAreaSelection || c.address === modalAreaSelection)).map(c => (
-                             <div key={c.id} onClick={() => { setSelectedCust(c); setShowCustList(false); }} className="p-5 hover:bg-indigo-50 cursor-pointer border-b border-slate-50 font-black text-sm uppercase italic rounded-xl">
+                             <div key={c.id} onClick={() => { setSelectedCust(c); setShowCustList(false); }} className="p-5 hover:bg-indigo-50 cursor-pointer border-b border-slate-50 font-black text-sm uppercase italic rounded-xl transition-colors">
                                {c.name}<p className="text-[10px] opacity-40 font-bold tracking-tighter mt-1">📍 {c.address}</p>
                              </div>
                            ))}
@@ -346,34 +354,35 @@ const Bookings: React.FC<BookingsProps> = ({ company, role, user }) => {
                  </div>
 
                  <div className="space-y-4">
-                    <label className="text-[10px] font-black text-indigo-600 uppercase ml-4 mb-1 block tracking-widest">৩. পণ্য খুঁজে বের করুন</label>
+                    <label className="text-[10px] font-black text-indigo-600 uppercase ml-4 mb-1 block tracking-widest">৩. প্রোডাক্ট মডেল সার্চ</label>
                     <div className="relative">
-                       <input className="w-full p-6 bg-white border-2 border-slate-100 rounded-[2.2rem] font-black text-lg uppercase italic outline-none focus:border-indigo-500 shadow-md" placeholder="প্রোডাক্ট মডেল সার্চ..." value={prodSearch} onChange={e => setProdSearch(e.target.value)} />
+                       <input className="w-full p-6 bg-white border-2 border-slate-100 rounded-[2.2rem] font-black text-lg uppercase italic outline-none focus:border-indigo-500 shadow-md transition-all" placeholder="যেমন: CDL 15W..." value={prodSearch} onChange={e => setProdSearch(e.target.value)} />
                        <span className="absolute right-8 top-1/2 -translate-y-1/2 text-2xl opacity-20">🔍</span>
                     </div>
-                    <div className="grid grid-cols-1 gap-3 pt-2">
-                       {prodSearch.trim() !== "" && products.filter(p => p.name.toLowerCase().includes(prodSearch.toLowerCase())).slice(0, 2).map(p => (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2">
+                       {prodSearch.trim() !== "" && products.filter(p => p.name.toLowerCase().includes(prodSearch.toLowerCase())).slice(0, 4).map(p => (
                          <div key={p.id} onClick={() => addToCart(p)} className="p-6 border-2 border-indigo-100 rounded-[2.5rem] hover:border-indigo-500 cursor-pointer transition-all bg-white active:scale-95 shadow-lg flex justify-between items-center group">
                             <div className="min-w-0 pr-4">
-                               <p className="text-xl font-black uppercase italic truncate text-slate-800">{p.name}</p>
-                               <p className="text-sm font-bold text-indigo-600 mt-1 italic uppercase tracking-tighter">Retail MRP: ৳{p.mrp}</p>
+                               <p className="text-lg font-black uppercase italic truncate text-slate-800">{p.name}</p>
+                               <p className="text-[10px] font-bold text-indigo-600 mt-2 italic tracking-widest">MRP: ৳{p.mrp}</p>
                             </div>
-                            <div className="w-16 h-16 bg-indigo-50 rounded-3xl flex items-center justify-center text-4xl font-black text-indigo-500 group-hover:bg-indigo-600 group-hover:text-white transition-all shadow-sm">+</div>
+                            <div className="w-14 h-14 bg-indigo-50 rounded-2xl flex items-center justify-center text-3xl font-black text-indigo-500 group-hover:bg-indigo-600 group-hover:text-white transition-all shadow-sm">+</div>
                          </div>
                        ))}
                     </div>
                  </div>
               </div>
 
-              {/* Right Side: Order Cart */}
+              {/* Right Panel: Order Cart with Sticky Footer Integration */}
               <div className="w-full lg:w-1/2 flex flex-col bg-white overflow-hidden min-h-0 border-l border-slate-100">
-                 <div className="p-6 md:p-10 border-b shrink-0 bg-slate-50 flex justify-between items-center">
-                    <h4 className="text-[12px] font-black text-slate-400 uppercase italic tracking-[0.2em]">অর্ডার কার্ট ({bookingCart.length})</h4>
-                    <button onClick={() => setBookingCart([])} className="text-rose-500 font-black text-[10px] uppercase underline">মুছে ফেলুন</button>
+                 <div className="p-6 md:p-8 border-b shrink-0 bg-slate-50 flex justify-between items-center">
+                    <h4 className="text-[11px] font-black text-slate-400 uppercase italic tracking-[0.2em]">অর্ডার কার্ট ({bookingCart.length} আইটেম)</h4>
+                    <button onClick={() => setBookingCart([])} className="text-rose-500 font-black text-[10px] uppercase underline transition-colors hover:text-rose-700">সব মুছুন</button>
                  </div>
+                 
                  <div className="flex-1 overflow-y-auto custom-scroll p-6 md:p-10 space-y-5 overscroll-contain bg-white shadow-inner">
                     {bookingCart.map((it, idx) => (
-                      <div key={idx} className="bg-slate-50 p-6 md:p-8 rounded-[3rem] border border-slate-200 space-y-6 relative overflow-hidden group animate-reveal shadow-sm">
+                      <div key={idx} className="bg-slate-50 p-6 md:p-8 rounded-[3rem] border border-slate-200 space-y-5 relative overflow-hidden group animate-reveal shadow-sm">
                          <div className="flex justify-between items-start">
                             <div className="flex-1 min-w-0 pr-12">
                                <p className="text-xl font-black uppercase italic truncate leading-none text-slate-900">{it.name}</p>
@@ -384,35 +393,35 @@ const Bookings: React.FC<BookingsProps> = ({ company, role, user }) => {
                          
                          <div className="grid grid-cols-2 gap-6">
                             <div className="space-y-1.5">
-                               <label className="text-[10px] font-black text-blue-500 uppercase ml-2 italic tracking-widest">বুকিং রেট (৳)</label>
+                               <label className="text-[9px] font-black text-blue-500 uppercase ml-2 italic tracking-widest">বুকিং রেট (৳)</label>
                                <input type="number" className="w-full p-5 bg-white border border-blue-100 rounded-[1.8rem] text-center font-black text-xl text-blue-600 outline-none shadow-sm focus:border-blue-400" value={it.unitPrice} onChange={e => updateCartItem(idx, { unitPrice: Number(e.target.value) })} />
                             </div>
                             <div className="space-y-1.5">
-                               <label className="text-[10px] font-black text-slate-400 uppercase ml-2 italic tracking-widest">পরিমাণ (QTY)</label>
+                               <label className="text-[9px] font-black text-slate-400 uppercase ml-2 italic tracking-widest">পরিমাণ (QTY)</label>
                                <input type="number" className="w-full p-5 bg-white border border-slate-200 rounded-[1.8rem] text-center font-black text-xl text-slate-900 outline-none shadow-sm focus:border-indigo-400" value={it.qty} onChange={e => updateCartItem(idx, { qty: Number(e.target.value) })} />
                             </div>
                          </div>
-                         <div className="text-right border-t pt-4">
-                            <p className="text-[11px] font-black text-slate-800 italic uppercase tracking-tighter">সাব-টোটাল বিল: <span className="text-2xl text-indigo-600 ml-2 font-black italic">৳{it.total.toLocaleString()}</span></p>
+                         <div className="text-right border-t border-slate-200 pt-4">
+                            <p className="text-[11px] font-black text-slate-800 italic uppercase">আইটেম টোটাল: <span className="text-2xl text-indigo-600 ml-2 font-black italic">৳{it.total.toLocaleString()}</span></p>
                          </div>
                       </div>
                     ))}
                     {bookingCart.length === 0 && (
-                       <div className="py-20 text-center opacity-10 font-black uppercase italic tracking-[0.5em] flex flex-col items-center">
-                          <span className="text-[150px] mb-6">🛒</span>
-                          কার্ট এখন খালি
+                       <div className="py-32 text-center opacity-10 font-black uppercase italic tracking-[0.5em] flex flex-col items-center">
+                          <span className="text-[120px] mb-6">🛒</span>
+                          কার্ট খালি
                        </div>
                     )}
                  </div>
 
-                 {/* Sticky Footer for Total & Save */}
-                 <div className="pt-6 border-t space-y-5 bg-slate-900 p-6 md:p-10 shrink-0 z-50 shadow-[0_-20px_50px_rgba(0,0,0,0.2)]">
-                    <div className="bg-white/5 p-6 rounded-[2.5rem] border border-white/10 flex justify-between items-center backdrop-blur-md">
-                       <div className="flex-1">
-                          <label className="text-[10px] font-black text-emerald-400 uppercase italic block mb-2 tracking-widest">অগ্রিম পেমেন্ট জমা (৳)</label>
+                 {/* Sticky Calculations & Save Button */}
+                 <div className="pt-6 border-t space-y-5 bg-slate-900 p-6 md:p-10 shrink-0 z-50 shadow-[0_-20px_60px_rgba(0,0,0,0.3)]">
+                    <div className="bg-white/5 p-6 rounded-[2.5rem] border border-white/10 flex flex-col md:flex-row justify-between items-center gap-6">
+                       <div className="w-full md:flex-1">
+                          <label className="text-[10px] font-black text-emerald-400 uppercase italic block mb-2 tracking-widest">অগ্রিম পেমেন্ট জমা (Advance)</label>
                           <input type="number" className="w-full bg-transparent text-5xl font-black italic outline-none text-emerald-400 tracking-tighter" placeholder="0.00" value={form.advance} onChange={e => setForm({...form, advance: Number(e.target.value)})} />
                        </div>
-                       <div className="text-right border-l border-white/10 pl-10">
+                       <div className="w-full md:w-auto md:border-l md:border-white/10 md:pl-10 text-center md:text-right">
                           <p className="text-[10px] font-black text-white/40 uppercase italic mb-2 tracking-widest">গ্র্যান্ড টোটাল বিল</p>
                           <p className="text-5xl font-black italic text-white tracking-tighter leading-none">৳{bookingCart.reduce((s, i) => s + i.total, 0).toLocaleString()}</p>
                        </div>
@@ -426,40 +435,40 @@ const Bookings: React.FC<BookingsProps> = ({ company, role, user }) => {
         </div>
       )}
 
-      {/* Detail Modal - Full Screen & Scroll Fix */}
+      {/* DETAIL MODAL - Robust Scrolling */}
       {showDetailModal && selectedBooking && (
-        <div className="fixed inset-0 bg-slate-950/90 backdrop-blur-xl z-[3000] flex items-center justify-center p-4 no-print overflow-hidden">
-           <div className="bg-white rounded-[3rem] w-full max-w-2xl h-full max-h-[90vh] flex flex-col shadow-2xl animate-reveal overflow-hidden">
-              <div className="p-8 bg-slate-900 text-white flex justify-between items-center shrink-0 rounded-t-[3rem]">
-                 <div><h3 className="text-xl font-black uppercase italic leading-none">বুকিং হিসাব ও ডেলিভারি</h3><p className="text-[10px] text-slate-500 uppercase font-black mt-2">Order ID: #{selectedBooking.id.slice(-6).toUpperCase()}</p></div>
-                 <button onClick={() => setShowDetailModal(false)} className="text-4xl text-slate-500 font-black hover:text-white transition-colors">×</button>
+        <div className="fixed inset-0 bg-slate-950/90 backdrop-blur-xl z-[3000] flex items-center justify-center p-0 md:p-10 no-print overflow-hidden">
+           <div className="bg-white rounded-none md:rounded-[3rem] w-full max-w-2xl h-full md:h-fit max-h-[90vh] flex flex-col shadow-2xl animate-reveal overflow-hidden">
+              <div className="p-8 bg-slate-900 text-white flex justify-between items-center shrink-0">
+                 <div><h3 className="text-xl font-black uppercase italic leading-none">বুকিং হিসাব ও ডেলিভারি</h3><p className="text-[10px] text-slate-500 uppercase font-black mt-2 tracking-widest">Order ID: #{selectedBooking.id.slice(-6).toUpperCase()}</p></div>
+                 <button onClick={() => setShowDetailModal(false)} className="text-4xl text-slate-500 font-black hover:text-white transition-colors">✕</button>
               </div>
-              <div className="flex-1 overflow-y-auto custom-scroll p-8 space-y-8 text-slate-900 min-h-0 overscroll-contain">
-                 <div className="grid grid-cols-2 gap-6 border-b pb-8">
+              <div className="flex-1 overflow-y-auto custom-scroll p-8 space-y-10 text-slate-900 overscroll-contain min-h-0">
+                 <div className="grid grid-cols-2 gap-6 border-b pb-8 border-slate-100">
                     <div>
-                       <p className="text-[10px] font-black text-slate-400 uppercase italic mb-1">ক্রেতা তথ্য:</p>
+                       <p className="text-[10px] font-black text-slate-400 uppercase italic mb-1">দোকান তথ্য:</p>
                        <p className="text-xl font-black uppercase italic leading-tight text-slate-900">{selectedBooking.customer_name}</p>
-                       <p className="text-[11px] font-bold mt-2 uppercase text-slate-500 tracking-widest">📍 {selectedBooking.customer_address}</p>
+                       <p className="text-[11px] font-bold mt-2 uppercase text-slate-500 tracking-widest italic">📍 {selectedBooking.customer_address}</p>
                     </div>
                     <div className="text-right">
-                       <p className="text-[10px] font-black text-slate-400 uppercase italic mb-1">পেমেন্ট স্ট্যাটাস:</p>
+                       <p className="text-[10px] font-black text-slate-400 uppercase italic mb-1">পেমেন্ট অবস্থা:</p>
                        <p className="text-sm font-black italic text-emerald-600">জমা: {formatCurrency(selectedBooking.advance_amount)}</p>
-                       <p className="text-2xl font-black italic text-red-600 mt-2">বাকি: {formatCurrency(selectedBooking.total_amount - selectedBooking.advance_amount)}</p>
+                       <p className="text-3xl font-black italic text-red-600 mt-2 tracking-tighter">বাকি: {formatCurrency(selectedBooking.total_amount - selectedBooking.advance_amount)}</p>
                     </div>
                  </div>
 
                  <div className="space-y-4">
-                    <p className="text-[11px] font-black text-slate-400 uppercase italic tracking-widest">ডেলিভারি ট্র্যাকিং (Delivery Hub):</p>
-                    <div className="divide-y border border-slate-100 rounded-[2rem] overflow-hidden bg-slate-50 shadow-inner">
+                    <p className="text-[11px] font-black text-slate-400 uppercase italic tracking-widest">ডেলিভারি ট্র্যাকিং স্ট্যাটাস:</p>
+                    <div className="divide-y border border-slate-100 rounded-[2.5rem] overflow-hidden bg-slate-50 shadow-inner">
                        {selectedBooking.items.map((it, idx) => {
                           const p = Math.round(((it.delivered_qty || 0) / it.qty) * 100);
                           return (
-                            <div key={idx} className="p-6 bg-white">
+                            <div key={idx} className="p-8 bg-white">
                                <div className="flex justify-between items-center mb-4">
-                                  <div><p className="text-base font-black uppercase italic leading-none text-slate-900">{it.name}</p><p className="text-[10px] font-bold text-slate-400 uppercase mt-2 tracking-widest">অর্ডার: {it.qty} | <span className="text-blue-600 font-black">পাঠানো: {it.delivered_qty || 0}</span></p></div>
+                                  <div><p className="text-base font-black uppercase italic leading-none text-slate-900">{it.name}</p><p className="text-[10px] font-bold text-slate-400 uppercase mt-2 italic tracking-widest">অর্ডার: {it.qty} | <span className="text-blue-600 font-black">ডেলিভারি: {it.delivered_qty || 0}</span></p></div>
                                   <span className={`text-sm font-black italic ${p === 100 ? 'text-emerald-600' : 'text-blue-600'}`}>{p}%</span>
                                </div>
-                               <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
+                               <div className="h-3 bg-slate-100 rounded-full overflow-hidden">
                                   <div className={`h-full transition-all duration-1000 ${p === 100 ? 'bg-emerald-500' : 'bg-blue-600'}`} style={{ width: `${p}%` }}></div>
                                 </div>
                             </div>
@@ -468,66 +477,12 @@ const Bookings: React.FC<BookingsProps> = ({ company, role, user }) => {
                     </div>
                  </div>
               </div>
-              <div className="p-6 bg-slate-50 border-t shrink-0 rounded-b-[3rem] grid grid-cols-3 gap-3">
-                  <button onClick={() => { setNewPaymentAmount(""); setShowPaymentModal(true); }} className="bg-emerald-600 text-white py-6 rounded-2xl font-black uppercase text-[10px] shadow-lg active:scale-95">💰 টাকা জমা</button>
-                  <button onClick={() => { setDeliveryItems({}); setShowDeliverModal(true); }} className="bg-blue-600 text-white py-6 rounded-2xl font-black uppercase text-[10px] shadow-lg active:scale-95">🚚 ডেলিভারি</button>
-                  <button onClick={() => handleDownloadPDF(invoiceRef, 'Booking_Invoice')} className="bg-slate-900 text-white py-6 rounded-2xl font-black uppercase text-[10px] shadow-lg active:scale-95">📄 মেমো ডাউঃ</button>
+              <div className="p-6 md:p-8 bg-slate-50 border-t shrink-0 grid grid-cols-3 gap-3">
+                  <button onClick={() => { setNewPaymentAmount(""); setShowPaymentModal(true); }} className="bg-emerald-600 text-white py-6 rounded-2xl font-black uppercase text-[10px] shadow-lg active:scale-95 transition-all">💰 টাকা জমা</button>
+                  <button onClick={() => { setDeliveryItems({}); setShowDeliverModal(true); }} className="bg-blue-600 text-white py-6 rounded-2xl font-black uppercase text-[10px] shadow-lg active:scale-95 transition-all">🚚 ডেলিভারি</button>
+                  <button onClick={() => handleDownloadPDF(invoiceRef, 'Booking_Invoice')} className="bg-slate-900 text-white py-6 rounded-2xl font-black uppercase text-[10px] shadow-lg active:scale-95 transition-all">📄 মেমো ডাউঃ</button>
               </div>
            </div>
-        </div>
-      )}
-
-      {/* OTHER MODALS (Payment, Deliver) - Stay as they are but within z-index context */}
-      {showPaymentModal && selectedBooking && (
-        <div className="fixed inset-0 bg-slate-950/90 backdrop-blur-xl z-[4000] flex items-center justify-center p-4 no-print overflow-hidden">
-          <div className="bg-white p-8 rounded-[2.5rem] w-full max-w-sm shadow-2xl animate-reveal flex flex-col max-h-[90vh]">
-             <div className="flex justify-between items-center mb-6 border-b pb-4 shrink-0">
-                <h3 className="text-lg font-black uppercase italic tracking-tighter">টাকা জমা</h3>
-                <button onClick={() => setShowPaymentModal(false)} className="text-3xl text-slate-300 font-black">×</button>
-             </div>
-             <div className="space-y-6 text-slate-900 overflow-y-auto custom-scroll">
-                <div className="bg-slate-50 p-5 rounded-2xl border text-center shadow-inner">
-                   <p className="text-[9px] font-black text-slate-400 uppercase italic mb-1">বর্তমান বকেয়া</p>
-                   <p className="text-2xl font-black italic text-red-600 leading-none">{formatCurrency(selectedBooking.total_amount - selectedBooking.advance_amount)}</p>
-                </div>
-                <div className="space-y-2">
-                   <label className="text-[9px] font-black text-slate-400 uppercase ml-3 italic tracking-widest text-center block">জমা অ্যামাউন্ট (৳)</label>
-                   <input autoFocus type="number" className="w-full p-6 bg-blue-50 border-none rounded-[2rem] text-4xl font-black italic text-center text-blue-600 outline-none shadow-inner" placeholder="0.00" value={newPaymentAmount} onChange={e => setNewPaymentAmount(e.target.value === "" ? "" : Number(e.target.value))} />
-                </div>
-                <button disabled={isSaving || !newPaymentAmount} onClick={handleBookingPayment} className="w-full bg-slate-900 text-white py-6 rounded-2xl font-black uppercase text-[12px] tracking-[0.3em] shadow-xl active:scale-95 transition-all">জমা করুন ➔</button>
-             </div>
-          </div>
-        </div>
-      )}
-
-      {showDeliverModal && selectedBooking && (
-        <div className="fixed inset-0 bg-slate-950/90 backdrop-blur-xl z-[4000] flex items-center justify-center p-4 no-print overflow-hidden">
-          <div className="bg-white rounded-[3rem] w-full max-w-xl shadow-2xl flex flex-col h-full max-h-[85vh] animate-reveal">
-             <div className="p-8 bg-blue-600 text-white flex justify-between items-center shrink-0 rounded-t-[3rem]">
-                <div><h3 className="text-xl font-black uppercase italic leading-none">চালান এন্ট্রি করুন</h3><p className="text-[10px] text-blue-200 font-black uppercase mt-2 tracking-widest italic">কতটুকু মাল আজ পাঠানো হচ্ছে?</p></div>
-                <button onClick={() => setShowDeliverModal(false)} className="text-4xl text-white/30 font-black">×</button>
-             </div>
-             <div className="flex-1 overflow-y-auto custom-scroll p-8 space-y-4 text-slate-900">
-                {selectedBooking.items.map((it) => {
-                   const remaining = it.qty - (it.delivered_qty || 0);
-                   return (
-                      <div key={it.id} className="bg-slate-50 p-6 rounded-[2rem] border-2 border-slate-100 flex justify-between items-center group hover:bg-white hover:border-blue-400 transition-all shadow-sm">
-                         <div className="flex-1 pr-6">
-                            <p className="text-lg font-black uppercase italic truncate text-slate-800 leading-tight">{it.name}</p>
-                            <p className="text-[10px] font-black text-slate-400 mt-2 uppercase tracking-widest">বাকি আছে: <span className="text-rose-500 font-black">{remaining} টি</span></p>
-                         </div>
-                         <div className="flex items-center bg-white rounded-2xl shadow-md px-4 py-2 border border-slate-200">
-                            <input autoFocus type="number" className="w-14 bg-transparent text-center font-black text-2xl outline-none text-blue-600 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" placeholder="0" value={deliveryItems[it.id] || ""} onChange={e => setDeliveryItems({...deliveryItems, [it.id]: Math.max(0, Math.min(remaining, Number(e.target.value)))})} />
-                            <span className="text-[10px] font-black opacity-30 uppercase ml-2 italic">Pcs</span>
-                         </div>
-                      </div>
-                   );
-                })}
-             </div>
-             <div className="p-8 bg-white border-t shrink-0 rounded-b-[3rem]">
-                <button disabled={isSaving} onClick={handleDelivery} className="w-full bg-blue-600 text-white py-8 rounded-[2.2rem] font-black uppercase text-base tracking-[0.3em] shadow-2xl active:scale-95 transition-all">চালান তৈরি করুন ✅</button>
-             </div>
-          </div>
         </div>
       )}
 
@@ -593,6 +548,60 @@ const Bookings: React.FC<BookingsProps> = ({ company, role, user }) => {
            )}
         </div>
       </div>
+
+      {/* Payment and Delivery Modals handled via detail trigger */}
+      {showPaymentModal && selectedBooking && (
+        <div className="fixed inset-0 bg-slate-950/90 backdrop-blur-xl z-[4000] flex items-center justify-center p-4 no-print overflow-hidden">
+          <div className="bg-white p-8 rounded-[3rem] w-full max-w-sm shadow-2xl animate-reveal flex flex-col max-h-[90vh]">
+             <div className="flex justify-between items-center mb-8 border-b pb-4 shrink-0">
+                <h3 className="text-lg font-black uppercase italic tracking-tighter">টাকা জমা নিন</h3>
+                <button onClick={() => setShowPaymentModal(false)} className="text-3xl text-slate-300 font-black">✕</button>
+             </div>
+             <div className="space-y-8 text-slate-900 overflow-y-auto custom-scroll">
+                <div className="bg-slate-50 p-6 rounded-3xl border text-center shadow-inner">
+                   <p className="text-[10px] font-black text-slate-400 uppercase italic mb-2 tracking-widest">বর্তমান বকেয়া</p>
+                   <p className="text-3xl font-black italic text-red-600 leading-none tracking-tighter">{formatCurrency(selectedBooking.total_amount - selectedBooking.advance_amount)}</p>
+                </div>
+                <div className="space-y-3">
+                   <label className="text-[10px] font-black text-slate-400 uppercase ml-3 italic tracking-[0.2em] text-center block">জমা অ্যামাউন্ট (৳)</label>
+                   <input autoFocus type="number" className="w-full p-8 bg-blue-50 border-none rounded-[2.5rem] text-4xl font-black italic text-center text-blue-600 outline-none shadow-inner" placeholder="0.00" value={newPaymentAmount} onChange={e => setNewPaymentAmount(e.target.value === "" ? "" : Number(e.target.value))} />
+                </div>
+                <button disabled={isSaving || !newPaymentAmount} onClick={handleBookingPayment} className="w-full bg-slate-900 text-white py-8 rounded-[2.5rem] font-black uppercase text-[12px] tracking-[0.3em] shadow-xl active:scale-95 transition-all">কালেকশন সেভ করুন ➔</button>
+             </div>
+          </div>
+        </div>
+      )}
+
+      {showDeliverModal && selectedBooking && (
+        <div className="fixed inset-0 bg-slate-950/90 backdrop-blur-xl z-[4000] flex items-center justify-center p-4 no-print overflow-hidden">
+          <div className="bg-white rounded-[3rem] w-full max-w-xl shadow-2xl flex flex-col h-full max-h-[85vh] animate-reveal">
+             <div className="p-8 bg-blue-600 text-white flex justify-between items-center shrink-0 rounded-t-[3rem]">
+                <div><h3 className="text-xl font-black uppercase italic leading-none">চালান তৈরি (Delivery)</h3><p className="text-[10px] text-blue-200 font-black uppercase mt-2 tracking-widest italic">কতটুকু মাল আজ পাঠানো হচ্ছে?</p></div>
+                <button onClick={() => setShowDeliverModal(false)} className="text-4xl text-white/30 font-black">✕</button>
+             </div>
+             <div className="flex-1 overflow-y-auto custom-scroll p-8 space-y-4 text-slate-900 overscroll-contain">
+                {selectedBooking.items.map((it) => {
+                   const remaining = it.qty - (it.delivered_qty || 0);
+                   return (
+                      <div key={it.id} className="bg-slate-50 p-6 rounded-[2.2rem] border-2 border-slate-100 flex justify-between items-center group hover:bg-white hover:border-blue-400 transition-all shadow-sm">
+                         <div className="flex-1 pr-6">
+                            <p className="text-lg font-black uppercase italic truncate text-slate-800 leading-tight">{it.name}</p>
+                            <p className="text-[10px] font-black text-slate-400 mt-2 uppercase tracking-widest">অবশিষ্ট মাল: <span className="text-rose-500 font-black">{remaining} পিস</span></p>
+                         </div>
+                         <div className="flex items-center bg-white rounded-2xl shadow-md px-5 py-3 border border-slate-200">
+                            <input autoFocus type="number" className="w-16 bg-transparent text-center font-black text-2xl outline-none text-blue-600 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" placeholder="0" value={deliveryItems[it.id] || ""} onChange={e => setDeliveryItems({...deliveryItems, [it.id]: Math.max(0, Math.min(remaining, Number(e.target.value)))})} />
+                            <span className="text-[10px] font-black opacity-30 uppercase ml-2 italic">Qty</span>
+                         </div>
+                      </div>
+                   );
+                })}
+             </div>
+             <div className="p-8 bg-white border-t shrink-0 rounded-b-[3rem]">
+                <button disabled={isSaving} onClick={handleDelivery} className="w-full bg-blue-600 text-white py-10 rounded-[2.5rem] font-black uppercase text-base tracking-[0.3em] shadow-2xl active:scale-95 transition-all">চালান কনফার্ম করুন ✅</button>
+             </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );
