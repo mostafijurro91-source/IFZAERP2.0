@@ -89,11 +89,18 @@ const Collections: React.FC<CollectionsProps> = ({ company, user }) => {
   };
 
   const handleApprove = async (req: any) => {
-    if (!isAdmin) return alert("আপনার অনুমতির প্রয়োজন!");
+    if (!isAdmin) return alert("আপনার এই কালেকশনটি অ্যাপ্রুভ করার পারমিশন নেই!");
     if (isSaving) return;
+    
     setIsSaving(true);
+    // Optimistic UI: Remove from list immediately
+    const originalRequests = [...pendingRequests];
+    setPendingRequests(prev => prev.filter(r => r.id !== req.id));
+
     try {
       const dbCo = mapToDbCompany(req.company);
+      
+      // 1. Insert into transactions
       const { error: txErr } = await supabase.from('transactions').insert([{
         customer_id: req.customer_id, 
         company: dbCo, 
@@ -102,45 +109,59 @@ const Collections: React.FC<CollectionsProps> = ({ company, user }) => {
         items: [{ note: `নগদ আদায়: ${req.amount} টাকা` }], 
         submitted_by: req.submitted_by
       }]);
-      if (txErr) throw txErr;
       
+      if (txErr) throw new Error("ট্রানজ্যাকশন সেভ করতে সমস্যা হয়েছে: " + txErr.message);
+      
+      // 2. Delete the request from collection_requests
       const { error: delErr } = await supabase.from('collection_requests').delete().eq('id', req.id);
+      
       if (delErr) {
-        alert("টাকা জমা হয়েছে কিন্তু রিকোয়েস্টটি মুছতে সমস্যা হয়েছে। আপনি ম্যানুয়ালি লেজার থেকে চেক করুন।");
+        throw new Error("টাকা জমা হয়েছে কিন্তু লিস্ট থেকে ডিলিট হয়নি। কারণ: " + delErr.message + "\nআপনার সুপাবেস ড্যাশবোর্ডে DELETE Policy চেক করুন।");
       }
       
-      // Update local state instantly so the card disappears
-      setPendingRequests(prev => prev.filter(r => r.id !== req.id));
-      
-      const dues = allCompanyDues[req.customer_id] || { 'Transtec': 0, 'SQ Light': 0, 'SQ Cables': 0 };
-      const currentBalance = (dues[req.company] || 0) - Number(req.amount);
-      const smsMsg = `IFZA Electronics: ${req.customers?.name}, আপনার ${Number(req.amount).toLocaleString()} টাকা পেমেন্ট গৃহীত হয়েছে। বর্তমান বকেয়া (${req.company}): ${Math.round(currentBalance).toLocaleString()} টাকা। ধন্যবাদ।`;
-      await sendSMS(req.customers?.phone, smsMsg, req.customer_id);
-      
-      alert("কালেকশন এপ্রুভ হয়েছে!");
-      fetchData();
+      alert("কালেকশন সফলভাবে অ্যাপ্রুভ হয়েছে!");
+
+      // SMS Notification
+      try {
+        const dues = allCompanyDues[req.customer_id] || { 'Transtec': 0, 'SQ Light': 0, 'SQ Cables': 0 };
+        const currentBalance = (dues[req.company] || 0) - Number(req.amount);
+        const smsMsg = `IFZA Electronics: ${req.customers?.name}, আপনার ${Number(req.amount).toLocaleString()} টাকা পেমেন্ট গৃহীত হয়েছে। বর্তমান বকেয়া (${req.company}): ${Math.round(currentBalance).toLocaleString()} টাকা। ধন্যবাদ।`;
+        await sendSMS(req.customers?.phone, smsMsg, req.customer_id);
+      } catch (e) {
+        console.warn("SMS sending failed.");
+      }
+
+      await fetchData();
     } catch (err: any) { 
-      alert("Approve Error: " + err.message); 
+      // Rollback UI on error
+      setPendingRequests(originalRequests);
+      alert("ত্রুটি: " + err.message); 
     } finally { 
       setIsSaving(false); 
     }
   };
 
   const handleDeleteRequest = async (id: string) => {
-    if (!isAdmin || isSaving) return;
-    if (!confirm("আপনি কি নিশ্চিত এই রিকোয়েস্টটি ডিলিট করতে চান?")) return;
+    if (!isAdmin) return alert("আপনার ডিলিট করার অনুমতি নেই!");
+    if (isSaving) return;
+    
+    if (!confirm("আপনি কি নিশ্চিত এটি ডিলিট করতে চান?")) return;
     
     setIsSaving(true);
+    // Optimistic UI: Hide immediately
+    const originalRequests = [...pendingRequests];
+    setPendingRequests(prev => prev.filter(r => r.id !== id));
+
     try {
       const { error } = await supabase.from('collection_requests').delete().eq('id', id);
       if (error) throw error;
       
-      // Instantly update UI
-      setPendingRequests(prev => prev.filter(r => r.id !== id));
-      alert("রিকোয়েস্টটি সফলভাবে মুছে ফেলা হয়েছে।");
-      fetchData();
+      alert("সফলভাবে ডিলিট করা হয়েছে!");
+      await fetchData();
     } catch (err: any) {
-      alert("মুছে ফেলা সম্ভব হয়নি! কারণ: " + err.message);
+      // Rollback UI
+      setPendingRequests(originalRequests);
+      alert("ডিলিট করা যায়নি! সম্ভবত সুপাবেসে DELETE Policy সেট করা নেই। এরর: " + err.message);
     } finally {
       setIsSaving(false);
     }
@@ -156,6 +177,7 @@ const Collections: React.FC<CollectionsProps> = ({ company, user }) => {
 
   return (
     <div className="space-y-8 pb-24 text-slate-900 animate-reveal">
+      {/* Stats Summary */}
       <div className="bg-white p-10 md:p-14 rounded-[4rem] shadow-xl border border-slate-100 no-print relative overflow-hidden group">
          <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-500/5 blur-[100px] rounded-full"></div>
          <div className="relative z-10 flex flex-col md:flex-row justify-between items-center gap-10">
@@ -184,6 +206,7 @@ const Collections: React.FC<CollectionsProps> = ({ company, user }) => {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
+         {/* 🧾 Entry Form */}
          <div className="bg-white p-10 md:p-14 rounded-[4rem] border shadow-2xl space-y-10">
             <div className="flex items-center gap-6">
                <div className="w-16 h-16 bg-blue-600 rounded-3xl flex items-center justify-center text-white text-3xl shadow-xl italic font-bold">C</div>

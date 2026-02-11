@@ -83,19 +83,21 @@ const Customers: React.FC<CustomerProps> = ({ company, role, userName }) => {
 
   const handleDeleteTransaction = async (txId: string) => {
     if (!isAdmin) return;
-    if (!confirm("আপনি কি নিশ্চিত এই লেনদেনটি মুছে ফেলতে চান? এটি মুছে ফেললে কাস্টমারের ব্যালেন্স স্বয়ংক্রিয়ভাবে ঠিক হয়ে যাবে।")) return;
+    if (!confirm("আপনি কি নিশ্চিত এই লেনদেনটি চিরতরে মুছে ফেলতে চান?")) return;
     
     setIsSaving(true);
     try {
-      const { error } = await supabase.from('transactions').delete().eq('id', txId);
+      const { error, status } = await supabase.from('transactions').delete().eq('id', txId);
+      
       if (error) throw error;
       
       alert("লেনদেনটি সফলভাবে মুছে ফেলা হয়েছে।");
-      // Refresh ledger and main customer list
+      
+      // Refresh local UI
       if (selectedLedgerCust) fetchCustomerLedger(selectedLedgerCust);
       fetchCustomers();
     } catch (err: any) {
-      alert("মুছে ফেলা যায়নি: " + err.message);
+      alert("মুছে ফেলা যায়নি! কারণ: " + err.message + "\nসুপাবেসে Transactions টেবিলের DELETE Policy চেক করুন।");
     } finally {
       setIsSaving(false);
     }
@@ -122,7 +124,7 @@ const Customers: React.FC<CustomerProps> = ({ company, role, userName }) => {
 
   const handleDeleteCustomer = async (id: string) => {
     if (!isAdmin) return;
-    const confirmDelete = confirm("আপনি কি নিশ্চিত এই কাস্টমার প্রোফাইলটি ডিলিট করতে চান?\n\nসতর্কতা: যদি এই কাস্টমারের নামে কোনো সেলস মেমো বা লেনদেন থাকে, তবে ডাটাবেস এটি ডিলিট করতে দেবে না। সেক্ষেত্রে আগে তার সকল লেনদেন ডিলিট করতে হবে।");
+    const confirmDelete = confirm("আপনি কি নিশ্চিত এই কাস্টমার প্রোফাইলটি ডিলিট করতে চান?\n\nসতর্কতা: যদি এই কাস্টমারের নামে কোনো সেলস মেমো বা লেনদেন থাকে, তবে আগে লেজার থেকে সব লেনদেন ডিলিট করতে হবে।");
     if (!confirmDelete) return;
 
     try {
@@ -130,7 +132,7 @@ const Customers: React.FC<CustomerProps> = ({ company, role, userName }) => {
       const { error } = await supabase.from('customers').delete().eq('id', id);
       if (error) {
           if (error.message.includes("foreign key constraint")) {
-              throw new Error("এই কাস্টমারের নামে লেনদেন (Transactions) জমা আছে, তাই ডিলিট করা যাচ্ছে না। প্রথমে তার লেজার থেকে সব ডিলিট করুন।");
+              throw new Error("এই কাস্টমারের নামে লেনদেন জমা আছে, তাই ডিলিট করা যাচ্ছে না।");
           }
           throw error;
       }
@@ -233,16 +235,28 @@ const Customers: React.FC<CustomerProps> = ({ company, role, userName }) => {
     <div className="space-y-4 pb-40 relative text-black">
       <div className="sticky top-0 z-[110] -mx-6 px-6 py-3 bg-white/70 backdrop-blur-xl border-b border-slate-200">
         <div className="max-w-7xl mx-auto space-y-4">
-           <div className="flex flex-col md:flex-row gap-4 items-center animate-reveal">
-              <div className="flex-1 flex gap-2 items-center bg-slate-100 p-1.5 rounded-[1.8rem] shadow-inner border border-slate-200 w-full focus-within:ring-2 ring-blue-500/20 transition-all">
+           <div className="flex flex-col md:flex-row gap-3 items-center animate-reveal">
+              <div className="flex-[2] flex gap-2 items-center bg-slate-100 p-1.5 rounded-[1.8rem] shadow-inner border border-slate-200 w-full focus-within:ring-2 ring-blue-500/20 transition-all">
                  <div className="pl-4 text-slate-400">🔍</div>
                  <input autoFocus type="text" placeholder="দোকান বা ইউজার আইডি সার্চ..." className="flex-1 p-3 bg-transparent border-none text-[13px] font-bold uppercase outline-none text-black" value={search} onChange={e => setSearch(e.target.value)} />
-                 <button onClick={() => setIsCompact(!isCompact)} className="bg-white p-3 rounded-2xl shadow-sm text-lg active:scale-90 transition-transform">
-                   {isCompact ? "🔳" : "☰"}
-                 </button>
+              </div>
+              <div className="flex-1 w-full md:w-auto">
+                 <select 
+                   className="w-full p-4 bg-white border-2 border-slate-200 rounded-[1.8rem] text-[11px] font-black uppercase italic outline-none shadow-sm focus:border-blue-600 transition-all"
+                   value={selectedArea}
+                   onChange={e => setSelectedArea(e.target.value)}
+                 >
+                   <option value="">সকল এরিয়া (All Areas)</option>
+                   {uniqueAreas.map(area => (
+                     <option key={area} value={area}>{area}</option>
+                   ))}
+                 </select>
               </div>
               <div className="flex gap-2 shrink-0">
-                 <button onClick={() => { setEditingCustomer(null); setFormData({name:'', phone:'', address:'', money_amount:'', portal_username:'', portal_password:''}); setShowModal(true); }} className="bg-blue-600 text-white px-8 py-3 rounded-2xl font-black uppercase text-[10px] shadow-lg active:scale-95 transition-all">+ নতুন দোকান যোগ</button>
+                 <button onClick={() => setIsCompact(!isCompact)} className="bg-white p-4 rounded-2xl shadow-sm text-lg active:scale-90 transition-transform border border-slate-200">
+                   {isCompact ? "🔳" : "☰"}
+                 </button>
+                 <button onClick={() => { setEditingCustomer(null); setFormData({name:'', phone:'', address:'', money_amount:'', portal_username:'', portal_password:''}); setShowModal(true); }} className="bg-blue-600 text-white px-8 py-4 rounded-2xl font-black uppercase text-[10px] shadow-lg active:scale-95 transition-all">+ নতুন দোকান যোগ</button>
               </div>
            </div>
         </div>
@@ -285,7 +299,7 @@ const Customers: React.FC<CustomerProps> = ({ company, role, userName }) => {
         </div>
       )}
 
-      {/* Ledger Modal with Delete Transaction Feature */}
+      {/* Ledger Modal */}
       {showLedger && selectedLedgerCust && (
         <div className="fixed inset-0 bg-slate-950/95 backdrop-blur-xl z-[2000] flex items-center justify-center p-4">
            <div className="bg-white rounded-[3rem] w-full max-w-4xl h-[85vh] flex flex-col shadow-2xl animate-reveal overflow-hidden">
@@ -301,7 +315,7 @@ const Customers: React.FC<CustomerProps> = ({ company, role, userName }) => {
               </div>
               
               <div className="flex-1 overflow-y-auto p-8 space-y-6 custom-scroll bg-slate-50">
-                <div ref={ledgerRef} className="bg-white p-6 md:p-10 border shadow-sm rounded-3xl min-h-full">
+                <div ref={ledgerRef} className="bg-white p-6 md:p-10 border shadow-sm rounded-3xl min-h-full text-black">
                   <div className="text-center border-b-2 border-black pb-4 mb-8">
                      <h2 className="text-3xl font-black uppercase italic">IFZA ELECTRONICS</h2>
                      <p className="text-xs font-bold opacity-60 uppercase">{company} DIVISION</p>
@@ -318,11 +332,11 @@ const Customers: React.FC<CustomerProps> = ({ company, role, userName }) => {
                        </tr>
                     </thead>
                     <tbody className="text-[11px] font-bold">
-                       {ledgerHistory.map((tx, idx) => (
+                       {ledgerHistory.map((tx) => (
                          <tr key={tx.id} className="border-b border-slate-100 hover:bg-blue-50/50 transition-all">
-                            <td className="p-3">{new Date(tx.created_at).toLocaleDateString('bn-BD')}</td>
-                            <td className="p-3">
-                               <p className="uppercase">{tx.payment_type === 'COLLECTION' ? '💰 নগদ জমা' : '📄 মালের ইনভয়েস'}</p>
+                            <td className="p-3 text-black">{new Date(tx.created_at).toLocaleDateString('bn-BD')}</td>
+                            <td className="p-3 uppercase text-black">
+                               <p className="font-bold">{tx.payment_type === 'COLLECTION' ? '💰 নগদ জমা' : '📄 মালের ইনভয়েস'}</p>
                                <p className="text-[7px] text-slate-400">ID: #{tx.id.slice(-6).toUpperCase()}</p>
                             </td>
                             <td className="p-3 text-right text-red-600">
@@ -333,13 +347,7 @@ const Customers: React.FC<CustomerProps> = ({ company, role, userName }) => {
                             </td>
                             {isAdmin && (
                               <td className="p-2 text-center no-print">
-                                 <button 
-                                   disabled={isSaving}
-                                   onClick={() => handleDeleteTransaction(tx.id)} 
-                                   className="w-8 h-8 bg-red-50 text-red-500 rounded-lg flex items-center justify-center hover:bg-red-600 hover:text-white transition-all active:scale-90"
-                                 >
-                                    🗑️
-                                 </button>
+                                 <button disabled={isSaving} onClick={() => handleDeleteTransaction(tx.id)} className="w-8 h-8 bg-red-50 text-red-500 rounded-lg flex items-center justify-center hover:bg-red-600 hover:text-white transition-all active:scale-90">🗑️</button>
                               </td>
                             )}
                          </tr>
@@ -352,7 +360,7 @@ const Customers: React.FC<CustomerProps> = ({ company, role, userName }) => {
         </div>
       )}
 
-      {/* Modal for adding/editing customer */}
+      {/* Add/Edit Modal with Area Suggestion */}
       {showModal && (
         <div className="fixed inset-0 bg-slate-950/90 backdrop-blur-xl z-[2000] flex items-center justify-center p-4">
            <div className="bg-white p-10 md:p-14 rounded-[4rem] w-full max-w-lg shadow-2xl animate-reveal text-slate-900 overflow-y-auto max-h-[95vh] custom-scroll">
@@ -370,12 +378,24 @@ const Customers: React.FC<CustomerProps> = ({ company, role, userName }) => {
                     <input required className="w-full p-4 bg-slate-50 border-2 border-slate-100 rounded-2xl outline-none font-bold text-sm focus:border-blue-500 transition-all text-black" value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})} />
                  </div>
                  <div className="space-y-1">
-                    <label className="text-[9px] font-bold text-slate-400 uppercase ml-4 italic">এরিয়া/ঠিকানা</label>
-                    <input className="w-full p-4 bg-slate-50 border-2 border-slate-100 rounded-2xl outline-none font-bold uppercase text-sm focus:border-blue-500 transition-all text-black" value={formData.address} onChange={e => setFormData({...formData, address: e.target.value})} />
+                    <label className="text-[9px] font-bold text-slate-400 uppercase ml-4 italic">এরিয়া/ঠিকানা (Select or Type Area)</label>
+                    <input 
+                      required
+                      list="area-list"
+                      className="w-full p-4 bg-slate-50 border-2 border-slate-100 rounded-2xl outline-none font-bold uppercase text-sm focus:border-blue-500 transition-all text-black" 
+                      value={formData.address} 
+                      onChange={e => setFormData({...formData, address: e.target.value})} 
+                      placeholder="এরিয়া বাছাই বা টাইপ করুন..."
+                    />
+                    <datalist id="area-list">
+                      {uniqueAreas.map(area => (
+                        <option key={area} value={area} />
+                      ))}
+                    </datalist>
                  </div>
                  
                  <div className="pt-6 border-t mt-6 space-y-4">
-                    <h4 className="text-[10px] font-black text-blue-600 uppercase tracking-widest italic ml-2">Login Credentials (পোর্টালে লগইন করার জন্য)</h4>
+                    <h4 className="text-[10px] font-black text-blue-600 uppercase tracking-widest italic ml-2">পোর্টালে লগইন করার জন্য</h4>
                     <div className="grid grid-cols-2 gap-3">
                        <div className="space-y-1">
                           <label className="text-[8px] font-bold text-slate-400 uppercase ml-4 italic">User ID (ইউজার আইডি)</label>
@@ -390,9 +410,8 @@ const Customers: React.FC<CustomerProps> = ({ company, role, userName }) => {
 
                  <div className="pt-4 border-t space-y-4">
                     <div className="space-y-1">
-                       <label className="text-[9px] font-bold text-red-400 uppercase ml-4 italic">পূর্বের বকেয়া/টাকা (Edit Money Amount)</label>
+                       <label className="text-[9px] font-bold text-red-400 uppercase ml-4 italic">পূর্বের বকেয়া (Opening Balance)</label>
                        <input type="number" className="w-full p-4 bg-red-50 border-2 border-red-100 rounded-2xl outline-none font-bold text-red-600 text-sm focus:border-red-500 transition-all" value={formData.money_amount} onChange={e => setFormData({...formData, money_amount: e.target.value})} />
-                       <p className="text-[7px] text-slate-400 ml-4 italic">* টাকা পরিবর্তন করলে অটোমেটিক লেজারে 'পূর্বের বকেয়া' আপডেট হবে।</p>
                     </div>
                  </div>
 
