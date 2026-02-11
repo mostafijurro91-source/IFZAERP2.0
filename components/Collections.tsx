@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Company, User, formatCurrency } from '../types';
 import { supabase, mapToDbCompany } from '../lib/supabase';
-import { sendSMS } from '../lib/sms';
+import { sendWhatsApp } from '../lib/sms'; // Import WhatsApp helper
 
 interface CollectionsProps {
   company: Company;
@@ -110,18 +110,18 @@ const Collections: React.FC<CollectionsProps> = ({ company, user }) => {
       const { error: delErr } = await supabase.from('collection_requests').delete().match({ id: req.id });
 
       if (delErr) {
-         throw new Error("টাকা জমা হয়েছে কিন্তু কার্ডটি মুছতে ডাটাবেস বাধা দিচ্ছে। Supabase-এ SQL Editor এর কোড চেক করুন।");
+         throw new Error("Error clearing request card.");
       }
 
       setPendingRequests(prev => prev.filter(r => r.id !== req.id));
-      alert("কালেকশন সফলভাবে এপ্রুভ হয়েছে!");
 
-      try {
+      // WhatsApp Integration After Approval
+      if (confirm("কালেকশন সফলভাবে এপ্রুভ হয়েছে! কাস্টমারকে WhatsApp-এ কনফার্মেশন মেসেজ পাঠাতে চান?")) {
         const dues = allCompanyDues[req.customer_id] || { 'Transtec': 0, 'SQ Light': 0, 'SQ Cables': 0 };
         const currentBalance = (dues[req.company] || 0) - Number(req.amount);
-        const smsMsg = `IFZA: ${req.customers?.name}, ${Number(req.amount).toLocaleString()}৳ গৃহীত হয়েছে। বর্তমান বকেয়া (${req.company}): ${Math.round(currentBalance).toLocaleString()}৳।`;
-        sendSMS(req.customers?.phone, smsMsg, req.customer_id);
-      } catch (e) {}
+        const msg = `IFZA: ${req.customers?.name}, ৳${Number(req.amount).toLocaleString()} received successfully. Current balance (${req.company}): ৳${Math.round(currentBalance).toLocaleString()}. Thank you!`;
+        sendWhatsApp(req.customers?.phone, msg);
+      }
 
       fetchData(); 
     } catch (err: any) { 

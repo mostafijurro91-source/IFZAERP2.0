@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Company, UserRole, Product, formatCurrency, User } from '../types';
 import { supabase, mapToDbCompany } from '../lib/supabase';
-import { sendSMS } from '../lib/sms';
+import { sendWhatsApp } from '../lib/sms'; // Import WhatsApp helper
 import { jsPDF } from 'jspdf';
 import * as html2canvasModule from 'html2canvas';
 
@@ -203,7 +203,12 @@ const Sales: React.FC<{ company: Company; role: UserRole; user: User }> = ({ com
         if (amt !== 0) await supabase.rpc('increment_stock', { row_id: item.product.id, amt });
       }
 
-      alert("সফলভাবে সেভ হয়েছে!");
+      // WhatsApp Integration After Save
+      if (confirm("সাফল্যের সাথে সেভ হয়েছে! কাস্টমারকে WhatsApp-এ মেসেজ পাঠাতে চান?")) {
+        const msg = `IFZA Electronics: Dear ${selectedCustomer.name}, your invoice #${tempInvoiceId} for ৳${netTotal.toLocaleString()} has been generated. Thank you!`;
+        sendWhatsApp(selectedCustomer.phone, msg);
+      }
+
       setShowPreview(false);
       setCart([]);
       setSelectedCustomer(null);
