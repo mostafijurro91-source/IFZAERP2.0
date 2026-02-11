@@ -31,8 +31,8 @@ const Collections: React.FC<CollectionsProps> = ({ company, user }) => {
   const [amount, setAmount] = useState<number | "">("");
   const [targetCompany, setTargetCompany] = useState<Company>(company);
 
-  const isAdmin = user.role === 'ADMIN';
-  const isDelivery = user.role === 'DELIVERY';
+  const isAdmin = user.role.toUpperCase() === 'ADMIN';
+  const isDelivery = user.role.toUpperCase() === 'DELIVERY';
   const canSwitchCompany = isAdmin || isDelivery;
 
   useEffect(() => {
@@ -89,7 +89,8 @@ const Collections: React.FC<CollectionsProps> = ({ company, user }) => {
   };
 
   const handleApprove = async (req: any) => {
-    if (!isAdmin || isSaving) return;
+    if (!isAdmin) return alert("আপনার অনুমতির প্রয়োজন!");
+    if (isSaving) return;
     setIsSaving(true);
     try {
       const dbCo = mapToDbCompany(req.company);
@@ -103,32 +104,43 @@ const Collections: React.FC<CollectionsProps> = ({ company, user }) => {
       }]);
       if (txErr) throw txErr;
       
-      await supabase.from('collection_requests').delete().eq('id', req.id);
+      const { error: delErr } = await supabase.from('collection_requests').delete().eq('id', req.id);
+      if (delErr) {
+        alert("টাকা জমা হয়েছে কিন্তু রিকোয়েস্টটি মুছতে সমস্যা হয়েছে। আপনি ম্যানুয়ালি লেজার থেকে চেক করুন।");
+      }
+      
+      // Update local state instantly so the card disappears
+      setPendingRequests(prev => prev.filter(r => r.id !== req.id));
       
       const dues = allCompanyDues[req.customer_id] || { 'Transtec': 0, 'SQ Light': 0, 'SQ Cables': 0 };
       const currentBalance = (dues[req.company] || 0) - Number(req.amount);
-      
       const smsMsg = `IFZA Electronics: ${req.customers?.name}, আপনার ${Number(req.amount).toLocaleString()} টাকা পেমেন্ট গৃহীত হয়েছে। বর্তমান বকেয়া (${req.company}): ${Math.round(currentBalance).toLocaleString()} টাকা। ধন্যবাদ।`;
       await sendSMS(req.customers?.phone, smsMsg, req.customer_id);
       
-      alert("কালেকশন এপ্রুভ হয়েছে এবং কাস্টমারকে এসএমএস পাঠানো হয়েছে!");
-      await fetchData();
-    } catch (err: any) { alert("Approve Error: " + err.message); } finally { setIsSaving(false); }
+      alert("কালেকশন এপ্রুভ হয়েছে!");
+      fetchData();
+    } catch (err: any) { 
+      alert("Approve Error: " + err.message); 
+    } finally { 
+      setIsSaving(false); 
+    }
   };
 
   const handleDeleteRequest = async (id: string) => {
     if (!isAdmin || isSaving) return;
-    if (!confirm("আপনি কি নিশ্চিত এই রিকোয়েস্টটি ডিলিট করতে চান? এটি রিজেক্ট হিসেবে গণ্য হবে।")) return;
+    if (!confirm("আপনি কি নিশ্চিত এই রিকোয়েস্টটি ডিলিট করতে চান?")) return;
     
     setIsSaving(true);
     try {
       const { error } = await supabase.from('collection_requests').delete().eq('id', id);
       if (error) throw error;
       
-      alert("সফলভাবে ডিলিট করা হয়েছে!");
-      await fetchData();
+      // Instantly update UI
+      setPendingRequests(prev => prev.filter(r => r.id !== id));
+      alert("রিকোয়েস্টটি সফলভাবে মুছে ফেলা হয়েছে।");
+      fetchData();
     } catch (err: any) {
-      alert("ডিলিট করা যায়নি: " + err.message);
+      alert("মুছে ফেলা সম্ভব হয়নি! কারণ: " + err.message);
     } finally {
       setIsSaving(false);
     }
@@ -149,20 +161,20 @@ const Collections: React.FC<CollectionsProps> = ({ company, user }) => {
          <div className="relative z-10 flex flex-col md:flex-row justify-between items-center gap-10">
             <div className="text-center md:text-left">
                <h3 className="text-[11px] font-bold uppercase italic tracking-[0.4em] text-emerald-600 mb-4">আজকের মোট আদায় (Total Cash In)</h3>
-               <p className="text-5xl md:text-8xl font-black italic tracking-tighter text-slate-950 animate-in slide-in-from-bottom-2 duration-700">
+               <p className="text-5xl md:text-8xl font-black italic tracking-tighter text-slate-950">
                   {todayStats.total.toLocaleString()}<span className="text-2xl text-emerald-500 ml-2">৳</span>
                </p>
                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-4 italic">সম্মিলিত ব্র্যান্ড ট্র্যাকার</p>
             </div>
             
-            <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-3 w-full md:w-auto">
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 w-full md:w-auto">
                {[
-                 { label: 'Transtec', val: todayStats.transtec, color: 'text-amber-600', bg: 'bg-amber-50', border: 'border-amber-100' },
-                 { label: 'SQ Light', val: todayStats.sqLight, color: 'text-cyan-600', bg: 'bg-cyan-50', border: 'border-cyan-100' },
-                 { label: 'SQ Cables', val: todayStats.sqCables, color: 'text-rose-600', bg: 'bg-rose-50', border: 'border-rose-100' },
-                 { label: 'Pending (অপেক্ষমাণ)', val: todayStats.pendingTotal, color: 'text-orange-600', bg: 'bg-orange-50', border: 'border-orange-200' }
+                 { label: 'Transtec', val: todayStats.transtec, color: 'text-amber-600', bg: 'bg-amber-50' },
+                 { label: 'SQ Light', val: todayStats.sqLight, color: 'text-cyan-600', bg: 'bg-cyan-50' },
+                 { label: 'SQ Cables', val: todayStats.sqCables, color: 'text-rose-600', bg: 'bg-rose-50' },
+                 { label: 'Pending', val: todayStats.pendingTotal, color: 'text-orange-600', bg: 'bg-orange-50' }
                ].map(co => (
-                 <div key={co.label} className={`${co.bg} p-6 rounded-[2.5rem] border ${co.border} min-w-[120px] text-center shadow-sm group-hover:-translate-y-1 transition-transform`}>
+                 <div key={co.label} className={`${co.bg} p-6 rounded-[2.5rem] border min-w-[120px] text-center shadow-sm`}>
                     <p className="text-[8px] font-bold text-slate-500 uppercase mb-2">{co.label}</p>
                     <p className={`text-lg font-black italic ${co.color}`}>{co.val.toLocaleString()}৳</p>
                  </div>
@@ -172,7 +184,6 @@ const Collections: React.FC<CollectionsProps> = ({ company, user }) => {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
-         {/* 🧾 Entry Form */}
          <div className="bg-white p-10 md:p-14 rounded-[4rem] border shadow-2xl space-y-10">
             <div className="flex items-center gap-6">
                <div className="w-16 h-16 bg-blue-600 rounded-3xl flex items-center justify-center text-white text-3xl shadow-xl italic font-bold">C</div>
@@ -189,59 +200,44 @@ const Collections: React.FC<CollectionsProps> = ({ company, user }) => {
                     <option value="">সকল এরিয়া</option>
                     {uniqueRoutes.map(r => <option key={r} value={r}>{r}</option>)}
                   </select>
-                  <div className="relative">
-                    <div onClick={() => { setShowCustList(true); setSearch(""); }} className="p-6 bg-slate-50 border-2 border-slate-100 rounded-[2.5rem] cursor-pointer flex justify-between items-center shadow-sm hover:border-blue-300 transition-all">
-                       <span className={selectedCust ? "font-bold text-black uppercase italic text-xs truncate" : "text-slate-300 italic text-xs"}>{selectedCust ? selectedCust.name : "সার্চ করে দোকান বাছুন..."}</span>
-                       <span className="opacity-40 text-xs">▼</span>
-                    </div>
-                    {showCustList && (
-                      <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-md" onClick={() => setShowCustList(false)}>
-                        <div className="bg-white w-full max-w-lg rounded-[3rem] shadow-2xl overflow-hidden flex flex-col h-[70vh] animate-reveal" onClick={e => e.stopPropagation()}>
-                           <div className="p-6 bg-slate-900 flex justify-between items-center">
-                              <h4 className="text-white font-black uppercase italic text-xs">Shop Selector</h4>
-                              <button onClick={() => setShowCustList(false)} className="text-slate-400 text-3xl">×</button>
-                           </div>
-                           <div className="p-4 border-b">
-                              <input autoFocus placeholder="দোকানের নাম বা মোবাইল লিখুন..." className="w-full p-6 bg-slate-50 border-2 border-slate-100 rounded-2xl outline-none font-bold text-lg uppercase italic focus:border-blue-600 transition-all" value={search} onChange={e => setSearch(e.target.value)} />
-                           </div>
-                           <div className="overflow-y-auto flex-1 custom-scroll p-4 space-y-2">
-                             {filteredCustomers.map(c => {
-                               const dues = allCompanyDues[c.id] || { Transtec: 0, 'SQ Light': 0, 'SQ Cables': 0 };
-                               return (
-                                 <div key={c.id} onClick={() => { setSelectedCust(c); setShowCustList(false); }} className="p-5 hover:bg-blue-600 hover:text-white rounded-2xl cursor-pointer border-b border-slate-50 flex flex-col gap-2 transition-all text-black group">
-                                    <div className="flex justify-between items-center">
-                                      <p className="font-bold text-[14px] uppercase truncate group-hover:text-white leading-none">{c.name}</p>
-                                      <p className="text-[8px] font-black opacity-40 group-hover:text-white">📍 {c.address}</p>
-                                    </div>
-                                    <div className="flex gap-2">
-                                       <span className="px-2 py-1 bg-amber-50 text-amber-600 rounded-lg text-[8px] font-bold group-hover:bg-white/10 group-hover:text-white">T: ৳{dues['Transtec'].toLocaleString()}</span>
-                                       <span className="px-2 py-1 bg-cyan-50 text-cyan-600 rounded-lg text-[8px] font-bold group-hover:bg-white/10 group-hover:text-white">L: ৳{dues['SQ Light'].toLocaleString()}</span>
-                                       <span className="px-2 py-1 bg-rose-50 text-rose-600 rounded-lg text-[8px] font-bold group-hover:bg-white/10 group-hover:text-white">C: ৳{dues['SQ Cables'].toLocaleString()}</span>
-                                    </div>
-                                 </div>
-                               );
-                             })}
-                             {filteredCustomers.length === 0 && <div className="py-20 text-center text-slate-300 font-black uppercase italic">কোনো দোকান মেলেনি</div>}
-                           </div>
-                        </div>
-                      </div>
-                    )}
+                  <div onClick={() => { setShowCustList(true); setSearch(""); }} className="p-6 bg-slate-50 border-2 border-slate-100 rounded-[2.5rem] cursor-pointer flex justify-between items-center shadow-sm hover:border-blue-300 transition-all">
+                     <span className={selectedCust ? "font-bold text-black uppercase italic text-xs truncate" : "text-slate-300 italic text-xs"}>{selectedCust ? selectedCust.name : "সার্চ করে দোকান বাছুন..."}</span>
+                     <span className="opacity-40 text-xs">▼</span>
                   </div>
+                  {showCustList && (
+                    <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-md" onClick={() => setShowCustList(false)}>
+                      <div className="bg-white w-full max-w-lg rounded-[3rem] shadow-2xl overflow-hidden flex flex-col h-[70vh] animate-reveal" onClick={e => e.stopPropagation()}>
+                         <div className="p-6 bg-slate-900 flex justify-between items-center text-white">
+                            <h4 className="font-black uppercase italic text-xs">দোকান খুঁজুন</h4>
+                            <button onClick={() => setShowCustList(false)} className="text-slate-400 text-3xl">×</button>
+                         </div>
+                         <div className="p-4 border-b">
+                            <input autoFocus placeholder="দোকানের নাম লিখুন..." className="w-full p-6 bg-slate-50 border-2 border-slate-100 rounded-2xl outline-none font-bold text-lg uppercase italic focus:border-blue-600 transition-all text-black" value={search} onChange={e => setSearch(e.target.value)} />
+                         </div>
+                         <div className="overflow-y-auto flex-1 custom-scroll p-4 space-y-2">
+                           {filteredCustomers.map(c => (
+                             <div key={c.id} onClick={() => { setSelectedCust(c); setShowCustList(false); }} className="p-5 hover:bg-blue-600 hover:text-white rounded-2xl cursor-pointer border-b border-slate-50 transition-all text-black group">
+                                <div className="flex justify-between items-center">
+                                  <p className="font-bold text-[14px] uppercase truncate leading-none">{c.name}</p>
+                                  <p className="text-[8px] font-black opacity-40 group-hover:text-white">📍 {c.address}</p>
+                                </div>
+                             </div>
+                           ))}
+                         </div>
+                      </div>
+                    </div>
+                  )}
                </div>
             </div>
 
             {selectedCust && (
               <div className="bg-blue-50 p-6 rounded-[2.5rem] border-2 border-dashed border-blue-200 animate-reveal">
-                 <p className="text-[10px] font-black text-blue-400 uppercase italic mb-4 text-center">৩ কোম্পানির বর্তমান বাকি (Dues Summary)</p>
+                 <p className="text-[10px] font-black text-blue-400 uppercase italic mb-4 text-center">৩ কোম্পানির বকেয়া (Dues Summary)</p>
                  <div className="grid grid-cols-3 gap-4">
-                    {[
-                      { label: 'Transtec', val: allCompanyDues[selectedCust.id]?.['Transtec'] || 0, color: 'text-amber-600' },
-                      { label: 'SQ Light', val: allCompanyDues[selectedCust.id]?.['SQ Light'] || 0, color: 'text-cyan-600' },
-                      { label: 'SQ Cables', val: allCompanyDues[selectedCust.id]?.['SQ Cables'] || 0, color: 'text-rose-600' }
-                    ].map(d => (
-                      <div key={d.label} className="bg-white p-4 rounded-2xl text-center border border-blue-100 shadow-sm">
-                        <p className="text-[8px] font-bold text-slate-400 uppercase mb-1">{d.label}</p>
-                        <p className={`text-sm font-black italic ${d.color}`}>৳{d.val.toLocaleString()}</p>
+                    {['Transtec', 'SQ Light', 'SQ Cables'].map(co => (
+                      <div key={co} className="bg-white p-4 rounded-2xl text-center border border-blue-100 shadow-sm">
+                        <p className="text-[8px] font-bold text-slate-400 uppercase mb-1">{co}</p>
+                        <p className={`text-sm font-black italic`}>৳{(allCompanyDues[selectedCust.id]?.[co] || 0).toLocaleString()}</p>
                       </div>
                     ))}
                  </div>
@@ -258,7 +254,6 @@ const Collections: React.FC<CollectionsProps> = ({ company, user }) => {
                  </div>
                ) : (
                  <div className="p-6 bg-blue-600/10 border border-blue-600/30 rounded-[2rem] flex items-center gap-4">
-                    <div className="w-3 h-3 bg-blue-600 rounded-full animate-pulse shadow-[0_0_10px_#2563eb]"></div>
                     <span className="text-[13px] font-bold text-blue-700 uppercase tracking-widest">{targetCompany} Division Only</span>
                  </div>
                )}
@@ -280,8 +275,7 @@ const Collections: React.FC<CollectionsProps> = ({ company, user }) => {
                     status: 'PENDING' 
                 }]);
                 if (error) throw error;
-                setAmount(""); 
-                setSelectedCust(null); 
+                setAmount(""); setSelectedCust(null); 
                 await fetchData();
                 alert("কালেকশন রিকোয়েস্ট পাঠানো হয়েছে!");
               } catch (err: any) { alert("Error: " + err.message); } finally { setIsSaving(false); }
@@ -308,10 +302,10 @@ const Collections: React.FC<CollectionsProps> = ({ company, user }) => {
                          <p className="text-3xl font-bold italic text-black leading-none shrink-0 tracking-tighter">৳{Number(req.amount).toLocaleString()}</p>
                       </div>
                       <div className="flex items-center justify-between pt-8 border-t border-slate-50">
-                         <p className="text-[10px] font-bold text-slate-400 uppercase italic leading-none">কালেক্টর: {req.submitted_by}</p>
+                         <p className="text-[10px] font-bold text-slate-400 uppercase italic leading-none truncate pr-4">কালেক্টর: {req.submitted_by}</p>
                          <div className="flex gap-3">
                             <button disabled={isSaving} onClick={() => handleApprove(req)} className="bg-blue-600 text-white px-10 py-4 rounded-2xl text-[11px] font-bold uppercase shadow-xl active:scale-95 transition-all hover:bg-emerald-600">APPROVE ✅</button>
-                            <button disabled={isSaving} onClick={() => handleDeleteRequest(req.id)} className="text-red-600 hover:text-red-700 font-bold text-2xl px-4 transition-colors">×</button>
+                            <button disabled={isSaving} onClick={() => handleDeleteRequest(req.id)} className="text-red-600 hover:text-red-700 font-bold text-2xl px-4 transition-colors active:scale-90">×</button>
                          </div>
                       </div>
                    </div>

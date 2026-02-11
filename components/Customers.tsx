@@ -36,7 +36,7 @@ const Customers: React.FC<CustomerProps> = ({ company, role, userName }) => {
     name: '', phone: '', address: '', money_amount: '', portal_username: '', portal_password: ''
   });
 
-  const isAdmin = role === 'ADMIN';
+  const isAdmin = role.toUpperCase() === 'ADMIN';
 
   useEffect(() => { fetchCustomers(); }, [company]);
 
@@ -79,6 +79,26 @@ const Customers: React.FC<CustomerProps> = ({ company, role, userName }) => {
         .order('created_at', { ascending: true });
       setLedgerHistory(data || []);
     } catch (err) { console.error(err); }
+  };
+
+  const handleDeleteTransaction = async (txId: string) => {
+    if (!isAdmin) return;
+    if (!confirm("আপনি কি নিশ্চিত এই লেনদেনটি মুছে ফেলতে চান? এটি মুছে ফেললে কাস্টমারের ব্যালেন্স স্বয়ংক্রিয়ভাবে ঠিক হয়ে যাবে।")) return;
+    
+    setIsSaving(true);
+    try {
+      const { error } = await supabase.from('transactions').delete().eq('id', txId);
+      if (error) throw error;
+      
+      alert("লেনদেনটি সফলভাবে মুছে ফেলা হয়েছে।");
+      // Refresh ledger and main customer list
+      if (selectedLedgerCust) fetchCustomerLedger(selectedLedgerCust);
+      fetchCustomers();
+    } catch (err: any) {
+      alert("মুছে ফেলা যায়নি: " + err.message);
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const handleDownloadLedgerPDF = async () => {
@@ -129,8 +149,6 @@ const Customers: React.FC<CustomerProps> = ({ company, role, userName }) => {
     setIsSaving(true);
     try {
       const dbCompany = mapToDbCompany(company);
-      
-      // Removed 'proprietor_name' to strictly follow DB schema
       const payload = { 
         name: formData.name.trim(), 
         phone: formData.phone.trim(), 
@@ -150,7 +168,6 @@ const Customers: React.FC<CustomerProps> = ({ company, role, userName }) => {
         customerId = data[0].id;
       }
 
-      // Opening Balance Adjustment
       if (formData.money_amount !== '') {
         const newAmt = Number(formData.money_amount) || 0;
         const { data: existingTx } = await supabase
@@ -268,7 +285,74 @@ const Customers: React.FC<CustomerProps> = ({ company, role, userName }) => {
         </div>
       )}
 
-      {/* Modal */}
+      {/* Ledger Modal with Delete Transaction Feature */}
+      {showLedger && selectedLedgerCust && (
+        <div className="fixed inset-0 bg-slate-950/95 backdrop-blur-xl z-[2000] flex items-center justify-center p-4">
+           <div className="bg-white rounded-[3rem] w-full max-w-4xl h-[85vh] flex flex-col shadow-2xl animate-reveal overflow-hidden">
+              <div className="p-8 bg-slate-900 text-white flex justify-between items-center shrink-0">
+                 <div>
+                    <h3 className="text-xl font-black uppercase italic">{selectedLedgerCust.name}</h3>
+                    <p className="text-[9px] text-slate-500 uppercase tracking-widest mt-1">Official Statement • {company}</p>
+                 </div>
+                 <div className="flex gap-3">
+                   <button onClick={handleDownloadLedgerPDF} className="bg-emerald-600 text-white px-6 py-2 rounded-xl text-[10px] font-black uppercase">Download PDF ⬇</button>
+                   <button onClick={() => setShowLedger(false)} className="text-slate-400 text-3xl font-black">×</button>
+                 </div>
+              </div>
+              
+              <div className="flex-1 overflow-y-auto p-8 space-y-6 custom-scroll bg-slate-50">
+                <div ref={ledgerRef} className="bg-white p-6 md:p-10 border shadow-sm rounded-3xl min-h-full">
+                  <div className="text-center border-b-2 border-black pb-4 mb-8">
+                     <h2 className="text-3xl font-black uppercase italic">IFZA ELECTRONICS</h2>
+                     <p className="text-xs font-bold opacity-60 uppercase">{company} DIVISION</p>
+                  </div>
+                  
+                  <table className="w-full text-left border-collapse">
+                    <thead>
+                       <tr className="bg-slate-900 text-white text-[9px] font-black uppercase italic">
+                          <th className="p-3 border border-slate-700">তারিখ</th>
+                          <th className="p-3 border border-slate-700">বিবরণ</th>
+                          <th className="p-3 border border-slate-700 text-right">ডেবিট (বাকি)</th>
+                          <th className="p-3 border border-slate-700 text-right">ক্রেডিট (জমা)</th>
+                          {isAdmin && <th className="p-3 border border-slate-700 text-center no-print">×</th>}
+                       </tr>
+                    </thead>
+                    <tbody className="text-[11px] font-bold">
+                       {ledgerHistory.map((tx, idx) => (
+                         <tr key={tx.id} className="border-b border-slate-100 hover:bg-blue-50/50 transition-all">
+                            <td className="p-3">{new Date(tx.created_at).toLocaleDateString('bn-BD')}</td>
+                            <td className="p-3">
+                               <p className="uppercase">{tx.payment_type === 'COLLECTION' ? '💰 নগদ জমা' : '📄 মালের ইনভয়েস'}</p>
+                               <p className="text-[7px] text-slate-400">ID: #{tx.id.slice(-6).toUpperCase()}</p>
+                            </td>
+                            <td className="p-3 text-right text-red-600">
+                               {tx.payment_type !== 'COLLECTION' ? `৳${Number(tx.amount).toLocaleString()}` : '—'}
+                            </td>
+                            <td className="p-3 text-right text-emerald-600">
+                               {tx.payment_type === 'COLLECTION' ? `৳${Number(tx.amount).toLocaleString()}` : '—'}
+                            </td>
+                            {isAdmin && (
+                              <td className="p-2 text-center no-print">
+                                 <button 
+                                   disabled={isSaving}
+                                   onClick={() => handleDeleteTransaction(tx.id)} 
+                                   className="w-8 h-8 bg-red-50 text-red-500 rounded-lg flex items-center justify-center hover:bg-red-600 hover:text-white transition-all active:scale-90"
+                                 >
+                                    🗑️
+                                 </button>
+                              </td>
+                            )}
+                         </tr>
+                       ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+           </div>
+        </div>
+      )}
+
+      {/* Modal for adding/editing customer */}
       {showModal && (
         <div className="fixed inset-0 bg-slate-950/90 backdrop-blur-xl z-[2000] flex items-center justify-center p-4">
            <div className="bg-white p-10 md:p-14 rounded-[4rem] w-full max-w-lg shadow-2xl animate-reveal text-slate-900 overflow-y-auto max-h-[95vh] custom-scroll">
