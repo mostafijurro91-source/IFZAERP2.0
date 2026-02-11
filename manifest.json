@@ -2,13 +2,14 @@
 {
   "name": "IFZA Electronics ERP",
   "short_name": "IFZA ERP",
-  "description": "Enterprise ERP for Transtec, SQ Light, and SQ Cables Group",
+  "description": "Enterprise ERP for Transtec, SQ Light, and SQ Cables Group. Manage sales, inventory, and bookings efficiently.",
   "start_url": "./index.html",
   "display": "standalone",
   "background_color": "#0a0f1d",
   "theme_color": "#2563eb",
   "orientation": "portrait",
-  "scope": "./",
+  "id": "com.ifzaerp.portal.v4",
+  "categories": ["business", "finance"],
   "icons": [
     {
       "src": "https://r.jina.ai/i/0f7939be338446b5a32b904586927500",
@@ -23,11 +24,15 @@
       "purpose": "any maskable"
     }
   ],
-  "prefer_related_applications": false,
   "shortcuts": [
     {
-      "name": "Sales Terminal",
+      "name": "Sales Memo",
       "url": "./index.html?tab=sales",
+      "icons": [{ "src": "https://r.jina.ai/i/0f7939be338446b5a32b904586927500", "sizes": "192x192" }]
+    },
+    {
+      "name": "Digital Showroom",
+      "url": "./index.html?tab=showroom",
       "icons": [{ "src": "https://r.jina.ai/i/0f7939be338446b5a32b904586927500", "sizes": "192x192" }]
     }
   ]
