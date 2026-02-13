@@ -148,21 +148,23 @@ const Collections: React.FC<CollectionsProps> = ({ company, user }) => {
     if (!isAdmin || isSaving) return;
     setIsSaving(true);
     try {
-      const { error: txErr } = await supabase.from('transactions').insert([{
+      const { data: txData, error: txErr } = await supabase.from('transactions').insert([{
         customer_id: req.customer_id, 
         company: req.company, 
         amount: Number(req.amount),
         payment_type: 'COLLECTION', 
         items: [{ note: `নগদ আদায় অনুমোদন (${req.submitted_by} দ্বারা সংগৃহীত)` }], 
         submitted_by: user.name
-      }]);
+      }]).select().single();
       if (txErr) throw txErr;
+
+      const txIdShort = String(txData.id).slice(-6).toUpperCase();
 
       // 🔔 Trigger Notification to Customer
       await supabase.from('notifications').insert([{
         customer_id: req.customer_id,
-        title: "কালেকশন অনুমোদন হয়েছে",
-        message: `আপনার প্রদানকৃত ৳${Number(req.amount).toLocaleString()} জমা হিসেবে গ্রহণ করা হয়েছে। (${req.company})`,
+        title: `কালেকশন জমা রিসিট #${txIdShort}`,
+        message: `আপনার প্রদানকৃত ৳${Number(req.amount).toLocaleString()} জমা হিসেবে গ্রহণ করা হয়েছে। (${req.company}) রিসিট আইডি: #${txIdShort}`,
         type: 'PAYMENT'
       }]);
 
@@ -182,7 +184,6 @@ const Collections: React.FC<CollectionsProps> = ({ company, user }) => {
       await supabase.from('collection_requests').delete().eq('id', req.id);
       fetchData();
       if (selectedCust?.id === req.customer_id) fetchCustomerBalances(req.customer_id);
-    // Fixed catch block syntax error by adding curly braces and removing extra closing brace.
     } catch (err: any) { 
       alert(err.message); 
     } finally { 
@@ -190,12 +191,23 @@ const Collections: React.FC<CollectionsProps> = ({ company, user }) => {
     }
   };
 
-  const handleDeleteConfirmed = async (txId: string) => {
-    if (!isAdmin || !confirm("আপনি কি নিশ্চিত এই আদায়টি চিরতরে মুছে ফেলতে চান?")) return;
+  const handleDeleteConfirmed = async (tx: any) => {
+    if (!isAdmin || !confirm("আপনি কি নিশ্চিত এই আদায়টি চিরতরে মুছে ফেলতে চান? এটি কাস্টমার ইনবক্স থেকেও মুছে যাবে।")) return;
     try {
-      const { error } = await supabase.from('transactions').delete().eq('id', txId);
+      const txIdShort = String(tx.id).slice(-6).toUpperCase();
+
+      // 1. 🔔 Delete associated notification from customer inbox
+      await supabase
+        .from('notifications')
+        .delete()
+        .eq('customer_id', tx.customer_id)
+        .ilike('message', `%#${txIdShort}%`);
+
+      // 2. Delete transaction
+      const { error } = await supabase.from('transactions').delete().eq('id', tx.id);
       if (error) throw error;
-      alert("আদায়টি মুছে ফেলা হয়েছে!");
+      
+      alert("আদায়ের এন্ট্রি এবং সংশ্লিষ্ট নোটিফিকেশন মুছে ফেলা হয়েছে!");
       fetchData();
     } catch (err: any) { alert(err.message); }
   };
@@ -308,7 +320,7 @@ const Collections: React.FC<CollectionsProps> = ({ company, user }) => {
                        <div className="flex items-center gap-4">
                           <p className="text-lg font-black italic text-emerald-700">৳{Number(tx.amount).toLocaleString()}</p>
                           {isAdmin && (
-                            <button onClick={() => handleDeleteConfirmed(tx.id)} className="w-8 h-8 bg-white text-red-500 rounded-lg flex items-center justify-center border shadow-sm hover:bg-red-500 hover:text-white transition-all">🗑️</button>
+                            <button onClick={() => handleDeleteConfirmed(tx)} className="w-8 h-8 bg-white text-red-500 rounded-lg flex items-center justify-center border shadow-sm hover:bg-red-500 hover:text-white transition-all">🗑️</button>
                           )}
                        </div>
                     </div>

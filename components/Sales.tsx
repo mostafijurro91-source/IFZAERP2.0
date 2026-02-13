@@ -197,25 +197,27 @@ const Sales: React.FC<SalesProps> = ({ company, role, user }) => {
 
       if (txError) throw txError;
 
+      const memoIdShort = String(txData.id).slice(-6).toUpperCase();
+
       // 🔔 Trigger Notification to Customer
       await supabase.from('notifications').insert([{
         customer_id: selectedCust.id,
-        title: `নতুন সেলস মেমো #${String(txData.id).slice(-6).toUpperCase()}`,
-        message: `${company} থেকে আপনার নামে ৳${Math.round(totals.netTotal).toLocaleString()} টাকার একটি মেমো তৈরি করা হয়েছে।`,
+        title: `নতুন সেলস মেমো #${memoIdShort}`,
+        message: `${company} থেকে আপনার নামে ৳${Math.round(totals.netTotal).toLocaleString()} টাকার একটি মেমো তৈরি করা হয়েছে। (#${memoIdShort})`,
         type: 'MEMO'
       }]);
 
       if (cashReceived > 0) {
         await supabase.from('transactions').insert([{
           customer_id: selectedCust.id, company: dbCo, amount: cashReceived, payment_type: 'COLLECTION',
-          items: [{ note: `নগদ গ্রহণ (মেমো #${String(txData.id).slice(-6).toUpperCase()})` }],
+          items: [{ note: `নগদ গ্রহণ (মেমো #${memoIdShort})` }],
           submitted_by: user.name
         }]);
 
         await supabase.from('notifications').insert([{
            customer_id: selectedCust.id,
-           title: "টাকা জমা রশিদ",
-           message: `আপনার মেমো পরিশোধ বাবদ ৳${Math.round(cashReceived).toLocaleString()} জমা করা হয়েছে।`,
+           title: `টাকা জমা রশিদ (মেমো #${memoIdShort})`,
+           message: `আপনার মেমো #${memoIdShort} পরিশোধ বাবদ ৳${Math.round(cashReceived).toLocaleString()} জমা করা হয়েছে।`,
            type: 'PAYMENT'
         }]);
       }
@@ -251,30 +253,34 @@ const Sales: React.FC<SalesProps> = ({ company, role, user }) => {
 
   const handleDeleteMemo = async (memo: any) => {
     if (!user.role.includes('ADMIN') && !user.role.includes('STAFF')) return;
-    const confirmMsg = `আপনি কি নিশ্চিত এই মেমোটি ডিলিট করতে চান? এটি ডিলিট করলে ${memo.items?.length || 0} টি পণ্যের স্টক স্বয়ংক্রিয়ভাবে ইনভেন্টরিতে ফিরে যাবে।`;
+    const memoIdShort = String(memo.id).slice(-6).toUpperCase();
+    const confirmMsg = `আপনি কি নিশ্চিত এই মেমোটি (#${memoIdShort}) ডিলিট করতে চান? এটি ডিলিট করলে মাল স্টকে ফেরত যাবে এবং নোটিফিকেশন মুছে যাবে।`;
     if (!confirm(confirmMsg)) return;
 
     setLoading(true);
     try {
-      // 1. Recover stock for each item in the memo
+      // 1. Recover stock
       if (Array.isArray(memo.items)) {
         for (const item of memo.items) {
           if (item.id && item.qty) {
-            // Revert stock (add back if it was SALE, subtract if it was RETURN)
             const amtToRevert = item.action === 'RETURN' ? -Number(item.qty) : Number(item.qty);
-            await supabase.rpc('increment_stock', { 
-              row_id: item.id, 
-              amt: amtToRevert 
-            });
+            await supabase.rpc('increment_stock', { row_id: item.id, amt: amtToRevert });
           }
         }
       }
 
-      // 2. Delete the memo transaction
+      // 2. 🔔 Delete associated notifications from customer inbox
+      await supabase
+        .from('notifications')
+        .delete()
+        .eq('customer_id', memo.customer_id)
+        .ilike('message', `%#${memoIdShort}%`);
+
+      // 3. Delete the transaction
       const { error } = await supabase.from('transactions').delete().eq('id', memo.id);
       if (error) throw error;
 
-      alert("মেমো ডিলিট এবং স্টক অ্যাডজাস্ট সফল হয়েছে!");
+      alert("মেমো এবং নোটিফিকেশন সফলভাবে মুছে ফেলা হয়েছে!");
       fetchRecentMemos();
       loadData();
     } catch (err: any) {
@@ -428,7 +434,7 @@ const Sales: React.FC<SalesProps> = ({ company, role, user }) => {
         </div>
       </div>
 
-      {/* 📜 BOTTOM HISTORY SECTION (Requested Update) */}
+      {/* 📜 BOTTOM HISTORY SECTION */}
       <div className="mt-12 bg-white rounded-[3.5rem] border shadow-sm overflow-hidden no-print">
          <div className="p-8 md:p-10 border-b flex flex-col md:flex-row justify-between items-center gap-6">
             <div className="flex items-center gap-4">

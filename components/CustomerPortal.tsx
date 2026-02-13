@@ -100,6 +100,40 @@ const CustomerPortal: React.FC<PortalProps> = ({ type, user }) => {
 
   const companies: Company[] = ['Transtec', 'SQ Light', 'SQ Cables'];
 
+  // 🔔 Real-time Alerts Listener for Inbox and Dashboard
+  useEffect(() => {
+    if (!user.customer_id) return;
+    
+    const channel = supabase
+      .channel(`portal_notifications_${user.customer_id}`)
+      .on(
+        'postgres_changes',
+        { 
+          event: '*', 
+          schema: 'public', 
+          table: 'notifications', 
+          filter: `customer_id=eq.${user.customer_id}` 
+        },
+        (payload: any) => {
+          if (payload.eventType === 'INSERT') {
+            setAlerts(prev => [payload.new, ...prev]);
+            // Refresh stats on new transaction
+            fetchAllData();
+          } else if (payload.eventType === 'DELETE') {
+            setAlerts(prev => prev.filter(a => a.id !== payload.old.id));
+            fetchAllData();
+          } else if (payload.eventType === 'UPDATE') {
+            setAlerts(prev => prev.map(a => a.id === payload.new.id ? payload.new : a));
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user.customer_id]);
+
   useEffect(() => {
     fetchAllData();
     fetchAlerts();
@@ -114,13 +148,15 @@ const CustomerPortal: React.FC<PortalProps> = ({ type, user }) => {
 
   const fetchAlerts = async () => {
     if (!user.customer_id) return;
+    setLoading(true);
     const { data } = await supabase
       .from('notifications')
       .select('*')
       .eq('customer_id', user.customer_id)
       .order('created_at', { ascending: false })
-      .limit(type === 'DASHBOARD' ? 10 : 40);
+      .limit(60);
     setAlerts(data || []);
+    setLoading(false);
   };
 
   const markAlertsAsRead = async () => {
@@ -233,7 +269,7 @@ const CustomerPortal: React.FC<PortalProps> = ({ type, user }) => {
           {/* 📊 Top Stats Grid */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
              <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm text-center">
-                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 italic">আজকের মোট</p>
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 italic">আমার মোট বকেয়া</p>
                 <p className="text-2xl font-black text-slate-900 leading-none tracking-tighter italic">
                    {totalOutstanding.toLocaleString()}৳
                 </p>
@@ -260,42 +296,43 @@ const CustomerPortal: React.FC<PortalProps> = ({ type, user }) => {
 
           <div className="flex flex-col lg:flex-row gap-8">
             <div className="flex-1 space-y-12">
-              {/* 🔔 LIVE LOG */}
+              {/* 🔔 LIVE LOG / Activity Feed */}
               <div className="bg-white/40 p-2 md:p-4 rounded-[3.5rem] border-2 border-dashed border-slate-200">
                 <div className="flex justify-between items-center mb-6 px-8 pt-4">
-                   <h3 className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em] italic">সাম্প্রতিক অ্যাক্টিভিটি (Activity Feed)</h3>
-                   <span className="w-2.5 h-2.5 bg-emerald-500 rounded-full animate-ping shadow-[0_0_10px_#10b981]"></span>
+                   <h3 className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em] italic">রিয়েল-টাইম লগ (Activity Feed)</h3>
+                   <div className="flex items-center gap-2">
+                      <span className="text-[8px] font-black text-emerald-500 uppercase animate-pulse">Live Link Active</span>
+                      <span className="w-2.5 h-2.5 bg-emerald-500 rounded-full shadow-[0_0_10px_#10b981]"></span>
+                   </div>
                 </div>
                 
                 <div className="space-y-4">
-                  {loading ? (
+                  {loading && alerts.length === 0 ? (
                     <div className="py-20 text-center animate-pulse italic text-sm uppercase font-black opacity-20">Syncing Feed...</div>
                   ) : alerts.length === 0 ? (
                     <div className="py-20 text-center opacity-20 italic text-sm uppercase font-black">কোনো সাম্প্রতিক আপডেট নেই</div>
-                  ) : alerts.map(al => (
+                  ) : alerts.slice(0, 10).map(al => (
                     <div key={al.id} className="bg-white p-8 rounded-[3rem] border border-slate-100 shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-6 transition-all hover:shadow-xl hover:-translate-y-1 animate-reveal group">
                        <div className="flex-1">
-                          <h4 className="text-xl font-black text-slate-800 uppercase italic tracking-tight mb-2 leading-none">{user.name}</h4>
+                          <h4 className="text-xl font-black text-slate-800 uppercase italic tracking-tight mb-2 leading-none">{al.title}</h4>
                           <div className="flex gap-2 mb-4">
                              <span className={`px-4 py-1.5 rounded-xl text-[9px] font-black uppercase italic tracking-widest ${
-                               al.title.includes('Transtec') ? 'bg-amber-50 text-amber-600' : 
-                               al.title.includes('Light') ? 'bg-cyan-50 text-cyan-600' : 
-                               'bg-rose-50 text-rose-600'
+                               al.type === 'PAYMENT' ? 'bg-emerald-50 text-emerald-600' : 'bg-blue-50 text-blue-600'
                              }`}>
-                                {al.title.includes('Transtec') ? 'TRANSTEC' : al.title.includes('Light') ? 'SQ LIGHT' : 'SQ CABLES'}
+                                {al.type === 'PAYMENT' ? 'টাকা জমা' : 'মালের ইনভয়েস'}
                              </span>
                              <span className="px-4 py-1.5 bg-slate-50 text-slate-400 text-[9px] font-black rounded-xl uppercase italic tracking-widest border">
-                                ID: #{String(al.id).slice(-4).toUpperCase()}
+                                {new Date(al.created_at).toLocaleTimeString('bn-BD', {hour:'2-digit', minute:'2-digit'})}
                              </span>
                           </div>
                           <p className="text-[12px] font-bold text-slate-500 leading-relaxed max-w-lg">{al.message}</p>
                        </div>
                        <div className="text-right w-full md:w-auto border-t md:border-t-0 pt-6 md:pt-0 shrink-0">
                           <p className={`text-3xl font-black tracking-tighter italic leading-none ${al.type === 'PAYMENT' ? 'text-emerald-600' : 'text-slate-900'}`}>
-                             ৳{al.message.match(/৳(\d+(,\d+)*)/)?.[1] || '0'}
+                             ৳{al.message.match(/৳(\d+(,\d+)*)/)?.[1] || '---'}
                           </p>
                           <p className="text-[10px] font-black text-slate-300 uppercase mt-2 tracking-widest">
-                             {new Date(al.created_at).toLocaleTimeString('bn-BD', {hour:'2-digit', minute:'2-digit'})}
+                             {new Date(al.created_at).toLocaleDateString('bn-BD')}
                           </p>
                        </div>
                     </div>
@@ -339,42 +376,9 @@ const CustomerPortal: React.FC<PortalProps> = ({ type, user }) => {
         </>
       )}
 
-      {/* Detail Modal for Ad Preview */}
-      {selectedAd && (
-        <div className="fixed inset-0 bg-black/98 backdrop-blur-3xl z-[5000] flex flex-col animate-reveal" onClick={() => setSelectedAd(null)}>
-           <div className="h-28 px-10 md:px-20 flex justify-between items-center border-b border-white/5 bg-black/40" onClick={e => e.stopPropagation()}>
-              <div>
-                 <h4 className="text-2xl font-black uppercase italic leading-none text-white">{selectedAd.title}</h4>
-                 <p className="text-[9px] text-blue-500 font-black uppercase tracking-widest mt-2 italic">IFZA Enterprise Showroom Asset</p>
-              </div>
-              <button onClick={() => setSelectedAd(null)} className="w-16 h-16 bg-white/5 rounded-full flex items-center justify-center text-white text-2xl hover:bg-red-500 transition-all active:scale-90">✕</button>
-           </div>
-           
-           <div className="flex-1 overflow-y-auto p-6 md:p-20 custom-scroll" onClick={e => e.stopPropagation()}>
-              <div className="max-w-7xl mx-auto space-y-24 pb-40">
-                 {selectedAd.image_url && (
-                    <div className="relative group">
-                       <div className="absolute inset-0 bg-blue-600/10 blur-[150px] opacity-30 rounded-full"></div>
-                       <img src={selectedAd.image_url} className="w-full rounded-[4rem] shadow-2xl border border-white/10 relative z-10" />
-                    </div>
-                 )}
-                 <div className="bg-white/[0.03] p-12 md:p-24 rounded-[6rem] border border-white/5 relative overflow-hidden text-center">
-                    <div className="absolute top-10 left-10 text-9xl font-black text-white/5 select-none italic">"</div>
-                    <p className="text-2xl md:text-5xl font-medium leading-[1.3] text-slate-100 italic relative z-10 max-w-5xl mx-auto">{selectedAd.content}</p>
-                    <div className="mt-16 flex flex-col items-center gap-4 relative z-10">
-                       <span className="h-px w-20 bg-blue-500/40"></span>
-                       <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.5em] italic">Product Information Complete</p>
-                    </div>
-                 </div>
-              </div>
-           </div>
-        </div>
-      )}
-
       {/* Remaining Portal Views (ALERTS, LEDGER, CATALOG) */}
       {type === 'ALERTS' && (
-        <div className="max-w-2xl mx-auto space-y-4">
-           {/* ... existing code ... */}
+        <div className="max-w-2xl mx-auto space-y-4 pb-20">
            <div className="bg-[#0f172a] p-12 rounded-[4rem] text-white flex justify-between items-center shadow-2xl border border-white/5 mb-10">
               <div>
                  <h3 className="text-3xl font-black uppercase italic tracking-tighter">আমার ইনবক্স</h3>
@@ -382,7 +386,12 @@ const CustomerPortal: React.FC<PortalProps> = ({ type, user }) => {
               </div>
               <div className="w-16 h-16 bg-blue-600 rounded-[1.8rem] flex items-center justify-center text-3xl shadow-[0_0_40px_rgba(37,99,235,0.4)]">🔔</div>
            </div>
-           {alerts.map(al => (
+           
+           {loading && alerts.length === 0 ? (
+             <div className="py-20 text-center animate-pulse text-slate-300 font-black uppercase italic">লোড হচ্ছে...</div>
+           ) : alerts.length === 0 ? (
+             <div className="py-20 text-center opacity-20 italic text-sm uppercase font-black">কোনো নোটিফিকেশন নেই</div>
+           ) : alerts.map(al => (
              <div key={al.id} className="bg-white p-10 rounded-[3rem] border border-slate-100 shadow-sm flex items-start gap-8 animate-reveal relative overflow-hidden group hover:shadow-xl transition-all">
                 <div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-2xl shrink-0 shadow-inner group-hover:scale-110 transition-transform ${al.type === 'PAYMENT' ? 'bg-emerald-50 text-emerald-600' : 'bg-blue-50 text-blue-600'}`}>
                   {al.type === 'PAYMENT' ? '💰' : '📄'}
@@ -393,7 +402,7 @@ const CustomerPortal: React.FC<PortalProps> = ({ type, user }) => {
                       <span className="text-[10px] font-black text-slate-300 uppercase tracking-widest">{new Date(al.created_at).toLocaleDateString('bn-BD')}</span>
                    </div>
                    <p className="text-[13px] font-bold text-slate-500 leading-relaxed mb-4">{al.message}</p>
-                   <p className="text-[9px] font-black text-slate-300 uppercase tracking-widest">Tracking ID: #{String(al.id).toUpperCase()}</p>
+                   <p className="text-[9px] font-black text-slate-300 uppercase tracking-widest">Tracking ID: #{String(al.id).slice(-8).toUpperCase()}</p>
                 </div>
                 {!al.is_read && <div className="absolute top-6 right-6 w-3 h-3 bg-blue-600 rounded-full animate-ping"></div>}
              </div>
@@ -444,40 +453,6 @@ const CustomerPortal: React.FC<PortalProps> = ({ type, user }) => {
                     </tbody>
                  </table>
               </div>
-           </div>
-        </div>
-      )}
-
-      {type === 'CATALOG' && (
-        <div className="space-y-10">
-           <div className="bg-white p-2 rounded-[2rem] border shadow-sm flex gap-2 overflow-x-auto no-scrollbar">
-              {companies.map(co => (
-                 <button key={co} onClick={() => setActiveCompany(co)} className={`flex-1 min-w-[140px] py-5 rounded-[1.5rem] text-[11px] font-black uppercase tracking-widest transition-all ${activeCompany === co ? 'bg-slate-900 text-white shadow-xl' : 'text-slate-400 hover:bg-slate-50'}`}>
-                    {co} রেট লিস্ট
-                 </button>
-              ))}
-           </div>
-           
-           <div className="bg-white p-2 rounded-[2.5rem] border shadow-sm flex items-center gap-4 px-6 mb-6">
-              <span className="text-xl opacity-20 pl-2">🔍</span>
-              <input 
-                className="w-full p-5 bg-transparent border-none outline-none font-black text-xs uppercase tracking-widest placeholder:text-slate-300" 
-                placeholder="মডেল বা প্রোডাক্ট সার্চ করুন..." 
-                value={search}
-                onChange={e => setSearch(e.target.value)}
-              />
-           </div>
-
-           <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-6">
-              {products.filter(p => !search || p.name.toLowerCase().includes(search.toLowerCase())).map(p => (
-                 <div key={p.id} className="bg-white p-8 rounded-[3rem] border border-slate-100 shadow-sm group hover:shadow-2xl transition-all duration-500 hover:-translate-y-1">
-                    <h4 className="text-[14px] font-black uppercase italic text-slate-800 leading-tight mb-8 h-12 line-clamp-2 group-hover:text-blue-600">{p.name}</h4>
-                    <div className="border-t pt-8">
-                       <p className="text-[9px] font-black text-slate-300 uppercase mb-2 tracking-widest italic leading-none">Official Retail MRP</p>
-                       <p className="font-black text-2xl text-slate-900 italic leading-none tracking-tighter">{p.mrp}৳</p>
-                    </div>
-                 </div>
-              ))}
            </div>
         </div>
       )}
