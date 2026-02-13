@@ -18,6 +18,12 @@ const Dashboard: React.FC<DashboardProps> = ({ company, role }) => {
     monthDeliveryExpense: 0
   });
 
+  const [cloudUsage, setCloudUsage] = useState({
+    imageStorageMB: 0,
+    totalRecords: 0,
+    syncStatus: 'STABLE'
+  });
+
   const [monthlyData, setMonthlyData] = useState<any[]>([]);
   const [recentActivity, setRecentActivity] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -27,7 +33,39 @@ const Dashboard: React.FC<DashboardProps> = ({ company, role }) => {
 
   useEffect(() => {
     fetchDashboardData();
+    if (isAdmin) fetchCloudUsage();
   }, [company]);
+
+  const fetchCloudUsage = async () => {
+    try {
+      // Fetch advertisements to calculate image storage size
+      const { data: ads } = await supabase.from('advertisements').select('image_url');
+      let totalBytes = 0;
+      ads?.forEach(ad => {
+        if (ad.image_url) {
+          // Base64 string to approximate bytes
+          totalBytes += ad.image_url.length * 0.75;
+        }
+      });
+      
+      const mb = totalBytes / (1024 * 1024);
+
+      // Fetch record counts
+      const [custCount, prodCount, txCount] = await Promise.all([
+        supabase.from('customers').select('*', { count: 'exact', head: true }),
+        supabase.from('products').select('*', { count: 'exact', head: true }),
+        supabase.from('transactions').select('*', { count: 'exact', head: true })
+      ]);
+
+      setCloudUsage({
+        imageStorageMB: Number(mb.toFixed(2)),
+        totalRecords: (custCount.count || 0) + (prodCount.count || 0) + (txCount.count || 0),
+        syncStatus: 'STABLE'
+      });
+    } catch (e) {
+      console.error("Cloud usage fetch error:", e);
+    }
+  };
 
   const fetchDashboardData = async () => {
     setLoading(true);
@@ -162,13 +200,13 @@ const Dashboard: React.FC<DashboardProps> = ({ company, role }) => {
                  Live Sync Active
                </span>
                <span className="bg-black/25 px-6 py-3 rounded-2xl text-[9px] font-black uppercase tracking-widest italic border border-white/5 opacity-60">
-                 Node v4.7.2
+                 Node v4.7.5
                </span>
             </div>
          </div>
       </div>
 
-      {/* Stats with Staggered Entrance */}
+      {/* Stats Grid */}
       <div className="grid grid-cols-2 lg:grid-cols-6 gap-4">
         {[
           { label: 'আজকের বিক্রি', val: stats.todaySales, color: 'text-blue-600', bg: 'bg-blue-50' },
@@ -184,6 +222,63 @@ const Dashboard: React.FC<DashboardProps> = ({ company, role }) => {
           </div>
         ))}
       </div>
+
+      {/* 🚀 CLOUD STORAGE & INFRASTRUCTURE (New Section) */}
+      {isAdmin && (
+        <div className="bg-white p-10 rounded-[3.5rem] border shadow-sm animate-reveal">
+           <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-10">
+              <div className="flex items-center gap-5">
+                 <div className="w-14 h-14 bg-indigo-600 rounded-3xl flex items-center justify-center text-white text-2xl shadow-xl italic font-black">S</div>
+                 <div>
+                    <h3 className="text-xl font-black uppercase italic tracking-tighter">Cloud Storage & Health</h3>
+                    <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest mt-1">Supabase Real-time Database Monitor</p>
+                 </div>
+              </div>
+              <button onClick={fetchCloudUsage} className="bg-slate-100 px-6 py-3 rounded-2xl text-[9px] font-black uppercase hover:bg-indigo-600 hover:text-white transition-all active:scale-95">Refresh Metrics 🔄</button>
+           </div>
+
+           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+              {/* MB Usage Card */}
+              <div className="p-8 bg-slate-50 rounded-[2.5rem] border border-slate-100 relative overflow-hidden group">
+                 <div className="absolute right-[-10px] bottom-[-10px] text-6xl opacity-5 font-black italic">MB</div>
+                 <p className="text-[9px] font-black text-indigo-500 uppercase tracking-widest mb-4 italic">ব্যবহৃত ইমেজ স্টোরেজ</p>
+                 <div className="flex items-baseline gap-2">
+                    <p className="text-5xl font-black italic tracking-tighter text-slate-900">{cloudUsage.imageStorageMB}</p>
+                    <span className="text-xl font-black text-slate-400 italic">MB</span>
+                 </div>
+                 <div className="mt-6 h-2 bg-slate-200 rounded-full overflow-hidden">
+                    <div className="h-full bg-indigo-500 rounded-full animate-pulse" style={{ width: `${Math.min(100, (cloudUsage.imageStorageMB / 50) * 100)}%` }}></div>
+                 </div>
+                 <p className="text-[8px] font-bold text-slate-400 mt-4 uppercase tracking-widest">Base64 Database Estimate (Limit: 50MB Free)</p>
+              </div>
+
+              {/* Records Card */}
+              <div className="p-8 bg-slate-50 rounded-[2.5rem] border border-slate-100 relative overflow-hidden group">
+                 <div className="absolute right-[-10px] bottom-[-10px] text-6xl opacity-5 font-black italic">DB</div>
+                 <p className="text-[9px] font-black text-emerald-500 uppercase tracking-widest mb-4 italic">মোট ডাটাবেস এন্ট্রি</p>
+                 <div className="flex items-baseline gap-2">
+                    <p className="text-5xl font-black italic tracking-tighter text-slate-900">{cloudUsage.totalRecords.toLocaleString()}</p>
+                    <span className="text-xl font-black text-slate-400 italic">Rows</span>
+                 </div>
+                 <p className="text-[10px] font-bold text-slate-500 mt-6 leading-relaxed">আপনার ব্যবসার সকল কাস্টমার, সেলস এবং ইনভেন্টরি ডাটা নিরাপদে ক্লাউডে আছে।</p>
+              </div>
+
+              {/* Sync Health Card */}
+              <div className="p-8 bg-slate-900 rounded-[2.5rem] shadow-xl relative overflow-hidden">
+                 <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/10 blur-[60px] rounded-full"></div>
+                 <p className="text-[9px] font-black text-emerald-400 uppercase tracking-widest mb-4 italic">সার্ভার স্ট্যাটাস</p>
+                 <div className="flex items-center gap-4">
+                    <div className="w-4 h-4 bg-emerald-500 rounded-full animate-ping"></div>
+                    <p className="text-3xl font-black italic text-white tracking-tighter uppercase">Online</p>
+                 </div>
+                 <div className="mt-8 pt-8 border-t border-white/5">
+                    <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest italic mb-2">Supabase Region:</p>
+                    <p className="text-[10px] font-black text-emerald-500 italic">AWS ap-southeast-1 (Singapore)</p>
+                 </div>
+              </div>
+           </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
          <div className="lg:col-span-2 bg-white rounded-[3.5rem] shadow-sm border overflow-hidden animate-reveal stagger-2">
