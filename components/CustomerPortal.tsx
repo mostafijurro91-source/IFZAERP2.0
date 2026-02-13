@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { User, Advertisement, formatCurrency, Company, Product } from '../types';
 import { supabase, mapToDbCompany } from '../lib/supabase';
 
@@ -14,6 +14,73 @@ interface CompanyStats {
   totalPaid: number;
 }
 
+// 🎢 internal Slider Component for Portal
+const PortalBrandSlider: React.FC<{ 
+  brand: Company, 
+  ads: Advertisement[], 
+  onSeeAll: (brand: Company) => void,
+  onAdClick: (ad: Advertisement) => void,
+  themeColor: string
+}> = ({ brand, ads, onSeeAll, onAdClick, themeColor }) => {
+  const [index, setIndex] = useState(0);
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (ads.length <= 1) return;
+    const timer = setInterval(() => {
+      setIndex((prev) => (prev + 1) % ads.length);
+    }, 5000 + Math.random() * 1000);
+    return () => clearInterval(timer);
+  }, [ads.length]);
+
+  if (ads.length === 0) return null;
+
+  return (
+    <div className="space-y-6 animate-reveal">
+      <div className="flex justify-between items-end px-4">
+         <div>
+            <h4 className={`text-xl font-black uppercase italic tracking-tighter ${themeColor}`}>{brand}</h4>
+            <p className="text-[9px] text-slate-400 font-bold uppercase tracking-widest mt-1">এক্সক্লুসিভ অফার ও ক্যাটালগ</p>
+         </div>
+         <button 
+            onClick={() => onSeeAll(brand)}
+            className="px-6 py-2.5 bg-slate-900 text-white rounded-xl text-[9px] font-black uppercase tracking-widest shadow-lg hover:bg-blue-600 transition-all active:scale-95"
+         >
+           See All ➔
+         </button>
+      </div>
+
+      <div className="relative group h-64 md:h-72 w-full overflow-hidden rounded-[2.5rem] border border-slate-100 shadow-sm bg-white">
+         {ads.map((ad, idx) => (
+           <div 
+             key={ad.id}
+             onClick={() => onAdClick(ad)}
+             className={`absolute inset-0 transition-all duration-1000 ease-in-out cursor-pointer ${
+               idx === index ? 'opacity-100 scale-100 z-10' : 'opacity-0 scale-105 pointer-events-none'
+             }`}
+           >
+              {ad.image_url ? (
+                <img src={ad.image_url} className="w-full h-full object-cover opacity-90 group-hover:scale-110 transition-transform duration-[5000ms]" />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center bg-slate-50 text-slate-200 font-black text-4xl italic uppercase">IFZA</div>
+              )}
+              <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent flex flex-col justify-end p-8">
+                 <span className="bg-blue-600 text-white px-4 py-1 rounded-lg text-[8px] font-black uppercase w-fit mb-3">{ad.type.replace('_', ' ')}</span>
+                 <h5 className="text-white text-lg font-black uppercase italic leading-tight drop-shadow-lg line-clamp-1">{ad.title}</h5>
+              </div>
+           </div>
+         ))}
+         
+         <div className="absolute bottom-6 right-8 z-20 flex gap-1.5">
+            {ads.map((_, idx) => (
+              <div key={idx} className={`h-1 rounded-full transition-all duration-500 ${idx === index ? 'w-6 bg-blue-500' : 'w-1.5 bg-white/30'}`}></div>
+            ))}
+         </div>
+      </div>
+    </div>
+  );
+};
+
 const CustomerPortal: React.FC<PortalProps> = ({ type, user }) => {
   const [activeCompany, setActiveCompany] = useState<Company>('Transtec');
   const [ads, setAds] = useState<Advertisement[]>([]);
@@ -22,6 +89,8 @@ const CustomerPortal: React.FC<PortalProps> = ({ type, user }) => {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [alerts, setAlerts] = useState<any[]>([]);
+  const [selectedAd, setSelectedAd] = useState<Advertisement | null>(null);
+  const [showroomBrand, setShowroomBrand] = useState<Company | null>(null);
 
   const [multiStats, setMultiStats] = useState<Record<string, CompanyStats>>({
     'Transtec': { balance: 0, totalBill: 0, totalPaid: 0 },
@@ -38,10 +107,10 @@ const CustomerPortal: React.FC<PortalProps> = ({ type, user }) => {
   }, [user, type]);
 
   useEffect(() => {
-    if (type === 'DASHBOARD') fetchAds();
+    if (type === 'DASHBOARD' || showroomBrand) fetchAds();
     if (type === 'CATALOG') fetchProducts();
     if (type === 'LEDGER') fetchLedgerForCompany(activeCompany);
-  }, [type, activeCompany]);
+  }, [type, activeCompany, showroomBrand]);
 
   const fetchAlerts = async () => {
     if (!user.customer_id) return;
@@ -113,14 +182,55 @@ const CustomerPortal: React.FC<PortalProps> = ({ type, user }) => {
     }
   };
 
+  const handleAdClick = (ad: Advertisement) => {
+    if (ad.external_url) window.open(ad.external_url, '_blank');
+    else setSelectedAd(ad);
+  };
+
   const totalOutstanding = (Object.values(multiStats) as CompanyStats[]).reduce((sum, s) => sum + s.balance, 0);
 
+  // 🏛️ Brand Specific Showroom View (Internal Page)
+  if (showroomBrand) {
+    const filteredAds = ads.filter(a => a.company === showroomBrand);
+    return (
+      <div className="space-y-10 pb-40 animate-reveal">
+         <div className="bg-slate-900 p-10 md:p-16 rounded-[4rem] text-white relative overflow-hidden shadow-2xl">
+            <div className="absolute top-0 right-0 w-64 h-64 bg-blue-600/10 blur-[100px] rounded-full animate-pulse"></div>
+            <button onClick={() => setShowroomBrand(null)} className="mb-10 text-blue-400 font-black uppercase text-[10px] tracking-widest flex items-center gap-3">
+               <span>←</span> Back to Dashboard
+            </button>
+            <h2 className="text-5xl md:text-7xl font-black uppercase italic tracking-tighter leading-none">{showroomBrand}</h2>
+            <p className="text-[12px] font-black uppercase tracking-[0.6em] text-slate-500 mt-6 italic">Digital Showroom & Catalog</p>
+         </div>
+
+         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-10">
+            {filteredAds.length === 0 ? (
+               <div className="col-span-full py-40 text-center opacity-20 font-black uppercase tracking-widest italic">No Assets Found</div>
+            ) : filteredAds.map(ad => (
+               <div key={ad.id} onClick={() => handleAdClick(ad)} className="bg-white rounded-[3.5rem] border border-slate-100 shadow-sm overflow-hidden group hover:shadow-2xl transition-all duration-700 cursor-pointer animate-reveal">
+                  <div className="h-64 overflow-hidden relative bg-slate-50">
+                     {ad.image_url ? <img src={ad.image_url} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-[4000ms]" /> : <div className="w-full h-full flex items-center justify-center opacity-10 font-black text-4xl">IFZA</div>}
+                     <div className="absolute top-6 left-6">
+                        <span className="px-4 py-1.5 bg-blue-600 text-white text-[8px] font-black rounded-xl uppercase tracking-widest">{ad.type.replace('_', ' ')}</span>
+                     </div>
+                  </div>
+                  <div className="p-8">
+                     <h4 className="text-xl font-black uppercase italic text-slate-800 leading-tight mb-4 group-hover:text-blue-600 transition-colors">{ad.title}</h4>
+                     <p className="text-[12px] text-slate-400 font-medium italic line-clamp-2 leading-relaxed">"{ad.content}"</p>
+                  </div>
+               </div>
+            ))}
+         </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="space-y-6 pb-32 animate-reveal font-sans text-slate-900">
+    <div className="space-y-10 pb-32 animate-reveal font-sans text-slate-900">
       
       {type === 'DASHBOARD' && (
         <>
-          {/* 📊 Top Stats Grid - Exactly matching User Screenshot */}
+          {/* 📊 Top Stats Grid */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
              <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm text-center">
                 <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 italic">আজকের মোট</p>
@@ -149,8 +259,8 @@ const CustomerPortal: React.FC<PortalProps> = ({ type, user }) => {
           </div>
 
           <div className="flex flex-col lg:flex-row gap-8">
-            <div className="flex-1 space-y-6">
-              {/* 🔔 LIVE LOG - Matching user screenshot card style */}
+            <div className="flex-1 space-y-12">
+              {/* 🔔 LIVE LOG */}
               <div className="bg-white/40 p-2 md:p-4 rounded-[3.5rem] border-2 border-dashed border-slate-200">
                 <div className="flex justify-between items-center mb-6 px-8 pt-4">
                    <h3 className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em] italic">সাম্প্রতিক অ্যাক্টিভিটি (Activity Feed)</h3>
@@ -192,38 +302,79 @@ const CustomerPortal: React.FC<PortalProps> = ({ type, user }) => {
                   ))}
                 </div>
               </div>
-            </div>
 
-            {/* Right Side: Catalog/Offer Highlights */}
-            <div className="w-full lg:w-[380px] space-y-8">
-               <h4 className="text-[11px] font-black text-slate-400 uppercase tracking-[0.3em] ml-6 italic">নতুন অফার ও প্রমোশন</h4>
-               <div className="space-y-6">
-                  {ads.slice(0, 3).map(ad => (
-                    <div key={ad.id} className="bg-white rounded-[3.5rem] border-2 border-slate-50 overflow-hidden shadow-sm group hover:shadow-2xl transition-all cursor-pointer">
-                       <div className="h-56 overflow-hidden relative bg-slate-50">
-                          {ad.image_url ? (
-                            <img src={ad.image_url} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-[3000ms] opacity-90" />
-                          ) : (
-                            <div className="w-full h-full flex items-center justify-center opacity-5 font-black text-6xl uppercase italic">IFZA</div>
-                          )}
-                          <div className="absolute top-6 left-6">
-                             <span className="px-5 py-2 bg-black/80 backdrop-blur-xl text-white text-[9px] font-black rounded-xl uppercase tracking-widest italic">{ad.company}</span>
-                          </div>
-                       </div>
-                       <div className="p-8">
-                          <h5 className="font-black text-lg uppercase italic text-slate-800 mb-3 leading-tight group-hover:text-blue-600 transition-colors line-clamp-2">{ad.title}</h5>
-                          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest italic">{ad.type.replace('_', ' ')}</p>
-                       </div>
-                    </div>
-                  ))}
-               </div>
+              {/* 🎡 TRIPLE AUTOMATIC SLIDERS SECTION */}
+              <div className="space-y-16 pt-10 border-t-4 border-double border-slate-100">
+                  <div className="text-center mb-10">
+                     <h3 className="text-2xl font-black uppercase italic tracking-tighter">ব্র্যান্ড ক্যাটালগ ও অফার</h3>
+                     <p className="text-[10px] text-slate-400 font-bold uppercase tracking-[0.4em] mt-2 italic">Premium Digital Showroom Highlights</p>
+                  </div>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-10">
+                    <PortalBrandSlider 
+                      brand="Transtec" 
+                      ads={ads.filter(a => a.company === 'Transtec')} 
+                      onSeeAll={setShowroomBrand} 
+                      onAdClick={handleAdClick}
+                      themeColor="text-amber-500"
+                    />
+                    <PortalBrandSlider 
+                      brand="SQ Light" 
+                      ads={ads.filter(a => a.company === 'SQ Light')} 
+                      onSeeAll={setShowroomBrand} 
+                      onAdClick={handleAdClick}
+                      themeColor="text-cyan-500"
+                    />
+                    <PortalBrandSlider 
+                      brand="SQ Cables" 
+                      ads={ads.filter(a => a.company === 'SQ Cables')} 
+                      onSeeAll={setShowroomBrand} 
+                      onAdClick={handleAdClick}
+                      themeColor="text-rose-500"
+                    />
+                  </div>
+              </div>
             </div>
           </div>
         </>
       )}
 
+      {/* Detail Modal for Ad Preview */}
+      {selectedAd && (
+        <div className="fixed inset-0 bg-black/98 backdrop-blur-3xl z-[5000] flex flex-col animate-reveal" onClick={() => setSelectedAd(null)}>
+           <div className="h-28 px-10 md:px-20 flex justify-between items-center border-b border-white/5 bg-black/40" onClick={e => e.stopPropagation()}>
+              <div>
+                 <h4 className="text-2xl font-black uppercase italic leading-none text-white">{selectedAd.title}</h4>
+                 <p className="text-[9px] text-blue-500 font-black uppercase tracking-widest mt-2 italic">IFZA Enterprise Showroom Asset</p>
+              </div>
+              <button onClick={() => setSelectedAd(null)} className="w-16 h-16 bg-white/5 rounded-full flex items-center justify-center text-white text-2xl hover:bg-red-500 transition-all active:scale-90">✕</button>
+           </div>
+           
+           <div className="flex-1 overflow-y-auto p-6 md:p-20 custom-scroll" onClick={e => e.stopPropagation()}>
+              <div className="max-w-7xl mx-auto space-y-24 pb-40">
+                 {selectedAd.image_url && (
+                    <div className="relative group">
+                       <div className="absolute inset-0 bg-blue-600/10 blur-[150px] opacity-30 rounded-full"></div>
+                       <img src={selectedAd.image_url} className="w-full rounded-[4rem] shadow-2xl border border-white/10 relative z-10" />
+                    </div>
+                 )}
+                 <div className="bg-white/[0.03] p-12 md:p-24 rounded-[6rem] border border-white/5 relative overflow-hidden text-center">
+                    <div className="absolute top-10 left-10 text-9xl font-black text-white/5 select-none italic">"</div>
+                    <p className="text-2xl md:text-5xl font-medium leading-[1.3] text-slate-100 italic relative z-10 max-w-5xl mx-auto">{selectedAd.content}</p>
+                    <div className="mt-16 flex flex-col items-center gap-4 relative z-10">
+                       <span className="h-px w-20 bg-blue-500/40"></span>
+                       <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.5em] italic">Product Information Complete</p>
+                    </div>
+                 </div>
+              </div>
+           </div>
+        </div>
+      )}
+
+      {/* Remaining Portal Views (ALERTS, LEDGER, CATALOG) */}
       {type === 'ALERTS' && (
         <div className="max-w-2xl mx-auto space-y-4">
+           {/* ... existing code ... */}
            <div className="bg-[#0f172a] p-12 rounded-[4rem] text-white flex justify-between items-center shadow-2xl border border-white/5 mb-10">
               <div>
                  <h3 className="text-3xl font-black uppercase italic tracking-tighter">আমার ইনবক্স</h3>
