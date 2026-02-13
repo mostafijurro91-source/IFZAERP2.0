@@ -6,6 +6,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>IFZA Electronics | Enterprise ERP Portal</title>
     <meta name="description" content="Official Enterprise Management System for Transtec, SQ Light, and SQ Cables. Powered by ifzaerp.com">
+    <link rel="manifest" href="./manifest.json">
+    <meta name="theme-color" content="#2563eb">
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Hind+Siliguri:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
@@ -15,66 +17,57 @@
         body { font-family: 'Plus Jakarta Sans', 'Hind Siliguri', sans-serif; overflow-x: hidden; font-weight: 500; }
         #root { min-height: 100%; }
         
-        /* Typography overrides for Web */
-        .text-blue-600 { color: #2563eb !important; }
-
         .custom-scroll::-webkit-scrollbar { width: 4px; }
         .custom-scroll::-webkit-scrollbar-track { background: transparent; }
         .custom-scroll::-webkit-scrollbar-thumb { background: rgba(0, 0, 0, 0.1); border-radius: 20px; }
 
+        /* Enhanced Animations */
         @keyframes reveal {
-            from { opacity: 0; transform: translateY(15px) scale(0.98); }
-            to { opacity: 1; transform: translateY(0) scale(1); }
+            from { opacity: 0; transform: translateY(20px) scale(0.97); filter: blur(5px); }
+            to { opacity: 1; transform: translateY(0) scale(1); filter: blur(0); }
         }
-        .animate-reveal { animation: reveal 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+        .animate-reveal { animation: reveal 0.7s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+
+        @keyframes float {
+            0% { transform: translateY(0px); }
+            50% { transform: translateY(-10px); }
+            100% { transform: translateY(0px); }
+        }
+        .animate-float { animation: float 4s ease-in-out infinite; }
+
+        @keyframes spin-slow {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+        .hover-spin-slow:hover { animation: spin-slow 2s linear infinite; }
+
+        @keyframes shimmer {
+            0% { background-position: -200% 0; }
+            100% { background-position: 200% 0; }
+        }
+        .shimmer-bg {
+            background: linear-gradient(90deg, rgba(255,255,255,0) 0%, rgba(255,255,255,0.2) 50%, rgba(255,255,255,0) 100%);
+            background-size: 200% 100%;
+            animation: shimmer 2.5s infinite;
+        }
+
+        @keyframes pulse-ring {
+            0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(37, 99, 235, 0.4); }
+            70% { transform: scale(1); box-shadow: 0 0 0 15px rgba(37, 99, 235, 0); }
+            100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(37, 99, 235, 0); }
+        }
+        .active-pulse { animation: pulse-ring 2s infinite; }
+
+        .stagger-1 { animation-delay: 0.1s; }
+        .stagger-2 { animation-delay: 0.2s; }
+        .stagger-3 { animation-delay: 0.3s; }
+        .stagger-4 { animation-delay: 0.4s; }
 
         @media print { 
-            @page {
-                size: A5;
-                margin: 5mm;
-            }
+            @page { size: A4; margin: 10mm; }
             body { background: white !important; }
             .no-print { display: none !important; } 
-            
-            /* High Contrast Print Mode */
-            .printable-content { 
-                display: block !important; 
-                width: 100% !important; 
-                color: #000000 !important;
-                background: #ffffff !important;
-                position: static !important;
-                padding: 0 !important;
-                margin: 0 !important;
-                box-shadow: none !important;
-                border: none !important;
-            }
-            
-            .printable-content * {
-                color: #000000 !important; /* Force all text to absolute black */
-                background-color: transparent !important;
-                border-color: #000000 !important; /* Force all borders to black */
-                text-shadow: none !important;
-                box-shadow: none !important;
-            }
-
-            table { 
-                width: 100% !important;
-                border-collapse: collapse !important; 
-                page-break-inside: auto;
-            }
-            tr { 
-                page-break-inside: avoid; 
-                page-break-after: auto; 
-            }
-            thead { display: table-header-group; }
-            tfoot { display: table-footer-group; }
-            
-            /* Remove decorative rounded corners in print to save ink and look sharper */
-            .printable-content .rounded-xl, 
-            .printable-content .rounded-2xl, 
-            .printable-content .rounded-3xl {
-                border-radius: 0 !important;
-            }
+            .printable-content { display: block !important; width: 100% !important; color: #000 !important; background: #fff !important; }
         }
     </style>
 <script type="importmap">

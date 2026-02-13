@@ -20,7 +20,7 @@ import CustomerPortal from './components/CustomerPortal';
 import Showroom from './components/Showroom';
 import Tracking from './components/Tracking';
 import { User, Company } from './types';
-import { checkSupabaseConnection } from './lib/supabase';
+import { supabase, checkSupabaseConnection } from './lib/supabase';
 
 const App: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
@@ -30,36 +30,48 @@ const App: React.FC = () => {
   const [initialized, setInitialized] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [dbError, setDbError] = useState(false);
+  const [toast, setToast] = useState<{title: string, message: string, type?: string} | null>(null);
+
+  // 🔔 Universal Real-time Notification Engine (Staff & Customer)
+  useEffect(() => {
+    if (user) {
+      if ("Notification" in window && Notification.permission === "default") {
+        Notification.requestPermission();
+      }
+
+      const filter = user.role === 'CUSTOMER' ? `customer_id=eq.${user.customer_id}` : undefined;
+
+      const channel = supabase
+        .channel(`ifza_global_alerts_${user.id}`)
+        .on(
+          'postgres_changes',
+          { event: 'INSERT', schema: 'public', table: 'notifications', filter: filter },
+          (payload: any) => {
+            const { title, message, type } = payload.new;
+            try { new Audio('https://assets.mixkit.co/active_storage/sfx/2358/2358-preview.mp3').play(); } catch(e){}
+            setToast({ title, message, type });
+            setTimeout(() => setToast(null), 10000);
+            if (Notification.permission === "granted") {
+              new Notification(title, { body: message, icon: 'https://r.jina.ai/i/0f7939be338446b5a32b904586927500' });
+            }
+          }
+        )
+        .subscribe();
+      return () => { supabase.removeChannel(channel); };
+    }
+  }, [user]);
 
   useEffect(() => {
-    if ('serviceWorker' in navigator) {
-      window.addEventListener('load', () => {
-        navigator.serviceWorker.register('./sw.js').catch(err => console.log('SW registration failed:', err));
-      });
-    }
-
     const boot = async () => {
       try {
         const isConnected = await checkSupabaseConnection();
-        if (!isConnected) {
-          setDbError(true);
-        }
-
+        if (!isConnected) setDbError(true);
         const saved = localStorage.getItem('ifza_user');
         if (saved) {
           const parsed = JSON.parse(saved);
-          if (parsed?.id) {
-            setUser(parsed);
-            if (parsed.role === 'CUSTOMER' && (activeTab === 'dashboard' || activeTab === 'sales')) {
-                setActiveTab('portal_dashboard');
-            }
-          }
+          if (parsed?.id) setUser(parsed);
         }
-      } catch (e) {
-        setDbError(true);
-      } finally {
-        setTimeout(() => setInitialized(true), 2500);
-      }
+      } catch (e) { setDbError(true); } finally { setTimeout(() => setInitialized(true), 1500); }
     };
     boot();
   }, []);
@@ -74,11 +86,7 @@ const App: React.FC = () => {
   const handleLogin = (u: User) => {
     setUser(u);
     setShowLogin(false);
-    if (u.role === 'CUSTOMER') {
-      setActiveTab('portal_dashboard');
-    } else {
-      setActiveTab('dashboard');
-    }
+    setActiveTab(u.role === 'CUSTOMER' ? 'portal_dashboard' : 'dashboard');
     setSelectedCompany(u.company);
     localStorage.setItem('ifza_user', JSON.stringify(u));
   };
@@ -90,112 +98,90 @@ const App: React.FC = () => {
     }
   };
 
-  if (!initialized) {
-    return (
-      <div className="h-screen flex flex-col items-center justify-center bg-[#05070a] text-white overflow-hidden font-sans">
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(59,130,246,0.1),transparent_70%)] pointer-events-none"></div>
-        <div className="relative mb-12">
-            <div className="w-32 h-32 border-[8px] border-blue-500/10 border-t-blue-600 rounded-full animate-spin shadow-[0_0_60px_rgba(37,99,235,0.3)]"></div>
-            <div className="absolute inset-0 flex items-center justify-center font-black text-4xl italic text-blue-500">ই</div>
-        </div>
-        <div className="text-center space-y-4 relative z-10">
-          <p className="font-black uppercase text-[14px] tracking-[1em] text-blue-500 animate-pulse">ইফজা ইলেকট্রনিক্স</p>
-          <div className="flex flex-col gap-1">
-             <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">TRANSTEC • SQ LIGHT • SQ CABLES</p>
-             <p className="text-[8px] font-medium text-slate-700 uppercase tracking-[0.5em] mt-1 italic">Enterprise Cloud Terminal v4.6.8</p>
-          </div>
-        </div>
+  if (!initialized) return (
+    <div className="h-screen flex flex-col items-center justify-center bg-[#05070a] text-white">
+      <div className="relative mb-8">
+          <div className="w-24 h-24 border-[6px] border-blue-500/10 border-t-blue-600 rounded-full animate-spin"></div>
+          <div className="absolute inset-0 flex items-center justify-center font-black text-2xl italic text-blue-500">if</div>
       </div>
-    );
-  }
+      <p className="font-black uppercase text-[12px] tracking-[0.8em] text-blue-500 animate-pulse">IFZA ELECTRONICS</p>
+    </div>
+  );
 
-  if (dbError) {
-    return (
-      <div className="h-screen flex flex-col items-center justify-center bg-[#0a0f1d] text-white p-10 text-center">
-        <div className="text-8xl mb-8 animate-bounce">🛰️</div>
-        <h1 className="text-4xl font-black mb-4 uppercase italic tracking-tighter text-white">Connection Lost</h1>
-        <p className="text-slate-500 mb-10 max-w-sm mx-auto text-sm leading-relaxed font-medium">ক্লাউড সার্ভারের সাথে যোগাযোগ করা যাচ্ছে না। দয়া করে আপনার ইন্টারনেট চেক করুন অথবা আপনার হোস্টিং অ্যাডমিনকে জানান।</p>
-        <button onClick={() => window.location.reload()} className="bg-blue-600 text-white px-16 py-6 rounded-[2rem] font-black uppercase text-xs shadow-2xl active:scale-95 transition-all hover:bg-blue-700">Try Reconnecting 🔄</button>
-      </div>
-    );
-  }
+  if (dbError) return (
+    <div className="h-screen flex flex-col items-center justify-center bg-[#0a0f1d] text-white text-center">
+      <h1 className="text-4xl font-black mb-4 uppercase italic">Connection Lost</h1>
+      <button onClick={() => window.location.reload()} className="bg-blue-600 px-12 py-5 rounded-2xl font-black">Reconnect 🔄</button>
+    </div>
+  );
 
-  if (!user) {
-    if (showLogin) return <Login onLogin={handleLogin} onBack={() => setShowLogin(false)} />;
-    return <MarketingPage onEnterERP={() => setShowLogin(true)} />;
-  }
-
-  const renderContent = () => {
-    const props = { company: selectedCompany, role: user.role, user, userName: user.name };
-    switch (activeTab) {
-      case 'dashboard': return <Dashboard {...props} />;
-      case 'portal_dashboard': return <CustomerPortal type="DASHBOARD" user={user} />;
-      case 'portal_ledger': return <CustomerPortal type="LEDGER" user={user} />;
-      case 'portal_catalog': return <CustomerPortal type="CATALOG" user={user} />;
-      case 'showroom': return <Showroom />;
-      case 'ad_manager': return <AdManager />;
-      case 'sales': return <Sales company={selectedCompany} role={user.role} user={user} />;
-      case 'collections': return <Collections company={selectedCompany} user={user} />;
-      case 'order_management': return <OrderManagement company={selectedCompany} user={user} />;
-      case 'bookings': return <Bookings {...props} />;
-      case 'replacements': return <Replacements {...props} />;
-      case 'delivery_hub': return <DeliveryHub company={selectedCompany} user={user} />;
-      case 'inventory': return <Inventory {...props} />;
-      case 'customers': return <Customers {...props} />;
-      case 'ledger': return <CompanyLedger {...props} />;
-      case 'reports': return <Reports company={selectedCompany} userRole={user.role} userName={user.name} />;
-      case 'team': return <Team />;
-      case 'github_sync': return <Tracking />;
-      default: return <Dashboard {...props} />;
-    }
-  };
+  if (!user) return showLogin ? <Login onLogin={handleLogin} onBack={() => setShowLogin(false)} /> : <MarketingPage onEnterERP={() => setShowLogin(true)} />;
 
   return (
-    <div className="flex h-screen bg-[#f1f5f9] overflow-hidden font-sans selection:bg-blue-600/20">
-      <Sidebar 
-        activeTab={activeTab} 
-        setActiveTab={setActiveTab} 
-        onLogout={handleLogout} 
-        user={user} 
-        selectedCompany={selectedCompany} 
-        onCompanyChange={setSelectedCompany} 
-        isOpen={isSidebarOpen} 
-        onClose={() => setIsSidebarOpen(false)} 
-      />
+    <div className="flex h-screen bg-[#f1f5f9] overflow-hidden">
       
-      <main className="flex-1 flex flex-col md:ml-[320px] overflow-hidden relative">
-        <header className="h-20 bg-white/80 backdrop-blur-xl border-b border-slate-200 flex justify-between items-center px-6 md:px-12 shrink-0 z-40">
-          <div className="flex items-center gap-6">
-            <button onClick={() => setIsSidebarOpen(true)} className="md:hidden p-2.5 bg-slate-900 text-white rounded-xl shadow-lg active:scale-90 transition-transform">☰</button>
-            <div className="flex items-center gap-3 group cursor-pointer animate-reveal">
-              <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white font-black italic shadow-md animate-glow transition-transform group-hover:scale-110">
-                <span className="text-sm">ই</span>
+      {/* 🔔 Premium Alert Pop-up */}
+      {toast && (
+        <div className="fixed top-6 right-6 left-6 md:left-auto md:w-[460px] z-[9999] bg-white p-8 rounded-[3rem] shadow-[0_40px_120px_rgba(0,0,0,0.25)] animate-reveal flex items-start gap-6 ring-[15px] ring-blue-50 border-2 border-blue-600">
+           <div className={`w-16 h-16 rounded-[1.5rem] flex items-center justify-center text-3xl shrink-0 shadow-lg animate-bounce ${toast.type === 'PAYMENT' ? 'bg-emerald-500 text-white' : 'bg-blue-600 text-white'}`}>
+             {toast.type === 'PAYMENT' ? '💰' : '📄'}
+           </div>
+           <div className="flex-1">
+              <h4 className="font-black text-slate-900 uppercase italic text-base tracking-tighter leading-none mb-3">{toast.title}</h4>
+              <p className="text-[12px] font-bold text-slate-500 leading-relaxed mb-6">{toast.message}</p>
+              <div className="flex gap-2">
+                 <button onClick={() => { setActiveTab(user.role === 'CUSTOMER' ? 'portal_dashboard' : 'dashboard'); setToast(null); }} className="bg-slate-900 text-white px-8 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-xl">বিস্তারিত ➔</button>
+                 <button onClick={() => setToast(null)} className="text-slate-400 font-black text-[10px] uppercase px-4 py-2 hover:text-slate-600">বন্ধ করুন</button>
               </div>
-              <div className="hidden lg:block overflow-hidden">
-                <div className="text-xl font-black italic tracking-tighter leading-none animate-brand-text">ইফজা<span className="text-blue-600">.</span></div>
-                <p className="text-[7px] font-black text-slate-400 uppercase tracking-widest mt-0.5 italic leading-none">Enterprise Hub</p>
-              </div>
-            </div>
-            <div className="h-8 w-px bg-slate-200 hidden md:block"></div>
-            <div className="hidden sm:block overflow-hidden">
-              <h1 className="text-xs font-black text-slate-900 uppercase italic tracking-widest leading-none">{activeTab.replace(/_/g, ' ')}</h1>
-              <p className="text-[7px] font-black text-blue-600 uppercase tracking-[0.2em] mt-1 italic animate-pulse leading-none">• Node: {selectedCompany}</p>
+           </div>
+           <button onClick={() => setToast(null)} className="text-slate-300 hover:text-red-500 text-4xl font-black leading-none">×</button>
+        </div>
+      )}
+
+      <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} onLogout={handleLogout} user={user} selectedCompany={selectedCompany} onCompanyChange={setSelectedCompany} isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
+      
+      <main className="flex-1 flex flex-col md:ml-[300px] overflow-hidden relative">
+        <header className="h-20 bg-white border-b border-slate-200 flex justify-between items-center px-6 md:px-10 shrink-0 z-40 shadow-sm">
+          <div className="flex items-center gap-4">
+            <button onClick={() => setIsSidebarOpen(true)} className="md:hidden p-2.5 bg-slate-900 text-white rounded-xl shadow-lg">☰</button>
+            <div>
+              <h1 className="text-sm font-black text-slate-900 uppercase italic tracking-widest">{activeTab.replace(/_/g, ' ')}</h1>
+              <p className="text-[8px] font-black text-blue-600 uppercase tracking-[0.2em] mt-1.5 italic">• Node: {selectedCompany}</p>
             </div>
           </div>
-          
           <div className="flex items-center gap-4">
             <div className="text-right hidden sm:block">
-              <p className="text-[10px] font-black text-slate-900 leading-none truncate max-w-[150px] uppercase italic">{user.name}</p>
-              <p className="text-[7px] font-black text-slate-400 mt-1 uppercase tracking-widest">{user.role} ACCESS</p>
+              <p className="text-[10px] font-black text-slate-900 uppercase italic leading-none">{user.name}</p>
+              <p className="text-[7px] font-bold text-slate-400 mt-1 uppercase tracking-widest">{user.role} ACCESS</p>
             </div>
-            <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center text-white font-black italic shadow-lg border-2 border-white ring-4 ring-blue-500/5 group hover:rotate-12 transition-all text-sm">
+            <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center text-white font-black italic shadow-lg">
               {user.name.charAt(0)}
             </div>
           </div>
         </header>
 
         <div className="flex-1 overflow-y-auto p-4 md:p-8 custom-scroll bg-[#f8fafc]">
-          <div className="max-w-7xl mx-auto">{renderContent()}</div>
+          <div className="max-w-7xl mx-auto">
+            {activeTab === 'dashboard' && <Dashboard company={selectedCompany} role={user.role} />}
+            {activeTab === 'portal_dashboard' && <CustomerPortal type="DASHBOARD" user={user} />}
+            {activeTab === 'portal_alerts' && <CustomerPortal type="ALERTS" user={user} />}
+            {activeTab === 'portal_ledger' && <CustomerPortal type="LEDGER" user={user} />}
+            {activeTab === 'portal_catalog' && <CustomerPortal type="CATALOG" user={user} />}
+            {activeTab === 'showroom' && <Showroom />}
+            {activeTab === 'ad_manager' && <AdManager />}
+            {activeTab === 'sales' && <Sales company={selectedCompany} role={user.role} user={user} />}
+            {activeTab === 'collections' && <Collections company={selectedCompany} user={user} />}
+            {activeTab === 'order_management' && <OrderManagement company={selectedCompany} user={user} />}
+            {activeTab === 'bookings' && <Bookings company={selectedCompany} role={user.role} user={user} />}
+            {activeTab === 'replacements' && <Replacements company={selectedCompany} role={user.role} />}
+            {activeTab === 'delivery_hub' && <DeliveryHub company={selectedCompany} user={user} />}
+            {activeTab === 'inventory' && <Inventory company={selectedCompany} role={user.role} />}
+            {activeTab === 'customers' && <Customers company={selectedCompany} role={user.role} userName={user.name} />}
+            {activeTab === 'ledger' && <CompanyLedger company={selectedCompany} role={user.role} />}
+            {activeTab === 'reports' && <Reports company={selectedCompany} userRole={user.role} userName={user.name} />}
+            {activeTab === 'team' && <Team />}
+            {activeTab === 'github_sync' && <Tracking />}
+          </div>
         </div>
       </main>
     </div>
