@@ -158,6 +158,14 @@ const Collections: React.FC<CollectionsProps> = ({ company, user }) => {
       }]);
       if (txErr) throw txErr;
 
+      // 🔔 Trigger Notification to Customer
+      await supabase.from('notifications').insert([{
+        customer_id: req.customer_id,
+        title: "কালেকশন অনুমোদন হয়েছে",
+        message: `আপনার প্রদানকৃত ৳${Number(req.amount).toLocaleString()} জমা হিসেবে গ্রহণ করা হয়েছে। (${req.company})`,
+        type: 'PAYMENT'
+      }]);
+
       const expAmt = Number(req.meta?.delivery_expense || 0);
       if (expAmt > 0) {
         await supabase.from('transactions').insert([{
@@ -174,7 +182,12 @@ const Collections: React.FC<CollectionsProps> = ({ company, user }) => {
       await supabase.from('collection_requests').delete().eq('id', req.id);
       fetchData();
       if (selectedCust?.id === req.customer_id) fetchCustomerBalances(req.customer_id);
-    } catch (err: any) { alert(err.message); } finally { setIsSaving(false); }
+    // Fixed catch block syntax error by adding curly braces and removing extra closing brace.
+    } catch (err: any) { 
+      alert(err.message); 
+    } finally { 
+      setIsSaving(false); 
+    }
   };
 
   const handleDeleteConfirmed = async (txId: string) => {

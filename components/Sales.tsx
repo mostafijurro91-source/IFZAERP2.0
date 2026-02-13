@@ -197,11 +197,26 @@ const Sales: React.FC<SalesProps> = ({ company, role, user }) => {
 
       if (txError) throw txError;
 
+      // 🔔 Trigger Notification to Customer
+      await supabase.from('notifications').insert([{
+        customer_id: selectedCust.id,
+        title: `নতুন সেলস মেমো #${String(txData.id).slice(-6).toUpperCase()}`,
+        message: `${company} থেকে আপনার নামে ৳${Math.round(totals.netTotal).toLocaleString()} টাকার একটি মেমো তৈরি করা হয়েছে।`,
+        type: 'MEMO'
+      }]);
+
       if (cashReceived > 0) {
         await supabase.from('transactions').insert([{
           customer_id: selectedCust.id, company: dbCo, amount: cashReceived, payment_type: 'COLLECTION',
           items: [{ note: `নগদ গ্রহণ (মেমো #${String(txData.id).slice(-6).toUpperCase()})` }],
           submitted_by: user.name
+        }]);
+
+        await supabase.from('notifications').insert([{
+           customer_id: selectedCust.id,
+           title: "টাকা জমা রশিদ",
+           message: `আপনার মেমো পরিশোধ বাবদ ৳${Math.round(cashReceived).toLocaleString()} জমা করা হয়েছে।`,
+           type: 'PAYMENT'
         }]);
       }
 
