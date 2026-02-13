@@ -4,7 +4,7 @@ import { User, Advertisement, formatCurrency, Company, Product } from '../types'
 import { supabase, mapToDbCompany } from '../lib/supabase';
 
 interface PortalProps {
-  type: 'DASHBOARD' | 'CATALOG' | 'LEDGER';
+  type: 'DASHBOARD' | 'CATALOG' | 'LEDGER' | 'ALERTS';
   user: User;
 }
 
@@ -12,8 +12,6 @@ interface CompanyStats {
   balance: number;
   totalBill: number;
   totalPaid: number;
-  lastPurchase: string;
-  lastPayment: string;
 }
 
 const CustomerPortal: React.FC<PortalProps> = ({ type, user }) => {
@@ -21,22 +19,23 @@ const CustomerPortal: React.FC<PortalProps> = ({ type, user }) => {
   const [ads, setAds] = useState<Advertisement[]>([]);
   const [ledger, setLedger] = useState<any[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
-  const [shopInfo, setShopInfo] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
-  const [selectedAd, setSelectedAd] = useState<Advertisement | null>(null);
+  const [alerts, setAlerts] = useState<any[]>([]);
 
   const [multiStats, setMultiStats] = useState<Record<string, CompanyStats>>({
-    'Transtec': { balance: 0, totalBill: 0, totalPaid: 0, lastPurchase: '—', lastPayment: '—' },
-    'SQ Light': { balance: 0, totalBill: 0, totalPaid: 0, lastPurchase: '—', lastPayment: '—' },
-    'SQ Cables': { balance: 0, totalBill: 0, totalPaid: 0, lastPurchase: '—', lastPayment: '—' }
+    'Transtec': { balance: 0, totalBill: 0, totalPaid: 0 },
+    'SQ Light': { balance: 0, totalBill: 0, totalPaid: 0 },
+    'SQ Cables': { balance: 0, totalBill: 0, totalPaid: 0 }
   });
 
   const companies: Company[] = ['Transtec', 'SQ Light', 'SQ Cables'];
 
   useEffect(() => {
     fetchAllData();
-  }, [user]);
+    fetchAlerts();
+    if (type === 'ALERTS') markAlertsAsRead();
+  }, [user, type]);
 
   useEffect(() => {
     if (type === 'DASHBOARD') fetchAds();
@@ -44,294 +43,295 @@ const CustomerPortal: React.FC<PortalProps> = ({ type, user }) => {
     if (type === 'LEDGER') fetchLedgerForCompany(activeCompany);
   }, [type, activeCompany]);
 
+  const fetchAlerts = async () => {
+    if (!user.customer_id) return;
+    const { data } = await supabase
+      .from('notifications')
+      .select('*')
+      .eq('customer_id', user.customer_id)
+      .order('created_at', { ascending: false })
+      .limit(type === 'DASHBOARD' ? 10 : 40);
+    setAlerts(data || []);
+  };
+
+  const markAlertsAsRead = async () => {
+    if (!user.customer_id) return;
+    await supabase.from('notifications').update({ is_read: true }).eq('customer_id', user.customer_id);
+  };
+
   const fetchAds = async () => {
-    try {
-      const { data } = await supabase
-        .from('advertisements')
-        .select('*')
-        .order('created_at', { ascending: false });
-      setAds(data || []);
-    } catch (err) { console.error(err); }
+    const { data } = await supabase.from('advertisements').select('*').order('created_at', { ascending: false });
+    setAds(data || []);
   };
 
   const fetchProducts = async () => {
     setLoading(true);
-    try {
-      const { data } = await supabase
-        .from('products')
-        .select('*')
-        .eq('company', mapToDbCompany(activeCompany))
-        .order('name');
-      setProducts(data || []);
-    } catch (err) { console.error(err); } finally { setLoading(false); }
+    const { data } = await supabase.from('products').select('*').eq('company', mapToDbCompany(activeCompany)).order('name');
+    setProducts(data || []);
+    setLoading(false);
   };
 
   const fetchLedgerForCompany = async (co: Company) => {
     if (!user.customer_id) return;
     setLoading(true);
-    try {
-      const { data } = await supabase
-        .from('transactions')
-        .select('*')
-        .eq('customer_id', user.customer_id)
-        .eq('company', mapToDbCompany(co))
-        .order('created_at', { ascending: false });
-      setLedger(data || []);
-    } catch (err) { console.error(err); } finally { setLoading(false); }
+    const { data } = await supabase.from('transactions').select('*').eq('customer_id', user.customer_id).eq('company', mapToDbCompany(co)).order('created_at', { ascending: false });
+    setLedger(data || []);
+    setLoading(false);
   };
 
   const fetchAllData = async () => {
     if (!user.customer_id) return;
     setLoading(true);
     try {
-      const [custRes, txRes] = await Promise.all([
-        supabase.from('customers').select('*').eq('id', user.customer_id).single(),
-        supabase.from('transactions').select('*').eq('customer_id', user.customer_id)
-      ]);
-
-      setShopInfo(custRes.data);
+      const { data: allTxs } = await supabase.from('transactions').select('*').eq('customer_id', user.customer_id);
       
-      const allTxs = txRes.data || [];
       const stats: Record<string, CompanyStats> = {
-        'Transtec': { balance: 0, totalBill: 0, totalPaid: 0, lastPurchase: '—', lastPayment: '—' },
-        'SQ Light': { balance: 0, totalBill: 0, totalPaid: 0, lastPurchase: '—', lastPayment: '—' },
-        'SQ Cables': { balance: 0, totalBill: 0, totalPaid: 0, lastPurchase: '—', lastPayment: '—' }
+        'Transtec': { balance: 0, totalBill: 0, totalPaid: 0 },
+        'SQ Light': { balance: 0, totalBill: 0, totalPaid: 0 },
+        'SQ Cables': { balance: 0, totalBill: 0, totalPaid: 0 }
       };
 
-      allTxs.forEach(tx => {
+      (allTxs || []).forEach(tx => {
         const dbCo = mapToDbCompany(tx.company);
         if (stats[dbCo]) {
           const amt = Number(tx.amount);
           if (tx.payment_type === 'COLLECTION') {
             stats[dbCo].totalPaid += amt;
             stats[dbCo].balance -= amt;
-            if (stats[dbCo].lastPayment === '—') stats[dbCo].lastPayment = new Date(tx.created_at).toLocaleDateString('bn-BD');
           } else {
             stats[dbCo].totalBill += amt;
             stats[dbCo].balance += amt;
-            if (stats[dbCo].lastPurchase === '—') stats[dbCo].lastPurchase = new Date(tx.created_at).toLocaleDateString('bn-BD');
           }
         }
       });
 
       setMultiStats(stats);
-    } catch (err) { console.error(err); } finally { setLoading(false); }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const statsList = Object.values(multiStats) as CompanyStats[];
-  const totalOutstanding = statsList.reduce((sum, s) => sum + s.balance, 0);
+  const totalOutstanding = (Object.values(multiStats) as CompanyStats[]).reduce((sum, s) => sum + s.balance, 0);
 
-  const brandStyles: Record<string, string> = {
-    'Transtec': 'bg-amber-500',
-    'SQ Light': 'bg-cyan-500',
-    'SQ Cables': 'bg-rose-600'
-  };
+  return (
+    <div className="space-y-6 pb-32 animate-reveal font-sans text-slate-900">
+      
+      {type === 'DASHBOARD' && (
+        <>
+          {/* 📊 Top Stats Grid - Exactly matching User Screenshot */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
+             <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm text-center">
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 italic">আজকের মোট</p>
+                <p className="text-2xl font-black text-slate-900 leading-none tracking-tighter italic">
+                   {totalOutstanding.toLocaleString()}৳
+                </p>
+             </div>
+             <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm text-center group">
+                <p className="text-[10px] font-black text-amber-500 uppercase tracking-widest mb-2 italic">Transtec</p>
+                <p className="text-2xl font-black text-amber-600 leading-none tracking-tighter italic">
+                   {multiStats['Transtec'].balance.toLocaleString()}৳
+                </p>
+             </div>
+             <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm text-center group">
+                <p className="text-[10px] font-black text-cyan-500 uppercase tracking-widest mb-2 italic">SQ Light</p>
+                <p className="text-2xl font-black text-cyan-600 leading-none tracking-tighter italic">
+                   {multiStats['SQ Light'].balance.toLocaleString()}৳
+                </p>
+             </div>
+             <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm text-center group">
+                <p className="text-[10px] font-black text-rose-500 uppercase tracking-widest mb-2 italic">SQ Cables</p>
+                <p className="text-2xl font-black text-rose-600 leading-none tracking-tighter italic">
+                   {multiStats['SQ Cables'].balance.toLocaleString()}৳
+                </p>
+             </div>
+          </div>
 
-  const brandGradients: Record<string, string> = {
-    'Transtec': 'from-amber-400 to-amber-600',
-    'SQ Light': 'from-cyan-400 to-blue-500',
-    'SQ Cables': 'from-rose-500 to-red-600'
-  };
-
-  if (type === 'DASHBOARD') {
-    return (
-      <div className="space-y-8 pb-32 animate-reveal">
-        <div className="bg-white p-8 md:p-12 rounded-[3.5rem] border border-slate-100 shadow-sm flex flex-col lg:flex-row justify-between items-center gap-8">
-           <div className="flex items-center gap-6">
-              <div className="w-24 h-24 bg-blue-600 rounded-[2.5rem] flex items-center justify-center text-4xl font-black text-white italic shadow-2xl">
-                {user.name.charAt(0)}
-              </div>
-              <div>
-                 <h2 className="text-3xl font-black text-slate-900 uppercase italic tracking-tighter leading-none">{user.name}</h2>
-                 <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-3 italic">SHOP ID: {user.username}</p>
-                 <div className="flex gap-2 mt-2">
-                    <span className="px-3 py-1 bg-blue-50 text-blue-600 rounded-lg text-[8px] font-black uppercase tracking-widest">📍 {shopInfo?.address}</span>
-                    <span className="px-3 py-1 bg-slate-900 text-white rounded-lg text-[8px] font-black uppercase tracking-widest italic">IFZA HUB ACCESS</span>
-                 </div>
-              </div>
-           </div>
-           <div className="bg-slate-950 px-12 py-8 rounded-[3rem] text-center border border-white/5 shadow-2xl">
-              <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2 italic">মোট নিট বকেয়া (৩ কোম্পানি)</p>
-              <p className={`text-5xl font-black italic tracking-tighter ${totalOutstanding > 0 ? 'text-red-500' : 'text-emerald-500'}`}>{formatCurrency(totalOutstanding)}</p>
-           </div>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-           {companies.map(co => (
-             <div key={co} className="bg-white rounded-[3.5rem] border border-slate-100 shadow-sm overflow-hidden group hover:shadow-xl transition-all">
-                <div className={`h-2 bg-gradient-to-r ${brandGradients[co]}`}></div>
-                <div className="p-10">
-                   <div className="flex justify-between items-center mb-8">
-                      <div className={`px-5 py-2 rounded-xl text-white text-[10px] font-black uppercase italic tracking-widest shadow-lg ${brandStyles[co]}`}>{co}</div>
-                      <div className="text-[20px]">{co === 'Transtec' ? '⚡' : co === 'SQ Light' ? '💡' : '🔌'}</div>
-                   </div>
-                   <p className="text-[10px] font-black text-slate-400 uppercase mb-2 tracking-widest italic">কোম্পানি বকেয়া</p>
-                   <p className={`text-4xl font-black italic tracking-tighter ${multiStats[co].balance > 0 ? 'text-slate-900' : 'text-emerald-500'}`}>{formatCurrency(multiStats[co].balance)}</p>
-                   
-                   <div className="mt-8 pt-8 border-t border-slate-50 space-y-4">
-                      <div className="flex justify-between items-center">
-                         <span className="text-[9px] font-black text-slate-400 uppercase">মোট মালামাল গেছে</span>
-                         <span className="text-xs font-black text-slate-800">{formatCurrency(multiStats[co].totalBill)}</span>
-                      </div>
-                      <div className="flex justify-between items-center">
-                         <span className="text-[9px] font-black text-slate-400 uppercase">মোট নগদ জমা</span>
-                         <span className="text-xs font-black text-emerald-600">{formatCurrency(multiStats[co].totalPaid)}</span>
-                      </div>
-                   </div>
+          <div className="flex flex-col lg:flex-row gap-8">
+            <div className="flex-1 space-y-6">
+              {/* 🔔 LIVE LOG - Matching user screenshot card style */}
+              <div className="bg-white/40 p-2 md:p-4 rounded-[3.5rem] border-2 border-dashed border-slate-200">
+                <div className="flex justify-between items-center mb-6 px-8 pt-4">
+                   <h3 className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em] italic">সাম্প্রতিক অ্যাক্টিভিটি (Activity Feed)</h3>
+                   <span className="w-2.5 h-2.5 bg-emerald-500 rounded-full animate-ping shadow-[0_0_10px_#10b981]"></span>
                 </div>
+                
+                <div className="space-y-4">
+                  {loading ? (
+                    <div className="py-20 text-center animate-pulse italic text-sm uppercase font-black opacity-20">Syncing Feed...</div>
+                  ) : alerts.length === 0 ? (
+                    <div className="py-20 text-center opacity-20 italic text-sm uppercase font-black">কোনো সাম্প্রতিক আপডেট নেই</div>
+                  ) : alerts.map(al => (
+                    <div key={al.id} className="bg-white p-8 rounded-[3rem] border border-slate-100 shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-6 transition-all hover:shadow-xl hover:-translate-y-1 animate-reveal group">
+                       <div className="flex-1">
+                          <h4 className="text-xl font-black text-slate-800 uppercase italic tracking-tight mb-2 leading-none">{user.name}</h4>
+                          <div className="flex gap-2 mb-4">
+                             <span className={`px-4 py-1.5 rounded-xl text-[9px] font-black uppercase italic tracking-widest ${
+                               al.title.includes('Transtec') ? 'bg-amber-50 text-amber-600' : 
+                               al.title.includes('Light') ? 'bg-cyan-50 text-cyan-600' : 
+                               'bg-rose-50 text-rose-600'
+                             }`}>
+                                {al.title.includes('Transtec') ? 'TRANSTEC' : al.title.includes('Light') ? 'SQ LIGHT' : 'SQ CABLES'}
+                             </span>
+                             <span className="px-4 py-1.5 bg-slate-50 text-slate-400 text-[9px] font-black rounded-xl uppercase italic tracking-widest border">
+                                ID: #{String(al.id).slice(-4).toUpperCase()}
+                             </span>
+                          </div>
+                          <p className="text-[12px] font-bold text-slate-500 leading-relaxed max-w-lg">{al.message}</p>
+                       </div>
+                       <div className="text-right w-full md:w-auto border-t md:border-t-0 pt-6 md:pt-0 shrink-0">
+                          <p className={`text-3xl font-black tracking-tighter italic leading-none ${al.type === 'PAYMENT' ? 'text-emerald-600' : 'text-slate-900'}`}>
+                             ৳{al.message.match(/৳(\d+(,\d+)*)/)?.[1] || '0'}
+                          </p>
+                          <p className="text-[10px] font-black text-slate-300 uppercase mt-2 tracking-widest">
+                             {new Date(al.created_at).toLocaleTimeString('bn-BD', {hour:'2-digit', minute:'2-digit'})}
+                          </p>
+                       </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Right Side: Catalog/Offer Highlights */}
+            <div className="w-full lg:w-[380px] space-y-8">
+               <h4 className="text-[11px] font-black text-slate-400 uppercase tracking-[0.3em] ml-6 italic">নতুন অফার ও প্রমোশন</h4>
+               <div className="space-y-6">
+                  {ads.slice(0, 3).map(ad => (
+                    <div key={ad.id} className="bg-white rounded-[3.5rem] border-2 border-slate-50 overflow-hidden shadow-sm group hover:shadow-2xl transition-all cursor-pointer">
+                       <div className="h-56 overflow-hidden relative bg-slate-50">
+                          {ad.image_url ? (
+                            <img src={ad.image_url} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-[3000ms] opacity-90" />
+                          ) : (
+                            <div className="w-full h-full flex items-center justify-center opacity-5 font-black text-6xl uppercase italic">IFZA</div>
+                          )}
+                          <div className="absolute top-6 left-6">
+                             <span className="px-5 py-2 bg-black/80 backdrop-blur-xl text-white text-[9px] font-black rounded-xl uppercase tracking-widest italic">{ad.company}</span>
+                          </div>
+                       </div>
+                       <div className="p-8">
+                          <h5 className="font-black text-lg uppercase italic text-slate-800 mb-3 leading-tight group-hover:text-blue-600 transition-colors line-clamp-2">{ad.title}</h5>
+                          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest italic">{ad.type.replace('_', ' ')}</p>
+                       </div>
+                    </div>
+                  ))}
+               </div>
+            </div>
+          </div>
+        </>
+      )}
+
+      {type === 'ALERTS' && (
+        <div className="max-w-2xl mx-auto space-y-4">
+           <div className="bg-[#0f172a] p-12 rounded-[4rem] text-white flex justify-between items-center shadow-2xl border border-white/5 mb-10">
+              <div>
+                 <h3 className="text-3xl font-black uppercase italic tracking-tighter">আমার ইনবক্স</h3>
+                 <p className="text-[11px] text-slate-400 font-bold uppercase tracking-[0.3em] mt-3">Notification Archive & Real-time Logs</p>
+              </div>
+              <div className="w-16 h-16 bg-blue-600 rounded-[1.8rem] flex items-center justify-center text-3xl shadow-[0_0_40px_rgba(37,99,235,0.4)]">🔔</div>
+           </div>
+           {alerts.map(al => (
+             <div key={al.id} className="bg-white p-10 rounded-[3rem] border border-slate-100 shadow-sm flex items-start gap-8 animate-reveal relative overflow-hidden group hover:shadow-xl transition-all">
+                <div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-2xl shrink-0 shadow-inner group-hover:scale-110 transition-transform ${al.type === 'PAYMENT' ? 'bg-emerald-50 text-emerald-600' : 'bg-blue-50 text-blue-600'}`}>
+                  {al.type === 'PAYMENT' ? '💰' : '📄'}
+                </div>
+                <div className="flex-1">
+                   <div className="flex justify-between items-center mb-3">
+                      <h4 className="font-black text-slate-900 uppercase italic text-base tracking-tight leading-none">{al.title}</h4>
+                      <span className="text-[10px] font-black text-slate-300 uppercase tracking-widest">{new Date(al.created_at).toLocaleDateString('bn-BD')}</span>
+                   </div>
+                   <p className="text-[13px] font-bold text-slate-500 leading-relaxed mb-4">{al.message}</p>
+                   <p className="text-[9px] font-black text-slate-300 uppercase tracking-widest">Tracking ID: #{String(al.id).toUpperCase()}</p>
+                </div>
+                {!al.is_read && <div className="absolute top-6 right-6 w-3 h-3 bg-blue-600 rounded-full animate-ping"></div>}
              </div>
            ))}
         </div>
+      )}
 
-        <div className="pt-10">
-           <div className="flex justify-between items-end px-6 mb-8">
-              <h3 className="text-3xl font-black uppercase italic tracking-tighter text-slate-900">ভিজ্যুয়াল ক্যাটালগ ও পোস্টার</h3>
-              <span className="bg-slate-100 px-6 py-2.5 rounded-2xl text-[10px] font-black text-slate-500 uppercase">Live Feed</span>
+      {type === 'LEDGER' && (
+        <div className="space-y-8">
+           <div className="bg-white p-2 rounded-[2rem] border shadow-sm flex gap-2 overflow-x-auto no-scrollbar">
+              {companies.map(co => (
+                 <button key={co} onClick={() => setActiveCompany(co)} className={`flex-1 min-w-[140px] py-5 rounded-[1.5rem] text-[11px] font-black uppercase tracking-widest transition-all ${activeCompany === co ? 'bg-slate-900 text-white shadow-xl' : 'text-slate-400 hover:bg-slate-50'}`}>
+                    {co} লেজার
+                 </button>
+              ))}
            </div>
-           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-10">
-             {ads.map(ad => (
-               <div key={ad.id} onClick={() => setSelectedAd(ad)} className="bg-white rounded-[4rem] border shadow-sm overflow-hidden group hover:shadow-2xl transition-all cursor-pointer">
-                  <div className="aspect-[4/5] overflow-hidden bg-slate-50 relative">
-                     {ad.image_url ? (
-                        <img src={ad.image_url} alt="" className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-[3000ms] opacity-80" />
-                     ) : (
-                        <div className="w-full h-full flex items-center justify-center italic font-black text-slate-200 text-6xl uppercase">IFZA HUB</div>
-                     )}
-                     <div className="absolute top-8 left-8">
-                        <span className={`px-6 py-2.5 rounded-2xl text-white text-[9px] font-black uppercase tracking-widest italic shadow-2xl border border-white/20 ${brandStyles[ad.company] || 'bg-slate-900'}`}>{ad.company}</span>
-                     </div>
-                  </div>
-                  <div className="p-12">
-                     <h3 className="text-2xl font-black italic text-slate-800 uppercase leading-tight mb-4">{ad.title}</h3>
-                     <p className="text-sm text-slate-400 font-medium leading-relaxed italic line-clamp-2">"{ad.content}"</p>
-                  </div>
-               </div>
-             ))}
+           <div className="bg-white rounded-[3.5rem] border shadow-sm overflow-hidden animate-reveal">
+              <div className="overflow-x-auto custom-scroll">
+                 <table className="w-full text-left">
+                    <thead>
+                       <tr className="bg-slate-50 text-[10px] font-black text-slate-400 uppercase tracking-[0.3em] border-b">
+                          <th className="px-10 py-8">তারিখ</th>
+                          <th className="px-10 py-8">বিবরণ (Description)</th>
+                          <th className="px-10 py-8 text-right">ডেবিট (মালের বিল)</th>
+                          <th className="px-10 py-8 text-right">ক্রেডিট (টাকা জমা)</th>
+                       </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 text-[15px] font-bold">
+                       {loading ? (
+                         <tr><td colSpan={4} className="p-40 text-center animate-pulse text-slate-300 font-black uppercase italic">Syncing Ledger...</td></tr>
+                       ) : ledger.length === 0 ? (
+                         <tr><td colSpan={4} className="p-40 text-center opacity-20 font-black uppercase italic">কোনো লেনদেন পাওয়া যায়নি</td></tr>
+                       ) : ledger.map((tx, i) => (
+                         <tr key={tx.id} className="hover:bg-blue-50/20 transition-all group">
+                            <td className="px-10 py-10 text-slate-500 whitespace-nowrap">{new Date(tx.created_at).toLocaleDateString('bn-BD')}</td>
+                            <td className="px-10 py-10">
+                               <p className="uppercase italic font-black text-sm text-slate-800">{tx.payment_type === 'COLLECTION' ? '💰 নগদ জমা' : '📄 মালের ইনভয়েস'}</p>
+                               <p className="text-[10px] text-slate-300 uppercase mt-1 tracking-widest font-black">ID: #{String(tx.id).slice(-8).toUpperCase()}</p>
+                            </td>
+                            <td className="px-10 py-10 text-right font-black italic text-red-600 text-2xl tracking-tighter">
+                               {tx.payment_type !== 'COLLECTION' ? `${Math.round(tx.amount).toLocaleString()}৳` : '—'}
+                            </td>
+                            <td className="px-10 py-10 text-right font-black italic text-emerald-600 text-2xl tracking-tighter">
+                               {tx.payment_type === 'COLLECTION' ? `${Math.round(tx.amount).toLocaleString()}৳` : '—'}
+                            </td>
+                         </tr>
+                       ))}
+                    </tbody>
+                 </table>
+              </div>
            </div>
         </div>
+      )}
 
-        {selectedAd && (
-          <div className="fixed inset-0 bg-slate-950/98 backdrop-blur-3xl z-[3000] flex items-center justify-center p-4" onClick={() => setSelectedAd(null)}>
-             <div className="w-full max-w-5xl bg-white rounded-[5rem] overflow-hidden flex flex-col lg:flex-row shadow-2xl text-black">
-                <div className="flex-1 bg-slate-100 flex items-center justify-center">
-                   <img src={selectedAd.image_url} className="max-h-[80vh] object-contain" />
-                </div>
-                <div className="w-full lg:w-[400px] p-12 flex flex-col justify-center">
-                   <span className={`px-6 py-3 rounded-2xl text-[10px] font-black uppercase text-white mb-6 w-fit ${brandStyles[selectedAd.company]}`}>{selectedAd.company}</span>
-                   <h3 className="text-4xl font-black uppercase italic mb-8">{selectedAd.title}</h3>
-                   <p className="text-xl text-slate-500 italic mb-10 leading-relaxed">"{selectedAd.content}"</p>
-                   <button className="w-full bg-slate-900 text-white py-6 rounded-3xl font-black uppercase text-xs">বন্ধ করুন</button>
-                </div>
-             </div>
-          </div>
-        )}
-      </div>
-    );
-  }
-
-  if (type === 'LEDGER') {
-    return (
-      <div className="space-y-6 pb-32 animate-reveal">
-         <div className="bg-white p-2 rounded-[2.5rem] border shadow-sm flex gap-2">
-            {companies.map(co => (
-               <button key={co} onClick={() => setActiveCompany(co)} className={`flex-1 py-5 rounded-[2rem] text-[11px] font-black uppercase tracking-widest transition-all ${activeCompany === co ? 'bg-slate-900 text-white shadow-xl' : 'text-slate-400 hover:bg-slate-50'}`}>
-                  {co} লেজার
-               </button>
-            ))}
-         </div>
-
-         <div className={`p-12 rounded-[3.5rem] shadow-2xl flex flex-col md:flex-row justify-between items-center gap-10 text-white ${brandStyles[activeCompany]}`}>
-            <div>
-               <h3 className="text-3xl font-black uppercase italic tracking-tighter">{activeCompany} লেনদেন স্টেটমেন্ট</h3>
-               <p className="text-[11px] text-white/60 font-black uppercase mt-2 italic">{user.name} • Official Records</p>
-            </div>
-            <div className="text-right">
-               <p className="text-[11px] font-black text-white/50 uppercase italic mb-2">বর্তমান কোম্পানি বকেয়া</p>
-               <p className="text-5xl font-black italic tracking-tighter">{formatCurrency(multiStats[activeCompany].balance)}</p>
-            </div>
-         </div>
-
-         <div className="bg-white rounded-[4rem] border shadow-sm overflow-hidden">
-            <div className="overflow-x-auto">
-               <table className="w-full text-left">
-                  <thead>
-                     <tr className="bg-slate-50 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b">
-                        <th className="p-10">তারিখ ও সময়</th>
-                        <th className="p-10">বিবরণ (Description)</th>
-                        <th className="p-10 text-right text-red-500">মালের বিল (Debit)</th>
-                        <th className="p-10 text-right text-emerald-600">নগদ টাকা জমা (Credit)</th>
-                     </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-50 text-[14px]">
-                     {loading ? (
-                       <tr><td colSpan={4} className="p-40 text-center animate-pulse text-slate-300 font-black text-xl uppercase">লোড হচ্ছে...</td></tr>
-                     ) : ledger.length === 0 ? (
-                       <tr><td colSpan={4} className="p-40 text-center text-slate-300 italic font-black uppercase text-xl">কোনো লেনদেন পাওয়া যায়নি</td></tr>
-                     ) : ledger.map((tx, i) => (
-                       <tr key={i} className="hover:bg-blue-50/30 transition-all">
-                          <td className="p-10 font-bold">
-                             <p className="text-slate-800">{new Date(tx.created_at).toLocaleDateString('bn-BD')}</p>
-                             <p className="text-[10px] text-slate-400 font-bold uppercase mt-1">{new Date(tx.created_at).toLocaleTimeString('bn-BD')}</p>
-                          </td>
-                          <td className="p-10">
-                             <p className="font-black text-xs uppercase italic text-slate-700">
-                                {tx.payment_type === 'COLLECTION' ? '💰 নগদ পেমেন্ট জমা' : `📄 মালের মেমো`}
-                             </p>
-                             <p className="text-[10px] font-black text-blue-500 mt-2">ID: #{tx.id.slice(-8).toUpperCase()}</p>
-                          </td>
-                          <td className="p-10 text-right font-black italic text-slate-900 text-2xl">
-                             {tx.payment_type !== 'COLLECTION' ? `৳${Number(tx.amount).toLocaleString()}` : '—'}
-                          </td>
-                          <td className="p-10 text-right font-black italic text-emerald-600 text-2xl">
-                             {tx.payment_type === 'COLLECTION' ? `৳${Number(tx.amount).toLocaleString()}` : '—'}
-                          </td>
-                       </tr>
-                     ))}
-                  </tbody>
-               </table>
-            </div>
-         </div>
-      </div>
-    );
-  }
-
-  if (type === 'CATALOG') {
-    return (
-        <div className="space-y-10 pb-32 animate-reveal">
-           <div className="bg-white p-2 rounded-[2.5rem] border shadow-sm flex gap-2">
+      {type === 'CATALOG' && (
+        <div className="space-y-10">
+           <div className="bg-white p-2 rounded-[2rem] border shadow-sm flex gap-2 overflow-x-auto no-scrollbar">
               {companies.map(co => (
-                 <button key={co} onClick={() => setActiveCompany(co)} className={`flex-1 py-5 rounded-[2rem] text-[11px] font-black uppercase tracking-widest transition-all ${activeCompany === co ? 'bg-slate-900 text-white shadow-xl' : 'text-slate-400 hover:bg-slate-50'}`}>
+                 <button key={co} onClick={() => setActiveCompany(co)} className={`flex-1 min-w-[140px] py-5 rounded-[1.5rem] text-[11px] font-black uppercase tracking-widest transition-all ${activeCompany === co ? 'bg-slate-900 text-white shadow-xl' : 'text-slate-400 hover:bg-slate-50'}`}>
                     {co} রেট লিস্ট
                  </button>
               ))}
            </div>
-           <div className="bg-white p-8 md:p-10 rounded-[3.5rem] border flex flex-col md:flex-row gap-8 shadow-sm items-center">
-              <input className="flex-1 w-full p-6 bg-slate-50 border-none rounded-[2.5rem] font-black text-sm uppercase outline-none shadow-inner italic" placeholder={`${activeCompany} মডেল সার্চ করুন...`} value={search} onChange={e => setSearch(e.target.value)} />
-              <div className={`${brandStyles[activeCompany]} text-white px-12 py-5 rounded-[2.5rem] text-[11px] font-black uppercase tracking-widest shadow-2xl italic shrink-0`}>
-                 {activeCompany} Official Rates
-              </div>
+           
+           <div className="bg-white p-2 rounded-[2.5rem] border shadow-sm flex items-center gap-4 px-6 mb-6">
+              <span className="text-xl opacity-20 pl-2">🔍</span>
+              <input 
+                className="w-full p-5 bg-transparent border-none outline-none font-black text-xs uppercase tracking-widest placeholder:text-slate-300" 
+                placeholder="মডেল বা প্রোডাক্ট সার্চ করুন..." 
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+              />
            </div>
+
            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-6">
-              {products
-                .filter(p => p.stock > 0 && (!search || p.name.toLowerCase().includes(search.toLowerCase()))) // HIDES OUT OF STOCK FOR CUSTOMERS
-                .map(p => (
-                 <div key={p.id} className="bg-white p-8 rounded-[3rem] border border-slate-100 shadow-sm group hover:shadow-xl transition-all">
-                    <h4 className="text-[14px] font-black uppercase italic text-slate-800 leading-tight mb-8 h-10 line-clamp-2">{p.name}</h4>
-                    <div className="border-t pt-8 flex justify-between items-end">
-                       <div>
-                          <p className="text-[8px] font-black text-slate-300 uppercase mb-1.5 tracking-widest">Retail MRP</p>
-                          <p className="font-black text-2xl text-slate-900 italic leading-none">৳{p.mrp}</p>
-                       </div>
-                       <p className="text-[8px] font-black text-blue-500 italic uppercase">UID: {p.id.slice(-4).toUpperCase()}</p>
+              {products.filter(p => !search || p.name.toLowerCase().includes(search.toLowerCase())).map(p => (
+                 <div key={p.id} className="bg-white p-8 rounded-[3rem] border border-slate-100 shadow-sm group hover:shadow-2xl transition-all duration-500 hover:-translate-y-1">
+                    <h4 className="text-[14px] font-black uppercase italic text-slate-800 leading-tight mb-8 h-12 line-clamp-2 group-hover:text-blue-600">{p.name}</h4>
+                    <div className="border-t pt-8">
+                       <p className="text-[9px] font-black text-slate-300 uppercase mb-2 tracking-widest italic leading-none">Official Retail MRP</p>
+                       <p className="font-black text-2xl text-slate-900 italic leading-none tracking-tighter">{p.mrp}৳</p>
                     </div>
                  </div>
               ))}
            </div>
         </div>
-    );
-  }
-
-  return null;
+      )}
+    </div>
+  );
 };
 
 export default CustomerPortal;

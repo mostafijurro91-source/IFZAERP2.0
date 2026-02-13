@@ -1,8 +1,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { Company, User, formatCurrency } from '../types';
-import { supabase, mapToDbCompany } from '../lib/supabase';
-import { sendWhatsApp } from '../lib/sms'; // Import WhatsApp helper
+import { supabase, mapToDbCompany, db } from '../lib/supabase';
 
 interface CollectionsProps {
   company: Company;
@@ -10,279 +9,301 @@ interface CollectionsProps {
 }
 
 const Collections: React.FC<CollectionsProps> = ({ company, user }) => {
-  const [customers, setCustomers] = useState<any[]>([]);
-  const [allCompanyDues, setAllCompanyDues] = useState<Record<string, Record<string, number>>>({});
   const [pendingRequests, setPendingRequests] = useState<any[]>([]);
-  const [todayStats, setTodayStats] = useState({
-    total: 0,
+  const [confirmedToday, setConfirmedToday] = useState<any[]>([]);
+  const [customers, setCustomers] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+  
+  // Entry Form State
+  const [selectedArea, setSelectedArea] = useState("");
+  const [selectedCust, setSelectedCust] = useState<any>(null);
+  const [targetCompany, setTargetCompany] = useState<Company>('SQ Cables');
+  const [amount, setAmount] = useState<string>("");
+  const [deliveryExpense, setDeliveryExpense] = useState<string>("");
+
+  // Stats for the selected customer
+  const [custBalances, setCustBalances] = useState({
+    transtec: 0,
+    sqLight: 0,
+    sqCables: 0
+  });
+
+  // Global Stats
+  const [globalStats, setGlobalStats] = useState({
+    todayTotal: 0,
     transtec: 0,
     sqLight: 0,
     sqCables: 0,
     pendingTotal: 0
   });
-  
-  const [loading, setLoading] = useState(true);
-  const [isSaving, setIsSaving] = useState(false);
-  const [processingId, setProcessingId] = useState<string | null>(null);
-  const [search, setSearch] = useState("");
-  const [selectedRoute, setSelectedRoute] = useState<string>("");
-  const [uniqueRoutes, setUniqueRoutes] = useState<string[]>([]);
-  const [showCustList, setShowCustList] = useState(false);
-  const [selectedCust, setSelectedCust] = useState<any>(null);
-  const [amount, setAmount] = useState<number | "">("");
-  const [targetCompany, setTargetCompany] = useState<Company>(company);
 
-  const isAdmin = user.role.toUpperCase() === 'ADMIN';
+  const isAdmin = user.role === 'ADMIN';
 
   useEffect(() => {
-    setTargetCompany(company);
     fetchData();
-  }, [company]);
+  }, []);
+
+  useEffect(() => {
+    if (selectedCust) {
+      fetchCustomerBalances(selectedCust.id);
+    } else {
+      setCustBalances({ transtec: 0, sqLight: 0, sqCables: 0 });
+    }
+  }, [selectedCust]);
 
   const fetchData = async () => {
+    setLoading(true);
     try {
-      setLoading(true);
-      const today = new Date();
-      today.setHours(0,0,0,0);
-      const todayIso = today.toISOString();
-
-      const [custRes, txRes, pendRes, todayTxRes] = await Promise.all([
-        supabase.from('customers').select('*').order('name'),
-        supabase.from('transactions').select('customer_id, amount, payment_type, company'),
-        supabase.from('collection_requests').select('*, customers(name, address, phone)').eq('status', 'PENDING').order('created_at', { ascending: false }),
-        supabase.from('transactions').select('amount, company').eq('payment_type', 'COLLECTION').gte('created_at', todayIso)
+      const today = new Date().toISOString().split('T')[0];
+      const [custRes, reqRes, txRes] = await Promise.all([
+        db.getCustomers(),
+        supabase.from('collection_requests')
+          .select('*, customers(name, address, phone)')
+          .eq('status', 'PENDING')
+          .order('created_at', { ascending: false }),
+        supabase.from('transactions')
+          .select('*, customers(name)')
+          .gte('created_at', today + 'T00:00:00Z')
+          .order('created_at', { ascending: false })
       ]);
 
-      const dues: Record<string, Record<string, number>> = {};
+      setCustomers(custRes || []);
+      setPendingRequests(reqRes.data || []);
+      
+      const confirmed = (txRes.data || []).filter(tx => tx.payment_type === 'COLLECTION');
+      setConfirmedToday(confirmed);
+
+      let t_tot = 0, t_tr = 0, t_sl = 0, t_sc = 0;
       txRes.data?.forEach(tx => {
-        const cid = tx.customer_id;
         const amt = Number(tx.amount) || 0;
-        const txCo = mapToDbCompany(tx.company);
-        if (!dues[cid]) dues[cid] = { 'Transtec': 0, 'SQ Light': 0, 'SQ Cables': 0 };
-        if (dues[cid][txCo] !== undefined) {
-           dues[cid][txCo] += (tx.payment_type === 'COLLECTION' ? -amt : amt);
+        const co = mapToDbCompany(tx.company);
+        
+        if (tx.payment_type === 'COLLECTION') {
+          t_tot += amt;
+          if (co === 'Transtec') t_tr += amt;
+          if (co === 'SQ Light') t_sl += amt;
+          if (co === 'SQ Cables') t_sc += amt;
+        } else if (tx.payment_type === 'EXPENSE' && tx.meta?.type === 'DELIVERY') {
+          t_tot -= amt;
+          if (co === 'Transtec') t_tr -= amt;
+          if (co === 'SQ Light') t_sl -= amt;
+          if (co === 'SQ Cables') t_sc -= amt;
         }
       });
 
-      let t_total = 0, t_transtec = 0, t_sqlight = 0, t_sqcables = 0;
-      todayTxRes.data?.forEach(tx => {
-        const amt = Number(tx.amount) || 0;
-        const txCo = mapToDbCompany(tx.company);
-        t_total += amt;
-        if (txCo === 'Transtec') t_transtec += amt;
-        if (txCo === 'SQ Light') t_sqlight += amt;
-        if (txCo === 'SQ Cables') t_sqcables += amt;
+      setGlobalStats({
+        todayTotal: t_tot,
+        transtec: t_tr,
+        sqLight: t_sl,
+        sqCables: t_sc,
+        pendingTotal: (reqRes.data || []).reduce((sum: number, r: any) => sum + Number(r.amount), 0)
       });
-
-      setTodayStats({ 
-        total: t_total, 
-        transtec: t_transtec, 
-        sqLight: t_sqlight, 
-        sqCables: t_sqcables, 
-        pendingTotal: pendRes.data?.reduce((a, r) => a + (Number(r.amount) || 0), 0) || 0 
-      });
-      setCustomers(custRes.data || []);
-      setAllCompanyDues(dues);
-      setPendingRequests(pendRes.data || []);
-      setUniqueRoutes(Array.from(new Set((custRes.data || []).map(c => c.address?.trim()).filter(Boolean))).sort() as string[]);
-    } catch (err) {
-      console.error(err);
     } finally { setLoading(false); }
   };
 
-  const handleApprove = async (req: any) => {
-    if (!isAdmin || processingId) return;
-    setProcessingId(req.id);
-    
+  const fetchCustomerBalances = async (customerId: string) => {
     try {
-      const dbCo = mapToDbCompany(req.company);
+      const { data: txs } = await supabase
+        .from('transactions')
+        .select('amount, company, payment_type')
+        .eq('customer_id', customerId);
+
+      let t_tr = 0, t_sl = 0, t_sc = 0;
+      txs?.forEach(tx => {
+        const amt = Number(tx.amount);
+        const dbCo = mapToDbCompany(tx.company);
+        const factor = tx.payment_type === 'COLLECTION' ? -amt : amt;
+
+        if (dbCo === 'Transtec') t_tr += factor;
+        if (dbCo === 'SQ Light') t_sl += factor;
+        if (dbCo === 'SQ Cables') t_sc += factor;
+      });
+
+      setCustBalances({ transtec: t_tr, sqLight: t_sl, sqCables: t_sc });
+    } catch (err) {}
+  };
+
+  const handleManualSubmit = async () => {
+    if (!selectedCust || !amount || Number(amount) <= 0) return alert("দোকান এবং সঠিক অ্যামাউন্ট দিন!");
+    setIsSaving(true);
+    try {
+      const { error } = await supabase.from('collection_requests').insert([{
+        customer_id: selectedCust.id,
+        company: mapToDbCompany(targetCompany),
+        amount: Number(amount),
+        submitted_by: user.name,
+        status: 'PENDING',
+        meta: { delivery_expense: Number(deliveryExpense) || 0 }
+      }]);
+      if (error) throw error;
+      setAmount("");
+      setDeliveryExpense("");
+      alert("কালেকশন রিকোয়েস্ট সাবমিট হয়েছে!");
+      fetchData();
+    } catch (err: any) { alert(err.message); } finally { setIsSaving(false); }
+  };
+
+  const handleApprove = async (req: any) => {
+    if (!isAdmin || isSaving) return;
+    setIsSaving(true);
+    try {
       const { error: txErr } = await supabase.from('transactions').insert([{
         customer_id: req.customer_id, 
-        company: dbCo, 
+        company: req.company, 
         amount: Number(req.amount),
         payment_type: 'COLLECTION', 
-        items: [{ note: `নগদ আদায় অনুমোদন: ${req.amount} টাকা` }], 
-        submitted_by: req.submitted_by
+        items: [{ note: `নগদ আদায় অনুমোদন (${req.submitted_by} দ্বারা সংগৃহীত)` }], 
+        submitted_by: user.name
       }]);
-
       if (txErr) throw txErr;
 
-      const { error: delErr } = await supabase.from('collection_requests').delete().match({ id: req.id });
-
-      if (delErr) {
-         throw new Error("Error clearing request card.");
+      const expAmt = Number(req.meta?.delivery_expense || 0);
+      if (expAmt > 0) {
+        await supabase.from('transactions').insert([{
+          customer_id: req.customer_id,
+          company: req.company,
+          amount: expAmt,
+          payment_type: 'EXPENSE',
+          items: [{ note: `ডেলিভারি/যাতায়াত খরচ` }],
+          submitted_by: req.submitted_by,
+          meta: { type: 'DELIVERY' }
+        }]);
       }
 
-      setPendingRequests(prev => prev.filter(r => r.id !== req.id));
-
-      // WhatsApp Integration After Approval
-      if (confirm("কালেকশন সফলভাবে এপ্রুভ হয়েছে! কাস্টমারকে WhatsApp-এ কনফার্মেশন মেসেজ পাঠাতে চান?")) {
-        const dues = allCompanyDues[req.customer_id] || { 'Transtec': 0, 'SQ Light': 0, 'SQ Cables': 0 };
-        const currentBalance = (dues[req.company] || 0) - Number(req.amount);
-        const msg = `IFZA: ${req.customers?.name}, ৳${Number(req.amount).toLocaleString()} received successfully. Current balance (${req.company}): ৳${Math.round(currentBalance).toLocaleString()}. Thank you!`;
-        sendWhatsApp(req.customers?.phone, msg);
-      }
-
-      fetchData(); 
-    } catch (err: any) { 
-      alert("ত্রুটি: " + err.message); 
-    } finally { 
-      setProcessingId(null); 
-    }
-  };
-
-  const handleDeleteRequest = async (id: string) => {
-    if (!isAdmin || processingId) return;
-    if (!confirm("আপনি কি নিশ্চিত এই কার্ডটি ডিলিট করতে চান?")) return;
-    
-    setProcessingId(id);
-    try {
-      setPendingRequests(prev => prev.filter(r => r.id !== id));
-      const { error } = await supabase.from('collection_requests').delete().match({ id: id });
-      if (error) throw error;
-      alert("সাফল্যের সাথে মুছে ফেলা হয়েছে।");
-    } catch (err: any) {
-      alert("এরর: " + err.message);
+      await supabase.from('collection_requests').delete().eq('id', req.id);
       fetchData();
-    } finally {
-      setProcessingId(null);
-    }
+      if (selectedCust?.id === req.customer_id) fetchCustomerBalances(req.customer_id);
+    } catch (err: any) { alert(err.message); } finally { setIsSaving(false); }
   };
 
-  const filteredCustomers = useMemo(() => {
-    const q = search.toLowerCase().trim();
-    return customers.filter(c => 
-      (!q || c.name.toLowerCase().includes(q) || c.phone.includes(q)) && 
-      (!selectedRoute || c.address?.trim() === selectedRoute)
-    );
-  }, [customers, search, selectedRoute]);
+  const handleDeleteConfirmed = async (txId: string) => {
+    if (!isAdmin || !confirm("আপনি কি নিশ্চিত এই আদায়টি চিরতরে মুছে ফেলতে চান?")) return;
+    try {
+      const { error } = await supabase.from('transactions').delete().eq('id', txId);
+      if (error) throw error;
+      alert("আদায়টি মুছে ফেলা হয়েছে!");
+      fetchData();
+    } catch (err: any) { alert(err.message); }
+  };
+
+  const uniqueAreas = useMemo(() => Array.from(new Set(customers.map(c => c.address?.trim()).filter(Boolean))).sort(), [customers]);
+  const filteredCustomers = customers.filter(c => !selectedArea || c.address === selectedArea);
+
+  const currentSelectedBalance = useMemo(() => {
+    if (targetCompany === 'Transtec') return custBalances.transtec;
+    if (targetCompany === 'SQ Light') return custBalances.sqLight;
+    return custBalances.sqCables;
+  }, [targetCompany, custBalances]);
 
   return (
-    <div className="space-y-6 pb-24 text-slate-900 animate-reveal">
-      {/* Minimal Stats Row */}
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
-         {[
-           { label: 'আজকের মোট', val: todayStats.total, color: 'text-slate-900', bg: 'bg-white' },
-           { label: 'Transtec', val: todayStats.transtec, color: 'text-amber-600', bg: 'bg-white' },
-           { label: 'SQ Light', val: todayStats.sqLight, color: 'text-cyan-600', bg: 'bg-white' },
-           { label: 'SQ Cables', val: todayStats.sqCables, color: 'text-rose-600', bg: 'bg-white' },
-           { label: 'পেন্ডিং রিকোয়েস্ট', val: todayStats.pendingTotal, color: 'text-orange-600', bg: 'bg-white' }
-         ].map((s, i) => (
-           <div key={i} className={`${s.bg} p-4 rounded-2xl border shadow-sm text-center`}>
-              <p className="text-[8px] font-black uppercase text-slate-400 mb-1">{s.label}</p>
-              <p className={`text-sm font-black italic ${s.color}`}>{s.val.toLocaleString()}৳</p>
-           </div>
-         ))}
+    <div className="space-y-10 pb-40 animate-reveal text-slate-800 font-sans">
+      
+      {/* 📊 Top Stats Grid */}
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+         <div className="bg-white p-5 rounded-[1.8rem] border border-slate-100 shadow-sm text-center">
+            <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1 italic">আজকের নিট আদায়</p>
+            <p className="text-xl font-black text-slate-900 leading-none italic">{globalStats.todayTotal.toLocaleString()} ৳</p>
+         </div>
+         <div className="bg-white p-5 rounded-[1.8rem] border border-slate-100 shadow-sm text-center">
+            <p className="text-[9px] font-black text-amber-500 uppercase tracking-widest mb-1 italic">TRANSTEC</p>
+            <p className="text-xl font-black text-amber-600 leading-none italic">{globalStats.transtec.toLocaleString()} ৳</p>
+         </div>
+         <div className="bg-white p-5 rounded-[1.8rem] border border-slate-100 shadow-sm text-center">
+            <p className="text-[9px] font-black text-cyan-500 uppercase tracking-widest mb-1 italic">SQ LIGHT</p>
+            <p className="text-xl font-black text-cyan-600 leading-none italic">{globalStats.sqLight.toLocaleString()} ৳</p>
+         </div>
+         <div className="bg-white p-5 rounded-[1.8rem] border border-slate-100 shadow-sm text-center">
+            <p className="text-[9px] font-black text-rose-500 uppercase tracking-widest mb-1 italic">SQ CABLES</p>
+            <p className="text-xl font-black text-rose-600 leading-none italic">{globalStats.sqCables.toLocaleString()} ৳</p>
+         </div>
+         <div className="bg-white p-5 rounded-[1.8rem] border border-slate-100 shadow-sm text-center col-span-2 md:col-span-1">
+            <p className="text-[9px] font-black text-orange-400 uppercase tracking-widest mb-1 italic">পেন্ডিং রিকোয়েস্ট</p>
+            <p className="text-xl font-black text-orange-600 leading-none italic">{globalStats.pendingTotal.toLocaleString()} ৳</p>
+         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
-         {/* Entry Card */}
-         <div className="bg-white p-8 md:p-10 rounded-[2.5rem] border shadow-sm space-y-8">
-            <h3 className="text-lg font-black uppercase italic tracking-tighter flex items-center gap-3">
-               <span className="w-8 h-8 bg-blue-600 rounded-xl flex items-center justify-center text-white text-xs">C</span>
-               কালেকশন এন্ট্রি
-            </h3>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
+         {/* 📝 Entry Form */}
+         <div className="bg-white p-8 md:p-12 rounded-[3.5rem] border border-slate-100 shadow-2xl space-y-10">
+            <div className="flex items-center gap-5">
+               <div className="w-10 h-10 bg-blue-600 rounded-full flex items-center justify-center text-white text-lg font-black shadow-lg">C</div>
+               <h3 className="text-2xl font-black text-slate-900 italic tracking-tight uppercase">কালেকশন এন্ট্রি</h3>
+            </div>
+            <div className="space-y-5">
+               <select className="w-full p-5 bg-slate-50 border border-slate-100 rounded-[1.8rem] outline-none font-bold appearance-none shadow-sm" value={selectedArea} onChange={e => { setSelectedArea(e.target.value); setSelectedCust(null); }}>
+                  <option value="">সকল এরিয়া</option>
+                  {uniqueAreas.map(a => <option key={String(a)} value={String(a)}>{a}</option>)}
+               </select>
+               <select className="w-full p-5 bg-slate-50 border border-slate-100 rounded-[1.8rem] outline-none font-bold appearance-none shadow-sm" value={selectedCust?.id || ""} onChange={e => setSelectedCust(customers.find(c => c.id === e.target.value))}>
+                  <option value="">দোকান বাছাই করুন...</option>
+                  {filteredCustomers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+               </select>
+               <div className="bg-blue-50/50 p-6 rounded-[2.5rem] border border-blue-100/50">
+                  <div className="bg-white p-6 rounded-2xl shadow-md text-center">
+                     <p className="text-[10px] font-black text-blue-500 uppercase tracking-[0.2em] mb-2 italic">{targetCompany.toUpperCase()} DUE</p>
+                     <p className={`text-2xl font-black italic ${currentSelectedBalance > 0 ? 'text-red-600' : 'text-emerald-600'}`}>৳{Math.round(currentSelectedBalance).toLocaleString()}</p>
+                  </div>
+               </div>
+               <div className="flex gap-2">
+                  {['Transtec', 'SQ Light', 'SQ Cables'].map(co => (
+                    <button key={co} onClick={() => setTargetCompany(co as Company)} className={`flex-1 py-4 rounded-2xl font-black uppercase text-[9px] transition-all ${targetCompany === co ? 'bg-blue-600 text-white shadow-xl scale-105' : 'bg-slate-50 text-slate-400'}`}>{co}</button>
+                  ))}
+               </div>
+               <div className="grid grid-cols-3 gap-4 pt-4">
+                  <div className="col-span-2"><input type="number" className="w-full p-6 bg-slate-50 border rounded-3xl text-center text-4xl font-black italic" placeholder="0.00" value={amount} onChange={e => setAmount(e.target.value)} /></div>
+                  <div><input type="number" className="w-full p-6 bg-orange-50 border border-orange-100 rounded-3xl text-center text-xl font-black italic text-orange-600" placeholder="Exp" value={deliveryExpense} onChange={e => setDeliveryExpense(e.target.value)} /></div>
+               </div>
+               <button disabled={isSaving || !amount || !selectedCust} onClick={handleManualSubmit} className="w-full bg-[#0f172a] text-white py-8 rounded-[2.2rem] font-black uppercase text-xs tracking-widest shadow-2xl active:scale-95 transition-all disabled:opacity-50">কালেকশন সাবমিট ➔</button>
+            </div>
+         </div>
 
+         {/* ⏳ Pending & Recent History */}
+         <div className="space-y-10">
+            {/* Pending Approvals */}
             <div className="space-y-4">
-               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  <select className="p-4 bg-slate-50 border rounded-2xl font-bold text-[10px] uppercase outline-none" value={selectedRoute} onChange={e => { setSelectedRoute(e.target.value); setSelectedCust(null); }}>
-                    <option value="">সকল এরিয়া</option>
-                    {uniqueRoutes.map(r => <option key={r} value={r}>{r}</option>)}
-                  </select>
-                  <button onClick={() => setShowCustList(true)} className="p-4 bg-slate-50 border rounded-2xl text-[10px] font-bold uppercase text-left truncate italic text-slate-500">
-                    {selectedCust ? selectedCust.name : "দোকান বাছাই করুন..."}
-                  </button>
+               <p className="text-[11px] font-black text-slate-400 uppercase italic tracking-widest ml-4">{pendingRequests.length} টি অপেক্ষমাণ অনুমোদন</p>
+               <div className="space-y-4 max-h-[400px] overflow-y-auto custom-scroll pr-2">
+                  {pendingRequests.map(req => (
+                    <div key={req.id} className="bg-white p-6 rounded-[2.5rem] border shadow-md flex justify-between items-center animate-reveal group">
+                       <div className="flex-1">
+                          <h4 className="font-black text-slate-800 uppercase italic">{req.customers?.name}</h4>
+                          <span className="text-[8px] font-black text-slate-400 uppercase">{req.company} • By {req.submitted_by}</span>
+                       </div>
+                       <div className="text-right flex items-center gap-4">
+                          <p className="text-xl font-black italic">৳{Number(req.amount).toLocaleString()}</p>
+                          {isAdmin && <button onClick={() => handleApprove(req)} className="bg-emerald-600 text-white px-5 py-2 rounded-xl font-black text-[9px] uppercase shadow-lg">APPROVE</button>}
+                          <button onClick={async () => { if(confirm("ডিলিট?")) { await supabase.from('collection_requests').delete().eq('id', req.id); fetchData(); } }} className="text-red-300 hover:text-red-600 text-xl font-black px-2">×</button>
+                       </div>
+                    </div>
+                  ))}
                </div>
             </div>
 
-            {selectedCust && (
-              <div className="bg-blue-50 p-4 rounded-2xl grid grid-cols-3 gap-2">
-                 {['Transtec', 'SQ Light', 'SQ Cables'].map(co => (
-                   <div key={co} className="bg-white p-3 rounded-xl border text-center">
-                      <p className="text-[7px] font-black text-slate-400 uppercase mb-1">{co}</p>
-                      <p className="text-[10px] font-black italic">৳{(allCompanyDues[selectedCust.id]?.[co] || 0).toLocaleString()}</p>
-                   </div>
-                 ))}
-              </div>
-            )}
-
-            <div className="grid grid-cols-3 gap-2">
-               {(['Transtec', 'SQ Light', 'SQ Cables'] as Company[]).map(co => (
-                  <button key={co} onClick={() => setTargetCompany(co)} className={`py-4 rounded-xl text-[9px] font-black uppercase transition-all ${targetCompany === co ? 'bg-blue-600 text-white shadow-lg' : 'bg-slate-50 text-slate-400 border border-slate-100'}`}>{co}</button>
-               ))}
+            {/* Today's Confirmed Transactions */}
+            <div className="space-y-4 pt-4 border-t border-slate-200">
+               <p className="text-[11px] font-black text-emerald-600 uppercase italic tracking-widest ml-4">আজকের সম্পন্ন আদায় (Confirmed)</p>
+               <div className="space-y-3 max-h-[400px] overflow-y-auto custom-scroll pr-2">
+                  {confirmedToday.length === 0 ? (
+                    <div className="py-20 text-center opacity-10 font-black uppercase text-xs italic">আজকে কোনো কালেকশন হয়নি</div>
+                  ) : confirmedToday.map(tx => (
+                    <div key={tx.id} className="bg-emerald-50/50 p-5 rounded-[2rem] border border-emerald-100 flex justify-between items-center group transition-all">
+                       <div className="flex-1">
+                          <h4 className="font-black text-slate-700 uppercase text-xs truncate italic">{tx.customers?.name}</h4>
+                          <p className="text-[8px] font-bold text-slate-400 uppercase">{tx.company} • {new Date(tx.created_at).toLocaleTimeString('bn-BD', {hour:'2-digit', minute:'2-digit'})}</p>
+                       </div>
+                       <div className="flex items-center gap-4">
+                          <p className="text-lg font-black italic text-emerald-700">৳{Number(tx.amount).toLocaleString()}</p>
+                          {isAdmin && (
+                            <button onClick={() => handleDeleteConfirmed(tx.id)} className="w-8 h-8 bg-white text-red-500 rounded-lg flex items-center justify-center border shadow-sm hover:bg-red-500 hover:text-white transition-all">🗑️</button>
+                          )}
+                       </div>
+                    </div>
+                  ))}
+               </div>
             </div>
-
-            <div className="space-y-2">
-               <label className="text-[9px] font-black text-slate-400 uppercase ml-4 italic block">কালেকশন অ্যামাউন্ট (৳)</label>
-               <input type="number" className="w-full p-8 bg-slate-50 border rounded-3xl text-4xl font-black italic text-center outline-none" value={amount || ""} onChange={e => setAmount(e.target.value === "" ? "" : Number(e.target.value))} placeholder="0.00" />
-            </div>
-
-            <button disabled={isSaving || !selectedCust || !amount} onClick={async () => {
-              setIsSaving(true);
-              try {
-                const { error } = await supabase.from('collection_requests').insert([{ 
-                    customer_id: selectedCust.id, 
-                    amount: Number(amount), 
-                    company: targetCompany, 
-                    submitted_by: user.name, 
-                    status: 'PENDING' 
-                }]);
-                if (error) throw error;
-                setAmount(""); setSelectedCust(null); 
-                await fetchData();
-                alert("কালেকশন রিকোয়েস্ট পাঠানো হয়েছে!");
-              } catch (err: any) { alert(err.message); } finally { setIsSaving(false); }
-            }} className="w-full bg-slate-900 text-white py-6 rounded-3xl font-black uppercase text-xs tracking-widest shadow-xl active:scale-95 transition-all">সাবমিট করুন ➔</button>
          </div>
-
-         {/* Pending List Card */}
-         {isAdmin && (
-           <div className="bg-slate-100/50 p-8 rounded-[2.5rem] border-2 border-dashed space-y-6">
-              <h4 className="text-[10px] font-black uppercase italic tracking-widest text-slate-400">{pendingRequests.length}টি অপেক্ষমাণ অনুমোদন</h4>
-              <div className="space-y-3 max-h-[600px] overflow-y-auto custom-scroll pr-2">
-                 {pendingRequests.length === 0 ? (
-                   <div className="py-20 text-center opacity-10 font-black uppercase italic">No Pending Data</div>
-                 ) : pendingRequests.map(req => (
-                   <div key={req.id} className={`bg-white p-6 rounded-2xl border shadow-sm transition-all ${processingId === req.id ? 'opacity-30 pointer-events-none' : ''}`}>
-                      <div className="flex justify-between items-start mb-4">
-                         <div className="min-w-0 pr-4">
-                            <h5 className="font-black text-slate-800 uppercase italic text-sm truncate">{req.customers?.name}</h5>
-                            <span className="text-[8px] font-black text-slate-400 bg-slate-100 px-2 py-0.5 rounded uppercase mt-2 inline-block">{req.company}</span>
-                         </div>
-                         <p className="text-lg font-black italic tracking-tighter">৳{Number(req.amount).toLocaleString()}</p>
-                      </div>
-                      <div className="flex items-center justify-between pt-4 border-t border-slate-50">
-                         <p className="text-[8px] font-bold text-slate-300 uppercase italic">কালেক্টর: {req.submitted_by}</p>
-                         <div className="flex gap-2">
-                            <button disabled={!!processingId} onClick={() => handleApprove(req)} className="bg-blue-600 text-white px-6 py-2.5 rounded-xl text-[9px] font-black uppercase shadow-lg hover:bg-emerald-600">APPROVE</button>
-                            <button disabled={!!processingId} onClick={() => handleDeleteRequest(req.id)} className="text-red-500 hover:text-red-700 font-bold text-xl px-2">×</button>
-                         </div>
-                      </div>
-                   </div>
-                 ))}
-              </div>
-           </div>
-         )}
       </div>
-
-      {/* Customer Selector Modal */}
-      {showCustList && (
-        <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-sm" onClick={() => setShowCustList(false)}>
-           <div className="bg-white w-full max-w-lg rounded-[2.5rem] shadow-2xl overflow-hidden flex flex-col h-[60vh] animate-reveal" onClick={e => e.stopPropagation()}>
-              <div className="p-4 border-b">
-                 <input autoFocus placeholder="দোকান সার্চ করুন..." className="w-full p-4 bg-slate-50 border rounded-xl outline-none font-bold italic" value={search} onChange={e => setSearch(e.target.value)} />
-              </div>
-              <div className="overflow-y-auto flex-1 custom-scroll p-4 space-y-1">
-                {filteredCustomers.map(c => (
-                  <div key={c.id} onClick={() => { setSelectedCust(c); setShowCustList(false); }} className="p-4 hover:bg-blue-600 hover:text-white rounded-xl cursor-pointer transition-all">
-                    <p className="font-bold text-xs uppercase">{c.name}</p>
-                    <p className="text-[8px] opacity-60 uppercase mt-0.5">📍 {c.address}</p>
-                  </div>
-                ))}
-              </div>
-           </div>
-        </div>
-      )}
     </div>
   );
 };

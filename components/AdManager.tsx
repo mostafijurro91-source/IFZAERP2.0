@@ -1,15 +1,16 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Company, Advertisement } from '../types';
+import { Company, Advertisement, UserRole } from '../types';
 import { supabase } from '../lib/supabase';
 
 const AdManager: React.FC = () => {
   const [ads, setAds] = useState<Advertisement[]>([]);
+  const [customers, setCustomers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
+  const [showNotifyModal, setShowNotifyModal] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
-  const [dbStatus, setDbStatus] = useState<'CHECKING' | 'CONNECTED' | 'ERROR'>('CHECKING');
   const [editingAd, setEditingAd] = useState<Advertisement | null>(null);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -18,35 +19,30 @@ const AdManager: React.FC = () => {
     title: '', content: '', company: 'Transtec' as Company, type: 'OFFICIAL_CATALOG' as any, image_url: '', external_url: ''
   });
 
-  useEffect(() => { 
-    checkConnection();
-    fetchAds(); 
-  }, []);
+  const [notifyData, setNotifyData] = useState({
+    customer_id: '', title: '', message: '', type: 'ANNOUNCEMENT'
+  });
 
-  const checkConnection = async () => {
-    try {
-      const { error } = await supabase.from('advertisements').select('count', { count: 'exact', head: true });
-      if (error) throw error;
-      setDbStatus('CONNECTED');
-    } catch (err) {
-      console.error("Connection Check Failed:", err);
-      setDbStatus('ERROR');
-    }
-  };
+  useEffect(() => { 
+    fetchAds(); 
+    fetchCustomers();
+  }, []);
 
   const fetchAds = async () => {
     setLoading(true);
     try {
-      const { data, error } = await supabase.from('advertisements').select('*').order('created_at', { ascending: false });
-      if (error) throw error;
+      const { data } = await supabase.from('advertisements').select('*').order('created_at', { ascending: false });
       setAds(data || []);
-    } catch (err: any) {
-      console.error("Fetch error:", err);
     } finally { setLoading(false); }
   };
 
+  const fetchCustomers = async () => {
+    const { data } = await supabase.from('customers').select('id, name, address').order('name');
+    setCustomers(data || []);
+  };
+
   const compressImage = (file: File): Promise<string> => {
-    return new Promise((resolve, reject) => {
+    return new Promise((resolve) => {
       const reader = new FileReader();
       reader.readAsDataURL(file);
       reader.onload = (event) => {
@@ -54,24 +50,16 @@ const AdManager: React.FC = () => {
         img.src = event.target?.result as string;
         img.onload = () => {
           const canvas = document.createElement('canvas');
-          const MAX_WIDTH = 500; 
+          const MAX_WIDTH = 600; 
           let width = img.width;
           let height = img.height;
-
-          if (width > MAX_WIDTH) {
-            height *= MAX_WIDTH / width;
-            width = MAX_WIDTH;
-          }
-
-          canvas.width = width;
-          canvas.height = height;
+          if (width > MAX_WIDTH) { height *= MAX_WIDTH / width; width = MAX_WIDTH; }
+          canvas.width = width; canvas.height = height;
           const ctx = canvas.getContext('2d');
           ctx?.drawImage(img, 0, 0, width, height);
-          resolve(canvas.toDataURL('image/jpeg', 0.5));
+          resolve(canvas.toDataURL('image/jpeg', 0.6));
         };
-        img.onerror = reject;
       };
-      reader.onerror = reject;
     });
   };
 
@@ -79,151 +67,147 @@ const AdManager: React.FC = () => {
     const file = e.target.files?.[0];
     if (!file) return;
     setIsUploading(true);
-    try {
-      const compressedString = await compressImage(file);
-      setFormData(prev => ({ ...prev, image_url: compressedString }));
-    } catch (err) {
-      alert("ছবি প্রসেস করা যায়নি।");
-    } finally {
-      setIsUploading(false);
-    }
+    const compressed = await compressImage(file);
+    setFormData(prev => ({ ...prev, image_url: compressed }));
+    setIsUploading(false);
   };
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (isSaving || isUploading) return;
-    
     setIsSaving(true);
     try {
-      const payload = {
-        title: formData.title,
-        content: formData.content || formData.title,
-        company: formData.company,
-        type: formData.type,
-        image_url: formData.image_url,
-        external_url: formData.external_url
-      };
-
-      let res;
-      if (editingAd) {
-        res = await supabase.from('advertisements').update(payload).eq('id', editingAd.id);
-      } else {
-        res = await supabase.from('advertisements').insert([payload]);
-      }
-
+      const payload = { ...formData, content: formData.content || formData.title };
+      const res = editingAd ? await supabase.from('advertisements').update(payload).eq('id', editingAd.id) : await supabase.from('advertisements').insert([payload]);
       if (res.error) throw res.error;
-
-      alert("সফলভাবে পাবলিশ হয়েছে! ✅");
+      alert("সফলভাবে পাবলিশ হয়েছে!");
       setShowModal(false);
-      setFormData({title: '', content: '', company: 'Transtec', type: 'OFFICIAL_CATALOG', image_url: '', external_url: ''});
-      setEditingAd(null);
       fetchAds();
-    } catch (err: any) {
-      alert("ত্রুটি: " + err.message);
-    } finally {
-      setIsSaving(false);
-    }
+    } catch (err: any) { alert(err.message); } finally { setIsSaving(false); }
+  };
+
+  const handleSendNotification = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!notifyData.customer_id || !notifyData.message) return alert("দোকান এবং মেসেজ লিখুন!");
+    setIsSaving(true);
+    try {
+      const { error } = await supabase.from('notifications').insert([{
+        customer_id: notifyData.customer_id,
+        title: notifyData.title || "🔔 IFZA Alerts",
+        message: notifyData.message,
+        type: notifyData.type
+      }]);
+      if (error) throw error;
+      alert("নোটিফিকেশন পাঠানো হয়েছে!");
+      setShowNotifyModal(false);
+      setNotifyData({ customer_id: '', title: '', message: '', type: 'ANNOUNCEMENT' });
+    } catch (err: any) { alert(err.message); } finally { setIsSaving(false); }
   };
 
   return (
-    <div className="space-y-10 pb-32 animate-reveal">
-      <div className="bg-[#0f172a] p-10 md:p-14 rounded-[4rem] shadow-2xl border border-white/5 flex flex-col md:flex-row justify-between items-center gap-8">
-        <div>
-          <div className="flex items-center gap-3">
-            <h3 className="text-3xl font-black text-white uppercase italic tracking-tighter leading-none">ক্যাটালগ হাব</h3>
-            <span className={`px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-widest ${dbStatus === 'CONNECTED' ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20' : 'bg-red-500/10 text-red-500 border border-red-500/20'}`}>
-              {dbStatus === 'CONNECTED' ? 'Cloud Sync: Active' : 'Cloud Error'}
-            </span>
-          </div>
-          <p className="text-[10px] text-blue-400 font-black uppercase tracking-[0.4em] mt-3">Product Marketing & Catalog Control</p>
+    <div className="space-y-10 pb-40 animate-reveal text-black">
+      <div className="bg-[#0f172a] p-10 md:p-14 rounded-[4rem] shadow-2xl border border-white/5 flex flex-col md:flex-row justify-between items-center gap-8 relative overflow-hidden">
+        <div className="absolute top-0 right-0 w-64 h-64 bg-blue-600/10 blur-[100px] rounded-full"></div>
+        <div className="relative z-10">
+          <h3 className="text-3xl font-black text-white uppercase italic tracking-tighter leading-none">কমিউনিকেশন হাব</h3>
+          <p className="text-[10px] text-blue-400 font-black uppercase tracking-[0.4em] mt-3">Broadcast & Personal Alert Control</p>
         </div>
-        <button 
-          onClick={() => { setEditingAd(null); setFormData({title:'', content:'', company:'Transtec', type:'OFFICIAL_CATALOG', image_url:'', external_url:''}); setShowModal(true); }} 
-          className="bg-white text-slate-900 px-12 py-5 rounded-[2rem] font-black uppercase text-[11px] tracking-widest shadow-xl active:scale-95 transition-all"
-        >
-          নতুন পোস্ট +
-        </button>
+        <div className="flex gap-3 relative z-10">
+          <button onClick={() => setShowNotifyModal(true)} className="bg-blue-600 text-white px-8 py-5 rounded-[2rem] font-black uppercase text-[10px] tracking-widest shadow-xl active:scale-95 transition-all">মেসেজ পাঠান 🔔</button>
+          <button onClick={() => { setEditingAd(null); setFormData({title:'', content:'', company:'Transtec', type:'OFFICIAL_CATALOG', image_url:'', external_url:''}); setShowModal(true); }} className="bg-white text-slate-900 px-8 py-5 rounded-[2rem] font-black uppercase text-[10px] tracking-widest shadow-xl active:scale-95 transition-all">নতুন অফার +</button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
         {loading ? (
-          <div className="col-span-full py-40 text-center animate-pulse text-slate-300 font-black uppercase italic">সার্ভার সিঙ্ক হচ্ছে...</div>
+          <div className="col-span-full py-40 text-center animate-pulse text-slate-300 font-black uppercase italic italic">Syncing Terminal...</div>
         ) : ads.map(ad => (
           <div key={ad.id} className="bg-white rounded-[4rem] overflow-hidden border shadow-sm group hover:shadow-2xl transition-all duration-700 animate-reveal">
-             <div className="h-72 overflow-hidden bg-slate-50 relative">
-                {ad.image_url ? (
-                   <img src={ad.image_url} alt="" className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-[3000ms]" />
-                ) : (
-                   <div className="w-full h-full flex items-center justify-center opacity-10 font-black italic text-5xl uppercase">IFZA ERP</div>
-                )}
-                <div className="absolute top-8 left-8">
-                   <span className="px-5 py-2 bg-black/80 backdrop-blur-xl text-white text-[9px] font-black rounded-2xl uppercase tracking-widest italic">{ad.company}</span>
-                </div>
-                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-all flex items-center justify-center opacity-0 group-hover:opacity-100">
-                   <button onClick={() => { setEditingAd(ad); setFormData({title: ad.title, content: ad.content || '', company: ad.company, type: ad.type, image_url: ad.image_url || '', external_url: ad.external_url || ''}); setShowModal(true); }} className="bg-white text-slate-900 w-16 h-16 rounded-full flex items-center justify-center text-xl shadow-2xl active:scale-90">📝</button>
+             <div className="h-64 overflow-hidden bg-slate-50 relative">
+                {ad.image_url ? <img src={ad.image_url} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-[3000ms]" /> : <div className="w-full h-full flex items-center justify-center opacity-10 font-black text-4xl">IFZA</div>}
+                <div className="absolute top-6 left-6 flex gap-2">
+                   <span className="px-4 py-1.5 bg-black/80 backdrop-blur-xl text-white text-[8px] font-black rounded-xl uppercase tracking-widest">{ad.company}</span>
+                   <span className="px-4 py-1.5 bg-blue-600 text-white text-[8px] font-black rounded-xl uppercase tracking-widest">{ad.type}</span>
                 </div>
              </div>
-             <div className="p-10">
-                <h4 className="text-xl font-black uppercase italic text-slate-800 leading-tight mb-4">{ad.title}</h4>
+             <div className="p-8">
+                <h4 className="text-lg font-black uppercase italic text-slate-800 leading-tight mb-4">{ad.title}</h4>
                 <div className="flex justify-between items-center mt-6 pt-6 border-t border-slate-50">
-                   <span className="text-[10px] font-black text-slate-300 uppercase tracking-widest">{new Date(ad.created_at).toLocaleDateString('bn-BD')}</span>
-                   <button onClick={async () => { if(confirm("ডিলিট করতে চান?")) { await supabase.from('advertisements').delete().eq('id', ad.id); fetchAds(); } }} className="text-red-400 font-black text-2xl hover:scale-125 transition-transform">🗑️</button>
+                   <span className="text-[9px] font-black text-slate-300 uppercase">{new Date(ad.created_at).toLocaleDateString('bn-BD')}</span>
+                   <button onClick={async () => { if(confirm("ডিলিট করতে চান?")) { await supabase.from('advertisements').delete().eq('id', ad.id); fetchAds(); } }} className="text-red-400 font-black text-xl">🗑️</button>
                 </div>
              </div>
           </div>
         ))}
       </div>
 
+      {/* 🔔 Send Notification Modal */}
+      {showNotifyModal && (
+        <div className="fixed inset-0 bg-[#020617]/90 backdrop-blur-3xl z-[3000] flex items-center justify-center p-4">
+           <div className="bg-white rounded-[4rem] w-full max-w-lg shadow-2xl animate-reveal overflow-hidden">
+              <div className="p-10 md:p-12 space-y-8">
+                 <div className="flex justify-between items-center border-b pb-6">
+                    <h3 className="text-xl font-black text-slate-900 uppercase italic">কাস্টমার এলার্ট পাঠান</h3>
+                    <button onClick={() => setShowNotifyModal(false)} className="text-3xl text-slate-300 font-black">✕</button>
+                 </div>
+                 <form onSubmit={handleSendNotification} className="space-y-6">
+                    <div className="space-y-1">
+                       <label className="text-[9px] font-black text-slate-400 uppercase ml-4 italic">টার্গেট কাস্টমার (দোকান)</label>
+                       <select required className="w-full p-5 bg-slate-50 border-none rounded-2xl outline-none font-black text-[11px] uppercase italic" value={notifyData.customer_id} onChange={e => setNotifyData({...notifyData, customer_id: e.target.value})}>
+                          <option value="">দোকান সিলেক্ট করুন...</option>
+                          {customers.map(c => <option key={c.id} value={c.id}>{c.name} - {c.address}</option>)}
+                       </select>
+                    </div>
+                    <div className="space-y-1">
+                       <label className="text-[9px] font-black text-slate-400 uppercase ml-4 italic">টাইটেল (যেমন: বকেয়া নোটিশ)</label>
+                       <input className="w-full p-5 bg-slate-50 border-none rounded-2xl outline-none font-black text-xs uppercase" placeholder="নোটিফিকেশন টাইটেল" value={notifyData.title} onChange={e => setNotifyData({...notifyData, title: e.target.value})} />
+                    </div>
+                    <div className="space-y-1">
+                       <label className="text-[9px] font-black text-slate-400 uppercase ml-4 italic">বিস্তারিত মেসেজ</label>
+                       <textarea required className="w-full p-5 bg-slate-50 border-none rounded-2xl outline-none font-bold text-xs h-32" placeholder="আপনার মেসেজ এখানে লিখুন..." value={notifyData.message} onChange={e => setNotifyData({...notifyData, message: e.target.value})} />
+                    </div>
+                    <button disabled={isSaving} type="submit" className="w-full bg-blue-600 text-white py-6 rounded-[2.5rem] font-black uppercase text-xs tracking-widest shadow-2xl active:scale-95 transition-all">
+                       {isSaving ? "পাঠানো হচ্ছে..." : "এখনই পাঠান 🚀"}
+                    </button>
+                 </form>
+              </div>
+           </div>
+        </div>
+      )}
+
+      {/* 🖼️ Add Ad/Catalog Modal */}
       {showModal && (
-        <div className="fixed inset-0 bg-[#020617]/95 backdrop-blur-3xl z-[3000] flex items-center justify-center p-4">
-          <div className="bg-white rounded-[5rem] w-full max-w-2xl shadow-2xl animate-reveal max-h-[95vh] overflow-y-auto custom-scroll text-black">
+        <div className="fixed inset-0 bg-slate-950/95 backdrop-blur-3xl z-[3000] flex items-center justify-center p-4">
+          <div className="bg-white rounded-[5rem] w-full max-w-2xl shadow-2xl animate-reveal max-h-[95vh] overflow-y-auto custom-scroll">
             <div className="p-10 md:p-14 space-y-10">
               <div className="flex justify-between items-center border-b pb-8">
-                <h3 className="text-2xl font-black text-slate-900 uppercase italic tracking-tighter leading-none">{editingAd ? 'পোস্ট আপডেট' : 'নতুন পোস্ট পাবলিশ'}</h3>
+                <h3 className="text-2xl font-black text-slate-900 uppercase italic">অফার বা ক্যাটালগ পোস্ট</h3>
                 <button onClick={() => setShowModal(false)} className="text-4xl text-slate-300 font-black">✕</button>
               </div>
-
-              <form onSubmit={handleSave} className="space-y-8">
-                <div className="space-y-2">
-                   <label className="text-[10px] font-black text-slate-400 uppercase ml-6 italic">সিরিজ বা শিরোনাম</label>
-                   <input required className="w-full p-8 bg-slate-50 border-none rounded-[2.5rem] font-black outline-none uppercase italic text-sm shadow-inner" placeholder="যেমন: White Gold Switch" value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} />
+              <form onSubmit={handleSave} className="space-y-6">
+                <div className="space-y-1">
+                   <label className="text-[9px] font-black text-slate-400 uppercase ml-4 italic">সিরিজ বা শিরোনাম</label>
+                   <input required className="w-full p-6 bg-slate-50 border-none rounded-[2rem] font-black outline-none uppercase italic text-sm" placeholder="White Gold Switch" value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} />
                 </div>
-                
                 <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                     <label className="text-[10px] font-black text-slate-400 uppercase ml-6 italic">কোম্পানি</label>
-                     <select className="w-full p-6 bg-slate-50 border-none rounded-[2rem] font-black text-[11px] uppercase outline-none shadow-inner" value={formData.company} onChange={e => setFormData({...formData, company: e.target.value as Company})}>
-                        <option value="Transtec">TRANSTEC</option>
-                        <option value="SQ Light">SQ LIGHT</option>
-                        <option value="SQ Cables">SQ CABLES</option>
-                     </select>
-                  </div>
-                  <div className="space-y-2">
-                     <label className="text-[10px] font-black text-slate-400 uppercase ml-6 italic">টাইপ</label>
-                     <select className="w-full p-6 bg-slate-50 border-none rounded-[2rem] font-black text-[11px] uppercase outline-none shadow-inner" value={formData.type} onChange={e => setFormData({...formData, type: e.target.value as any})}>
-                        <option value="OFFICIAL_CATALOG">OFFICIAL CATALOG</option>
-                        <option value="NEW_PRODUCT">NEW PRODUCT</option>
-                        <option value="OFFER">SPECIAL OFFER</option>
-                     </select>
-                  </div>
+                  <select className="p-5 bg-slate-50 border-none rounded-[1.8rem] font-black text-[11px] uppercase" value={formData.company} onChange={e => setFormData({...formData, company: e.target.value as Company})}>
+                     <option value="Transtec">TRANSTEC</option>
+                     <option value="SQ Light">SQ LIGHT</option>
+                     <option value="SQ Cables">SQ CABLES</option>
+                  </select>
+                  <select className="p-5 bg-slate-50 border-none rounded-[1.8rem] font-black text-[11px] uppercase" value={formData.type} onChange={e => setFormData({...formData, type: e.target.value as any})}>
+                     <option value="OFFICIAL_CATALOG">OFFICIAL CATALOG</option>
+                     <option value="NEW_PRODUCT">NEW PRODUCT</option>
+                     <option value="OFFER">SPECIAL OFFER</option>
+                  </select>
                 </div>
-
-                <div className="space-y-4">
-                   <label className="text-[10px] font-black text-slate-400 uppercase ml-6 italic">ছবি আপলোড</label>
-                   <div className="flex gap-6 items-center">
-                      <div className="w-24 h-24 bg-slate-50 border-2 border-dashed border-slate-200 rounded-[2.5rem] flex items-center justify-center overflow-hidden">
-                         {formData.image_url ? <img src={formData.image_url} className="w-full h-full object-cover" /> : <span className="text-2xl">📸</span>}
-                      </div>
-                      <button type="button" onClick={() => fileInputRef.current?.click()} className="bg-slate-900 text-white px-8 py-4 rounded-3xl font-black uppercase text-[10px] tracking-widest active:scale-95 transition-all">গ্যালারি ➔</button>
-                      <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleImageUpload} />
+                <div className="flex gap-6 items-center bg-slate-50 p-6 rounded-[2.5rem]">
+                   <div className="w-20 h-20 bg-white border-2 border-dashed border-slate-200 rounded-[1.5rem] flex items-center justify-center overflow-hidden">
+                      {formData.image_url ? <img src={formData.image_url} className="w-full h-full object-cover" /> : <span className="text-xl">🖼️</span>}
                    </div>
+                   <button type="button" onClick={() => fileInputRef.current?.click()} className="bg-slate-900 text-white px-8 py-3 rounded-2xl font-black uppercase text-[9px] tracking-widest shadow-lg">ছবি আপলোড</button>
+                   <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleImageUpload} />
                 </div>
-
-                <button 
-                  disabled={isSaving || isUploading} 
-                  type="submit" 
-                  className={`w-full text-white py-10 rounded-[3rem] font-black uppercase text-sm tracking-[0.4em] shadow-2xl active:scale-95 transition-all bg-[#2563eb] hover:bg-blue-700 disabled:opacity-50`}
-                >
+                <button disabled={isSaving || isUploading} type="submit" className="w-full bg-blue-600 text-white py-10 rounded-[3rem] font-black uppercase text-sm tracking-[0.4em] shadow-2xl active:scale-95 transition-all">
                   {isSaving ? "পাবলিশ হচ্ছে..." : "এখনই পাবলিশ করুন ➔"}
                 </button>
               </form>

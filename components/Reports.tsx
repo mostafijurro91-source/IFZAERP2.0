@@ -26,12 +26,13 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName, user }) 
   const [selectedRoute, setSelectedRoute] = useState("");
   const [routes, setRoutes] = useState<string[]>([]);
   
-  // States for individual row printing
   const [showSlipModal, setShowSlipModal] = useState(false);
   const [selectedSlipData, setSelectedSlipData] = useState<any>(null);
 
   const reportRef = useRef<HTMLDivElement>(null);
   const slipRef = useRef<HTMLDivElement>(null);
+
+  const isAdmin = userRole === 'ADMIN';
 
   useEffect(() => { fetchRoutes(); }, []);
   useEffect(() => { 
@@ -63,7 +64,6 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName, user }) 
           .select('*')
           .eq('company', dbCompany);
         
-        // Grouping by product name to sum up quantities
         const groupedMap: Record<string, any> = {};
         data?.forEach(r => {
           const key = r.product_name || 'Unknown Product';
@@ -156,17 +156,73 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName, user }) 
     } finally { setLoading(false); }
   };
 
+  /**
+   * Delete Logic (Maintained but removed from log UI as requested)
+   */
+  const handleDeleteTransaction = async (tx: any) => {
+    if (!isAdmin) return;
+    const typeLabel = tx.payment_type === 'COLLECTION' ? 'আদায়' : 'মেমো';
+    const confirmMsg = tx.payment_type === 'DUE' 
+      ? `আপনি কি নিশ্চিত এই মেমোটি (#${String(tx.id).slice(-6).toUpperCase()}) ডিলিট করতে চান? এটি ডিলিট করলে মালের স্টক স্বয়ংক্রিয়ভাবে আবার ইনভেন্টরিতে যোগ হয়ে যাবে।` 
+      : `আপনি কি নিশ্চিত এই আদায়ের এন্ট্রিটি চিরতরে মুছে ফেলতে চান?`;
+
+    if (!confirm(confirmMsg)) return;
+    
+    setLoading(true);
+    try {
+      if (tx.payment_type === 'DUE' && Array.isArray(tx.items)) {
+        for (const item of tx.items) {
+          if (item.id && item.qty) {
+            await supabase.rpc('increment_stock', { 
+              row_id: item.id, 
+              amt: Number(item.qty)
+            });
+          }
+        }
+      }
+      const { error } = await supabase.from('transactions').delete().eq('id', tx.id);
+      if (error) throw error;
+      alert("সফলভাবে ডিলিট এবং স্টক অ্যাডজাস্ট করা হয়েছে!");
+      fetchReport(activeReport);
+    } catch (err: any) {
+      alert("ডিলিট করা যায়নি: " + err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleDownloadPDF = async (ref: React.RefObject<HTMLDivElement>, filename: string) => {
     if (!ref.current || isDownloading) return;
     setIsDownloading(true);
     try {
       const element = ref.current;
-      const canvas = await html2canvas(element, { scale: 2.5, useCORS: true, backgroundColor: '#ffffff' });
+      const canvas = await html2canvas(element, { 
+        scale: 2, 
+        useCORS: true, 
+        backgroundColor: '#ffffff',
+        logging: false
+      });
+      
       const imgData = canvas.toDataURL('image/jpeg', 0.95);
-      const pdf = new jsPDF('p', 'mm', 'a5');
-      const pdfWidth = pdf.internal.pageSize.getWidth();
-      const imgHeight = (canvas.height * pdfWidth) / canvas.width;
-      pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, imgHeight);
+      const pdf = new jsPDF('p', 'mm', 'a4');
+      const pageWidth = pdf.internal.pageSize.getWidth();
+      const pageHeight = pdf.internal.pageSize.getHeight();
+      const imgWidth = pageWidth;
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+      
+      let heightLeft = imgHeight;
+      let position = 0;
+
+      pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight);
+      heightLeft -= pageHeight;
+
+      while (heightLeft >= 0) {
+        position = heightLeft - imgHeight;
+        pdf.addPage();
+        pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight);
+        heightLeft -= pageHeight;
+      }
+      
       pdf.save(`${filename}_${new Date().getTime()}.pdf`);
     } catch (err) {
       alert("PDF ডাউনলোড ব্যর্থ হয়েছে।");
@@ -265,33 +321,33 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName, user }) 
     <div className="bg-white p-6 md:p-12 rounded-[4rem] shadow-2xl min-h-[85vh] border relative animate-reveal text-black">
       <div className="flex justify-between items-center mb-12 no-print flex-wrap gap-6">
         <button onClick={() => setActiveReport('MAIN')} className="bg-slate-900 text-white px-10 py-5 rounded-[2rem] font-black text-[11px] uppercase shadow-2xl active:scale-95 transition-all">← ফিরে যান</button>
-        <div className="flex gap-4 flex-wrap items-center">
+        
+        <div className="flex gap-4 flex-wrap items-center bg-slate-50 p-4 rounded-[2.5rem] border shadow-inner">
           {!isBooking && !isRepl && (
             <div className="flex flex-col">
-              <label className="text-[8px] font-black uppercase text-slate-400 ml-3 mb-1">তারিখ বাছাই</label>
-              <input type="date" className="p-4 border-2 border-slate-100 rounded-[2rem] text-[10px] font-black outline-none bg-slate-50" value={selectedDate} onChange={e => setSelectedDate(e.target.value)} />
+              <label className="text-[8px] font-black uppercase text-slate-400 ml-4 mb-1 italic">তারিখ অনুযায়ী খুঁজুন</label>
+              <input type="date" className="p-4 border-2 border-white rounded-[1.8rem] text-[11px] font-black outline-none bg-white shadow-sm focus:border-blue-500 transition-all" value={selectedDate} onChange={e => setSelectedDate(e.target.value)} />
             </div>
           )}
           <div className="flex flex-col">
-            <label className="text-[8px] font-black uppercase text-slate-400 ml-3 mb-1">সার্চ ({isRepl ? 'প্রোডাক্ট' : 'দোকান'})</label>
-            <input className="p-4 border-2 border-slate-100 rounded-[2rem] text-[10px] font-black outline-none bg-slate-50 min-w-[180px]" placeholder="Search..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
+            <label className="text-[8px] font-black uppercase text-slate-400 ml-4 mb-1 italic">সার্চ ({isRepl ? 'প্রোডাক্ট' : 'দোকান'})</label>
+            <input className="p-4 border-2 border-white rounded-[1.8rem] text-[11px] font-black outline-none bg-white shadow-sm min-w-[200px] focus:border-blue-500 transition-all" placeholder="নাম বা ঠিকানা লিখুন..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
           </div>
           <div className="flex gap-2 self-end">
-            <button disabled={isDownloading || loading} onClick={() => handleDownloadPDF(reportRef, 'Full_Report')} className="bg-emerald-600 text-white px-8 py-5 rounded-[2rem] font-black text-[11px] uppercase shadow-2xl active:scale-95 transition-all">
-              {isDownloading ? "ডাউনলোড..." : "Full Report PDF ⬇"}
+            <button disabled={isDownloading || loading} onClick={() => handleDownloadPDF(reportRef, 'Full_Report')} className="bg-emerald-600 text-white px-8 py-5 rounded-[1.8rem] font-black text-[11px] uppercase shadow-lg active:scale-95 transition-all">
+              {isDownloading ? "ডাউনলোড..." : "PDF ডাউনলোড ⬇"}
             </button>
-            <button onClick={() => window.print()} className="bg-blue-600 text-white px-8 py-5 rounded-[2rem] font-black text-[11px] uppercase shadow-2xl active:scale-95">প্রিন্ট শিট ⎙</button>
+            <button onClick={() => window.print()} className="bg-blue-600 text-white px-8 py-5 rounded-[1.8rem] font-black text-[11px] uppercase shadow-lg active:scale-95">প্রিন্ট শিট ⎙</button>
           </div>
         </div>
       </div>
 
-      {/* Main Report Container */}
-      <div className="max-w-[148mm] mx-auto border-2 border-slate-100 p-2 overflow-hidden bg-slate-50 rounded-2xl shadow-inner no-print">
-         <p className="text-[8px] font-black text-center text-slate-400 mb-2 uppercase tracking-widest italic">A5 Page Preview</p>
-         <div ref={reportRef} className="print-area printable-content p-8 bg-white text-black min-h-fit flex flex-col border-2 border-black">
+      <div className="max-w-[210mm] mx-auto border-2 border-slate-100 p-2 overflow-hidden bg-slate-50 rounded-2xl shadow-inner no-print">
+         <p className="text-[8px] font-black text-center text-slate-400 mb-2 uppercase tracking-widest italic">A4 Page Preview (ডেলিভারি ম্যানের জন্য প্রস্তুত)</p>
+         <div ref={reportRef} className="print-area printable-content p-10 bg-white text-black min-h-fit flex flex-col border-2 border-black">
             <style>{`
                @media print {
-                  @page { size: A5; margin: 8mm; }
+                  @page { size: A4; margin: 10mm; }
                   body * { visibility: hidden !important; }
                   .printable-content, .printable-content * { 
                     visibility: visible !important; 
@@ -300,60 +356,59 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName, user }) 
                     -webkit-print-color-adjust: exact;
                   }
                   .printable-content { position: static !important; width: 100% !important; padding: 0 !important; border: none !important; box-shadow: none !important; display: block !important; }
-                  table { font-size: 8px !important; border: 1.2px solid #000 !important; border-collapse: collapse !important; width: 100% !important; }
-                  th, td { padding: 5px 3px !important; border: 1px solid #000 !important; }
+                  table { font-size: 10px !important; border: 1.5px solid #000 !important; border-collapse: collapse !important; width: 100% !important; }
+                  th, td { padding: 12px 6px !important; border: 1px solid #000 !important; }
                   .no-print-col { display: none !important; }
                }
             `}</style>
-            <div className="text-center border-b-4 border-black pb-4 mb-4 relative">
-               <h1 className="text-4xl font-black uppercase italic mb-1 tracking-tighter text-black leading-none">IFZA ELECTRONICS</h1>
-               <p className="text-[12px] font-black uppercase tracking-[0.3em] mb-1 text-black">{isCombined ? 'ALL' : company} DIVISIONS</p>
-               <div className="inline-block px-6 py-1.5 bg-black text-white text-[9px] font-black uppercase rounded-full italic tracking-widest">
-                  {activeReport.replace(/_/g, ' ')}
+            <div className="text-center border-b-4 border-black pb-6 mb-8 relative">
+               <h1 className="text-5xl font-black uppercase italic mb-1 tracking-tighter text-black leading-none">IFZA ELECTRONICS</h1>
+               <p className="text-lg font-black uppercase tracking-[0.4em] mb-2 text-black">{isCombined ? 'ALL' : company} DIVISIONS</p>
+               <div className="inline-block px-10 py-2 bg-black text-white text-xs font-black uppercase rounded-full italic tracking-widest mt-2">
+                  {activeReport.replace(/_/g, ' ')} ({new Date(selectedDate).toLocaleDateString('bn-BD')})
                </div>
             </div>
 
             <table className="w-full border-collapse border-2 border-black flex-1">
                <thead>
-                  <tr className="bg-slate-50 text-[9px] font-black uppercase italic border-b-2 border-black text-black">
-                     <th className="p-2 border-r border-black text-center w-8">#</th>
-                     <th className="p-2 border-r border-black text-left">{isRepl ? 'পণ্যের নাম' : 'বিবরণ ও ঠিকানা'}</th>
+                  <tr className="bg-slate-50 text-[11px] font-black uppercase italic border-b-2 border-black text-black">
+                     <th className="p-3 border-r border-black text-center w-10">#</th>
+                     <th className="p-3 border-r border-black text-left">{isRepl ? 'পণ্যের নাম' : 'বিবরণ ও ঠিকানা'}</th>
                      {isBooking ? (
                        <>
-                        <th className="p-2 border-r border-black text-center w-14">অর্ডার</th>
-                        <th className="p-2 border-r border-black text-center w-14">গেছে</th>
-                        <th className="p-2 border-r border-black text-center w-14">বাকি</th>
-                        <th className="p-2 no-print-col text-center w-16">অ্যাকশন</th>
+                        <th className="p-3 border-r border-black text-center w-20">অর্ডার</th>
+                        <th className="p-3 border-r border-black text-center w-20">গেছে</th>
+                        <th className="p-3 border-r border-black text-center w-20">বাকি</th>
+                        <th className="p-3 no-print-col text-center w-20">অ্যাকশন</th>
                        </>
                      ) : isRepl ? (
                        <>
-                        <th className="p-2 border-r border-black text-center w-12">পেন্ডিং</th>
-                        <th className="p-2 border-r border-black text-center w-12">প্রাপ্ত</th>
-                        <th className="p-2 border-r border-black text-center w-12">প্রেরিত</th>
-                        <th className="p-2 border-r border-black text-center w-16">মোট</th>
+                        <th className="p-3 border-r border-black text-center w-16">পেন্ডিং</th>
+                        <th className="p-3 border-r border-black text-center w-16">প্রাপ্ত</th>
+                        <th className="p-3 border-r border-black text-center w-16">প্রেরিত</th>
+                        <th className="p-3 border-r border-black text-center w-20">মোট</th>
                        </>
                      ) : (
                        <>
-                        <th className="p-2 border-r border-black text-right w-20">টাকা</th>
-                        {!isLog && <th className="p-2 border-r border-black text-center w-16">{isDue ? 'বকেয়া' : 'পরিমাণ'}</th>}
+                        <th className="p-3 border-r border-black text-right w-32">টাকা</th>
+                        {!isLog && <th className="p-3 border-r border-black text-center w-24">{isDue ? 'বকেয়া' : 'পরিমাণ'}</th>}
                         {isLog && (
                           <>
-                            <th className="p-2 border-r border-black text-center w-24">নোট</th>
-                            <th className="p-2 border-r border-black text-center w-20">স্বাক্ষর</th>
+                            <th className="p-3 border-r border-black text-center w-24">আদায় (হাতে)</th>
+                            <th className="p-3 border-r border-black text-center w-28">স্বাক্ষর</th>
                           </>
                         )}
                        </>
                      )}
                   </tr>
                </thead>
-               <tbody className="divide-y divide-black/30 text-[9px] font-bold">
+               <tbody className="divide-y divide-black/30 text-[11px] font-bold">
                   {loading ? (
-                    <tr><td colSpan={6} className="p-10 text-center animate-pulse">লোডিং...</td></tr>
+                    <tr><td colSpan={6} className="p-20 text-center animate-pulse">লোডিং...</td></tr>
                   ) : filteredData.length === 0 ? (
-                    <tr><td colSpan={6} className="p-10 text-center">কোনো ডাটা পাওয়া যায়নি</td></tr>
+                    <tr><td colSpan={6} className="p-20 text-center">এই তারিখে কোনো ডাটা পাওয়া যায়নি</td></tr>
                   ) : filteredData.map((item, idx) => {
                      const amount = Number(item.amount || item.balance || item.total_amount || (item.stock * item.tp) || 0);
-                     // সঠিক ডাটা কল করা (মাস্টার লগ এবং ট্রানজ্যাকশনের জন্য)
                      const shopName = item.customers?.name || item.customer_name || item.name || item.product_name;
                      const shopAddress = item.customers?.address || item.address || '—';
                      const displayCompany = item.company ? `[${item.company}]` : '';
@@ -361,15 +416,15 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName, user }) 
 
                      return (
                         <tr key={idx} className="border-b border-black text-black">
-                           <td className="p-2 border-r border-black text-center">{idx + 1}</td>
-                           <td className="p-2 border-r border-black">
+                           <td className="p-3 border-r border-black text-center">{idx + 1}</td>
+                           <td className="p-3 border-r border-black">
                               <div className="flex flex-col">
-                                 <p className="font-black uppercase text-black">
-                                    {isCombined ? <span className="text-blue-700 mr-1">{displayCompany}</span> : ''}
+                                 <p className="font-black uppercase text-black text-[12px]">
+                                    {isCombined ? <span className="text-blue-700 mr-2">{displayCompany}</span> : ''}
                                     {shopName}
                                  </p>
                                  {!isRepl && (
-                                   <p className="text-[7px] font-bold italic opacity-80 leading-none mt-0.5">
+                                   <p className="text-[9px] font-bold italic opacity-80 leading-none mt-1">
                                      {isBooking ? `${item.name} | ` : ''} 📍 {shopAddress}
                                    </p>
                                  )}
@@ -378,30 +433,30 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName, user }) 
                            
                            {isBooking ? (
                              <>
-                               <td className="p-2 border-r border-black text-center">{item.qty}</td>
-                               <td className="p-2 border-r border-black text-center text-blue-600">{item.delivered_qty}</td>
-                               <td className="p-2 border-r border-black text-center text-red-600">{item.qty - item.delivered_qty}</td>
-                               <td className="p-1 text-center no-print-col">
-                                  <button onClick={() => { setSelectedSlipData(item); setShowSlipModal(true); }} className="bg-slate-900 text-white px-2 py-1 rounded text-[7px] font-black uppercase">স্লিপ 🖨️</button>
+                               <td className="p-3 border-r border-black text-center">{item.qty}</td>
+                               <td className="p-3 border-r border-black text-center text-blue-600">{item.delivered_qty}</td>
+                               <td className="p-3 border-r border-black text-center text-red-600">{item.qty - item.delivered_qty}</td>
+                               <td className="p-2 text-center no-print-col">
+                                  <button onClick={() => { setSelectedSlipData(item); setShowSlipModal(true); }} className="bg-slate-900 text-white px-3 py-1.5 rounded text-[8px] font-black uppercase">স্লিপ 🖨️</button>
                                </td>
                              </>
                            ) : isRepl ? (
                              <>
-                               <td className="p-2 border-r border-black text-center text-slate-400">{item.pending}</td>
-                               <td className="p-2 border-r border-black text-center text-blue-600">{item.received}</td>
-                               <td className="p-2 border-r border-black text-center text-rose-500">{item.sent}</td>
-                               <td className="p-2 border-r border-black text-center font-black">{item.qty}</td>
+                               <td className="p-3 border-r border-black text-center text-slate-400">{item.pending}</td>
+                               <td className="p-3 border-r border-black text-center text-blue-600">{item.received}</td>
+                               <td className="p-3 border-r border-black text-center text-rose-500">{item.sent}</td>
+                               <td className="p-3 border-r border-black text-center font-black">{item.qty}</td>
                              </>
                            ) : (
                              <>
-                               <td className={`p-2 border-r border-black text-right font-black italic ${isCollection ? 'text-emerald-600' : (amount < 0 ? 'text-red-600' : '')}`}>
+                               <td className={`p-3 border-r border-black text-right font-black italic text-[13px] ${isCollection ? 'text-emerald-600' : (amount < 0 ? 'text-red-600' : '')}`}>
                                   {isCollection ? '-' : ''}৳{Math.abs(amount).toLocaleString()}
                                </td>
-                               {!isLog && <td className="p-2 border-r border-black text-center">{isDue ? '—' : (item.stock || item.total_qty || 0)}</td>}
+                               {!isLog && <td className="p-3 border-r border-black text-center">{isDue ? '—' : (item.stock || item.total_qty || 0)}</td>}
                                {isLog && (
                                <>
-                                  <td className="p-2 border-r border-black h-12"></td>
-                                  <td className="p-2 border-r border-black h-12"></td>
+                                  <td className="p-3 border-r border-black h-16 w-24"></td>
+                                  <td className="p-3 border-r border-black h-16"></td>
                                </>
                                )}
                              </>
@@ -412,18 +467,19 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName, user }) 
                </tbody>
             </table>
 
-            <div className="mt-8 border-t-2 border-black pt-4 flex justify-between items-end">
-               <div className="text-[8px] font-black uppercase italic space-y-1">
+            <div className="mt-12 border-t-4 border-black pt-6 flex justify-between items-end">
+               <div className="text-[10px] font-black uppercase italic space-y-1.5">
                   <p>* জেনারেট টাইম: {new Date().toLocaleString('bn-BD')}</p>
                   <p>* রিপোর্ট মেকার: {userName || 'SYSTEM'}</p>
+                  <p className="text-[8px] mt-2 opacity-50 font-black">বিঃদ্রঃ "আদায় (হাতে)" কলামে ডেলিভারি ম্যান কত টাকা পেলেন তা লিখবেন।</p>
                </div>
-               <div className="w-48 space-y-1 text-right">
-                  <div className="flex justify-between text-[10px] font-black border-b border-black">
+               <div className="w-64 space-y-2 text-right">
+                  <div className="flex justify-between text-[11px] font-black border-b border-black/20 pb-1">
                      <span>TOTAL QTY:</span>
                      <span>{totals.totalQty}</span>
                   </div>
                   {!isRepl && (
-                    <div className="flex justify-between text-[14px] font-black text-black">
+                    <div className="flex justify-between text-2xl font-black text-black tracking-tighter">
                       <span>G. TOTAL:</span>
                       <span>৳{(totals.sales || totals.totalDue || totals.stockValue).toLocaleString()}</span>
                     </div>
@@ -433,7 +489,6 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName, user }) 
          </div>
       </div>
 
-      {/* 🧾 INDIVIDUAL DELIVERY SLIP MODAL */}
       {showSlipModal && selectedSlipData && (
         <div className="fixed inset-0 bg-slate-950/95 backdrop-blur-xl z-[5000] flex flex-col items-center p-4 overflow-y-auto no-print">
            <div className="w-full max-w-[148mm] flex justify-between gap-6 mb-8 sticky top-0 z-[5001] bg-slate-900/90 p-6 rounded-3xl border border-white/10 shadow-2xl items-center">
