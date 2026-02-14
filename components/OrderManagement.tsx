@@ -29,6 +29,7 @@ const OrderManagement: React.FC<OrderManagementProps> = ({ company, user }) => {
   const [currentStep, setCurrentStep] = useState(1); 
 
   const isAdmin = user.role === 'ADMIN';
+  const isStaff = user.role === 'STAFF';
 
   useEffect(() => { fetchData(); }, [company]);
 
@@ -50,16 +51,23 @@ const OrderManagement: React.FC<OrderManagementProps> = ({ company, user }) => {
 
   const handleDeleteOrder = async (id: string, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
-    if (!isAdmin) return;
+    // Allow both ADMIN and STAFF to delete orders (to fix customer mistakes)
+    if (!isAdmin && !isStaff) return alert("আপনার অর্ডার ডিলিট করার অনুমতি নেই।");
+    
     if (!confirm("আপনি কি নিশ্চিত এই মার্কেট অর্ডারটি ডিলিট করতে চান?")) return;
     
+    setLoading(true);
     try {
       const { error } = await supabase.from('market_orders').delete().eq('id', id);
       if (error) throw error;
-      alert("অর্ডার ডিলিট করা হয়েছে!");
+      alert("অর্ডারটি সফলভাবে ডিলিট করা হয়েছে!");
       setShowDetailModal(false);
       fetchData();
-    } catch (err: any) { alert(err.message); }
+    } catch (err: any) { 
+      alert("ডিলিট করা যায়নি: " + err.message); 
+    } finally {
+      setLoading(false);
+    }
   };
 
   const addToCart = (p: Product) => {
@@ -91,18 +99,31 @@ const OrderManagement: React.FC<OrderManagementProps> = ({ company, user }) => {
   };
 
   const handleApproveOrder = async () => {
-    if (!selectedOrder || !isAdmin) return;
-    if (!confirm("অর্ডার কনফার্ম করতে চান? এটি করলে স্টক আপডেট হবে।")) return;
+    if (!selectedOrder) return;
+    if (!confirm("অর্ডার কনফার্ম করতে চান? এটি করলে স্টক আপডেট হবে এবং মেমো তৈরি হবে।")) return;
     setIsSaving(true);
     try {
       const dbCo = mapToDbCompany(company);
-      for (const item of selectedOrder.items) { await supabase.rpc('increment_stock', { row_id: item.id, amt: -item.qty }); }
+      for (const item of selectedOrder.items) { 
+        await supabase.rpc('increment_stock', { row_id: item.id, amt: -item.qty }); 
+      }
       await supabase.from('transactions').insert([{
-        customer_id: selectedOrder.customer_id, company: dbCo, amount: selectedOrder.total_amount, payment_type: 'DUE', items: selectedOrder.items, submitted_by: selectedOrder.created_by
+        customer_id: selectedOrder.customer_id, 
+        company: dbCo, 
+        amount: selectedOrder.total_amount, 
+        payment_type: 'DUE', 
+        items: selectedOrder.items, 
+        submitted_by: selectedOrder.created_by
       }]);
       await supabase.from('market_orders').update({ status: 'COMPLETED' }).eq('id', selectedOrder.id);
-      alert("স্টক আপডেট হয়েছে! ✅"); setShowDetailModal(false); fetchData();
-    } catch (err: any) { alert(err.message); } finally { setIsSaving(false); }
+      alert("অর্ডারটি সফলভাবে মেমোতে রূপান্তর করা হয়েছে! ✅"); 
+      setShowDetailModal(false); 
+      fetchData();
+    } catch (err: any) { 
+      alert("ত্রুটি: " + err.message); 
+    } finally { 
+      setIsSaving(false); 
+    }
   };
 
   const filteredModalCustomers = useMemo(() => {
@@ -136,7 +157,16 @@ const OrderManagement: React.FC<OrderManagementProps> = ({ company, user }) => {
           <div key={order.id} onClick={() => { setSelectedOrder(order); setShowDetailModal(true); }} className="bg-white p-8 rounded-[3rem] border border-slate-100 shadow-sm hover:shadow-xl transition-all cursor-pointer group animate-reveal">
              <div className="flex justify-between items-start mb-6">
                 <span className={`px-4 py-1.5 rounded-xl text-[8px] font-black uppercase tracking-widest ${order.status === 'PENDING' ? 'bg-orange-50 text-orange-600' : 'bg-emerald-50 text-emerald-600'}`}>{order.status}</span>
-                {isAdmin && <button onClick={(e) => handleDeleteOrder(order.id, e)} className="text-red-300 hover:text-red-600 transition-colors text-lg">🗑️</button>}
+                {/* 🗑️ Delete Button for Admin and Staff */}
+                {(isAdmin || isStaff) && (
+                  <button 
+                    onClick={(e) => handleDeleteOrder(order.id, e)} 
+                    className="w-10 h-10 bg-red-50 text-red-500 rounded-xl flex items-center justify-center border shadow-sm hover:bg-red-600 hover:text-white transition-all active:scale-90"
+                    title="Delete Wrong Order"
+                  >
+                    🗑️
+                  </button>
+                )}
              </div>
              <h4 className="font-black text-slate-900 text-xl uppercase italic leading-none truncate mb-2">{order.customers?.name}</h4>
              <p className="text-[10px] text-slate-400 font-black uppercase italic truncate tracking-widest">📍 এরিয়া: {order.customers?.address || 'অনির্ধারিত'}</p>
@@ -160,7 +190,7 @@ const OrderManagement: React.FC<OrderManagementProps> = ({ company, user }) => {
                     <p className="text-[10px] text-slate-500 mt-2 uppercase font-black tracking-widest">Order ID: #{String(selectedOrder.id).slice(-6).toUpperCase()}</p>
                  </div>
                  <div className="flex gap-4">
-                    {isAdmin && <button onClick={() => handleDeleteOrder(selectedOrder.id)} className="text-red-400 text-2xl">🗑️</button>}
+                    {(isAdmin || isStaff) && <button onClick={() => handleDeleteOrder(selectedOrder.id)} className="w-12 h-12 bg-red-600/20 text-red-500 rounded-2xl flex items-center justify-center hover:bg-red-600 hover:text-white transition-all">🗑️</button>}
                     <button onClick={() => setShowDetailModal(false)} className="text-4xl text-slate-500 font-black hover:text-white transition-colors">✕</button>
                  </div>
               </div>
@@ -195,11 +225,11 @@ const OrderManagement: React.FC<OrderManagementProps> = ({ company, user }) => {
                     <p className="text-4xl font-black italic tracking-tighter text-slate-900">{formatCurrency(selectedOrder.total_amount)}</p>
                  </div>
               </div>
-              <div className="p-10 bg-slate-900 border-t flex flex-col md:flex-row gap-4 shrink-0">
-                 {isAdmin && selectedOrder.status === 'PENDING' && (
-                    <button disabled={isSaving} onClick={handleApproveOrder} className="flex-1 bg-blue-600 text-white py-6 rounded-3xl font-black uppercase text-xs tracking-[0.2em] shadow-2xl active:scale-95 transition-all hover:bg-emerald-600">অর্ডার অ্যাপ্রুভ ও মেমো তৈরি ✅</button>
+              <div className="p-10 bg-slate-50 border-t flex flex-col md:flex-row gap-4 shrink-0">
+                 {selectedOrder.status === 'PENDING' && (
+                    <button disabled={isSaving} onClick={handleApproveOrder} className="flex-1 bg-blue-600 text-white py-6 rounded-3xl font-black uppercase text-xs tracking-[0.2em] shadow-xl active:scale-95 transition-all hover:bg-emerald-600">অর্ডার অ্যাপ্রুভ ও মেমো তৈরি ✅</button>
                  )}
-                 <button onClick={() => setShowDetailModal(false)} className="px-12 py-6 text-white font-black uppercase text-[10px] tracking-widest bg-white/10 rounded-3xl">বন্ধ করুন</button>
+                 <button onClick={() => setShowDetailModal(false)} className="px-12 py-6 text-slate-500 font-black uppercase text-[10px] tracking-widest bg-white border rounded-3xl active:scale-95">বন্ধ করুন</button>
               </div>
            </div>
         </div>

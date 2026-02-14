@@ -33,6 +33,7 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName, user }) 
   const slipRef = useRef<HTMLDivElement>(null);
 
   const isAdmin = userRole === 'ADMIN';
+  const isStaff = userRole === 'STAFF';
 
   useEffect(() => { fetchRoutes(); }, []);
   useEffect(() => { 
@@ -157,27 +158,43 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName, user }) 
   };
 
   const handleDeleteTransaction = async (tx: any) => {
-    if (!isAdmin) return alert("আপনার ট্রানজেকশন ডিলিট করার অনুমতি নেই।");
+    // 🛡️ Allow both Admin and Staff to delete mistake entries
+    if (!isAdmin && !isStaff) return alert("আপনার ট্রানজেকশন ডিলিট করার অনুমতি নেই।");
+    
+    const memoIdShort = String(tx.id).slice(-6).toUpperCase();
     const confirmMsg = tx.payment_type === 'DUE' 
-      ? `আপনি কি নিশ্চিত এই মেমোটি (#${String(tx.id).slice(-6).toUpperCase()}) ডিলিট করতে চান? এটি ডিলিট করলে মালের স্টক স্বয়ংক্রিয়ভাবে আবার ইনভেন্টরিতে যোগ হয়ে যাবে।` 
-      : `আপনি কি নিশ্চিত এই আদায়ের এন্ট্রিটি চিরতরে মুছে ফেলতে চান?`;
+      ? `আপনি কি নিশ্চিত এই মেমোটি (#${memoIdShort}) ডিলিট করতে চান? এটি ডিলিট করলে মালের স্টক স্বয়ংক্রিয়ভাবে আবার ইনভেন্টরিতে যোগ হয়ে যাবে।` 
+      : `আপনি কি নিশ্চিত এই আদায়ের এন্ট্রিটি (#${memoIdShort}) মুছে ফেলতে চান?`;
 
     if (!confirm(confirmMsg)) return;
     
     setLoading(true);
     try {
+      // 1. Revert Stock if it was a Sale Memo
       if (tx.payment_type === 'DUE' && Array.isArray(tx.items)) {
         for (const item of tx.items) {
           if (item.id && item.qty) {
+            // If it was a return, decrement stock; if sale, increment stock
+            const amtToRevert = item.action === 'RETURN' ? -Number(item.qty) : Number(item.qty);
             await supabase.rpc('increment_stock', { 
               row_id: item.id, 
-              amt: Number(item.qty)
+              amt: amtToRevert
             });
           }
         }
       }
+
+      // 2. Remove any associated notifications from customer inbox
+      await supabase
+        .from('notifications')
+        .delete()
+        .eq('customer_id', tx.customer_id)
+        .ilike('message', `%#${memoIdShort}%`);
+
+      // 3. Delete the transaction
       const { error } = await supabase.from('transactions').delete().eq('id', tx.id);
       if (error) throw error;
+
       alert("সফলভাবে ডিলিট এবং স্টক অ্যাডজাস্ট করা হয়েছে!");
       fetchReport(activeReport);
     } catch (err: any) {
@@ -275,7 +292,6 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName, user }) 
   const isDue = activeReport === 'CUSTOMER_DUES';
 
   if (activeReport === 'MAIN') {
-    // 🛡️ ROLE BASED REPORT FILTERING
     const reportOptions = [
       { id: 'MASTER_LOG_ALL', title: 'MASTER LOG (3-IN-1)', icon: '🚛', desc: 'তিন কোম্পানির রিপোর্ট এক সাথে দেখুন', color: 'bg-blue-600', anim: 'hover-float', roles: ['ADMIN'] },
       { id: 'DELIVERY_LOG_A4', title: 'DIVISION LOG', icon: '🚚', desc: 'ডেলিভারি ও আদায় শিট', color: 'bg-slate-900', anim: 'hover-truck', roles: ['ADMIN'] },
@@ -384,7 +400,7 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName, user }) 
                         {isLog && (
                           <>
                             <th className="p-3 border-r border-black text-center w-24">আদায় (হাতে)</th>
-                            <th className="p-3 border-r border-black text-center w-28">স্বাক্ষর</th>
+                            <th className="p-3 border-r border-black text-center w-28">অ্যাকশন</th>
                           </>
                         )}
                        </>
@@ -444,8 +460,18 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName, user }) 
                                {!isLog && <td className="p-3 border-r border-black text-center">{isDue ? '—' : (item.stock || item.total_qty || 0)}</td>}
                                {isLog && (
                                <>
-                                  <td className="p-3 border-r border-black h-16 w-24"></td>
-                                  <td className="p-3 border-r border-black h-16"></td>
+                                  <td className="p-3 border-r border-black h-16 w-24 text-center align-middle">
+                                     {/* Column for manual collection check in print */}
+                                  </td>
+                                  <td className="p-3 border-r border-black text-center no-print-col">
+                                     <button 
+                                       onClick={() => handleDeleteTransaction(item)}
+                                       className="w-10 h-10 bg-red-50 text-red-600 rounded-xl hover:bg-red-600 hover:text-white transition-all shadow-sm flex items-center justify-center text-sm"
+                                       title="Delete Mistake Memo"
+                                     >
+                                        🗑️
+                                     </button>
+                                  </td>
                                </>
                                )}
                              </>
@@ -460,7 +486,7 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName, user }) 
                <div className="text-[10px] font-black uppercase italic space-y-1.5">
                   <p>* জেনারেট টাইম: {new Date().toLocaleString('bn-BD')}</p>
                   <p>* রিপোর্ট মেকার: {userName || 'SYSTEM'}</p>
-                  <p className="text-[8px] mt-2 opacity-50 font-black">বিঃদ্রঃ "আদায় (হাতে)" কলামে ডেলিভারি ম্যান কত টাকা পেলেন তা লিখবেন।</p>
+                  <p className="text-[8px] mt-2 opacity-50 font-black">বিঃদ্রঃ কোনো মেমো ভুল হলে "অ্যাকশন" কলাম থেকে ডিলিট করুন। ডিলিট করলে মাল স্টকে ফিরে যাবে।</p>
                </div>
                <div className="w-64 space-y-2 text-right">
                   <div className="flex justify-between text-[11px] font-black border-b border-black/20 pb-1">
