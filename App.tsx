@@ -105,16 +105,17 @@ const App: React.FC = () => {
   };
 
   if (!initialized) return (
-    <div className="h-screen flex flex-col items-center justify-between bg-[#05070a] text-white py-20">
+    <div className="h-screen flex flex-col items-center justify-between bg-[#05070a] text-white py-20 overflow-hidden">
       <div className="flex-1 flex flex-col items-center justify-center">
-        <div className="relative mb-8">
+        <div className="relative mb-12">
             <div className="w-24 h-24 border-[6px] border-blue-500/10 border-t-blue-600 rounded-full animate-spin"></div>
             <div className="absolute inset-0 flex items-center justify-center font-black text-2xl italic text-blue-500">if</div>
         </div>
-        <p className="font-black uppercase text-[12px] tracking-[0.8em] text-blue-500 animate-pulse">IFZA ELECTRONICS</p>
+        <p className="font-black uppercase text-[10px] tracking-[1em] text-blue-500 animate-pulse ml-4">IFZA ELECTRONICS</p>
       </div>
-      <div className="animate-reveal">
-         <p className="text-5xl font-black italic tracking-tighter text-white/20 uppercase">IFZA</p>
+      <div className="animate-reveal flex flex-col items-center">
+         <p className="text-6xl font-black italic tracking-tighter text-white/20 uppercase">IFZA</p>
+         <div className="w-12 h-1 bg-blue-600/30 rounded-full mt-4"></div>
       </div>
     </div>
   );
@@ -162,7 +163,7 @@ const App: React.FC = () => {
         </header>
 
         {isCustomer && (
-          <div className="bg-white border-b px-4 md:px-10 py-4 flex gap-3 overflow-x-auto no-scrollbar shrink-0 z-30 shadow-md">
+          <div className="bg-white border-b px-4 md:px-10 py-4 flex gap-2 md:gap-3 overflow-x-auto no-scrollbar shrink-0 z-30 shadow-sm">
              {[
                { id: 'portal_dashboard', label: '🏠 হোম', color: 'blue' },
                { id: 'portal_order', label: '🛒 অর্ডার', color: 'indigo' },
@@ -173,14 +174,14 @@ const App: React.FC = () => {
                <button 
                  key={nav.id} 
                  onClick={() => setActiveTab(nav.id)}
-                 className={`px-6 py-4 rounded-[2rem] text-[14px] font-black uppercase tracking-wider transition-all whitespace-nowrap flex flex-col items-center justify-center gap-1 border-2 min-w-[110px] flex-1 ${
+                 className={`px-4 py-3 rounded-2xl md:px-8 md:py-4 md:rounded-[2rem] text-[12px] md:text-[14px] font-black uppercase tracking-wider transition-all whitespace-nowrap flex flex-col items-center justify-center gap-1 border-2 flex-1 min-w-[80px] md:min-w-[110px] ${
                    activeTab === nav.id 
                    ? 'bg-blue-600 text-white border-blue-600 shadow-xl scale-105' 
                    : 'bg-white text-slate-400 border-slate-100 hover:border-blue-200'
                  }`}
                >
-                 <span className="text-2xl mb-1">{nav.label.split(' ')[0]}</span>
-                 <span className="text-[11px] font-black">{nav.label.split(' ')[1]}</span>
+                 <span className="text-xl md:text-2xl mb-1">{nav.label.split(' ')[0]}</span>
+                 <span className="text-[10px] md:text-[11px] font-black">{nav.label.split(' ')[1]}</span>
                </button>
              ))}
           </div>
