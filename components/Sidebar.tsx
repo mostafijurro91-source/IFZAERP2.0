@@ -38,13 +38,11 @@ const Sidebar: React.FC<SidebarProps> = ({
     if (!isCustomer) {
       fetchCounts();
       
-      // Real-time subscription for collection requests
       const collectionChannel = supabase
         .channel('schema-db-changes-collections')
         .on('postgres_changes', { event: '*', schema: 'public', table: 'collection_requests' }, () => fetchCounts())
         .subscribe();
 
-      // Real-time subscription for market orders
       const ordersChannel = supabase
         .channel('schema-db-changes-orders')
         .on('postgres_changes', { event: '*', schema: 'public', table: 'market_orders' }, () => fetchCounts())
@@ -62,15 +60,22 @@ const Sidebar: React.FC<SidebarProps> = ({
   const fetchCounts = async () => {
     try {
       const dbCo = mapToDbCompany(selectedCompany);
-      
+      const today = new Date().toISOString().split('T')[0];
+      const startOfDay = `${today}T00:00:00.000Z`;
+
       // 1. Fetch Pending Collections
       let collQuery = supabase.from('collection_requests').select('*', { count: 'exact', head: true }).eq('status', 'PENDING');
       if (isStaff) collQuery = collQuery.eq('company', mapToDbCompany(user.company));
       const { count: cCount } = await collQuery;
       setPendingCollections(cCount || 0);
 
-      // 2. Fetch Pending Market Orders
-      let orderQuery = supabase.from('market_orders').select('*', { count: 'exact', head: true }).eq('status', 'PENDING');
+      // 2. Fetch Pending Market Orders (Filter by Today for badge)
+      let orderQuery = supabase
+        .from('market_orders')
+        .select('*', { count: 'exact', head: true })
+        .eq('status', 'PENDING')
+        .gte('created_at', startOfDay);
+        
       if (isStaff) orderQuery = orderQuery.eq('company', mapToDbCompany(user.company));
       else orderQuery = orderQuery.eq('company', dbCo);
       
