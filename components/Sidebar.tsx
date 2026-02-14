@@ -24,7 +24,8 @@ const Sidebar: React.FC<SidebarProps> = ({
   isOpen,
   onClose
 }) => {
-  const [pendingCount, setPendingCount] = useState(0);
+  const [pendingCollections, setPendingCollections] = useState(0);
+  const [pendingOrders, setPendingOrders] = useState(0);
   const [hasCustomerDue, setHasCustomerDue] = useState(false);
   
   const isCustomer = user.role === 'CUSTOMER';
@@ -35,21 +36,47 @@ const Sidebar: React.FC<SidebarProps> = ({
 
   useEffect(() => {
     if (!isCustomer) {
-      fetchPendingCollections();
-      const interval = setInterval(fetchPendingCollections, 30000);
-      return () => clearInterval(interval);
+      fetchCounts();
+      
+      // Real-time subscription for collection requests
+      const collectionChannel = supabase
+        .channel('schema-db-changes-collections')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'collection_requests' }, () => fetchCounts())
+        .subscribe();
+
+      // Real-time subscription for market orders
+      const ordersChannel = supabase
+        .channel('schema-db-changes-orders')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'market_orders' }, () => fetchCounts())
+        .subscribe();
+
+      return () => {
+        supabase.removeChannel(collectionChannel);
+        supabase.removeChannel(ordersChannel);
+      };
     } else {
       checkCustomerDue();
     }
-  }, [isCustomer, user.customer_id]);
+  }, [isCustomer, user.customer_id, selectedCompany]);
 
-  const fetchPendingCollections = async () => {
+  const fetchCounts = async () => {
     try {
-      const { count, error } = await supabase
-        .from('collection_requests')
-        .select('*', { count: 'exact', head: true })
-        .eq('status', 'PENDING');
-      if (!error) setPendingCount(count || 0);
+      const dbCo = mapToDbCompany(selectedCompany);
+      
+      // 1. Fetch Pending Collections
+      let collQuery = supabase.from('collection_requests').select('*', { count: 'exact', head: true }).eq('status', 'PENDING');
+      if (isStaff) collQuery = collQuery.eq('company', mapToDbCompany(user.company));
+      const { count: cCount } = await collQuery;
+      setPendingCollections(cCount || 0);
+
+      // 2. Fetch Pending Market Orders
+      let orderQuery = supabase.from('market_orders').select('*', { count: 'exact', head: true }).eq('status', 'PENDING');
+      if (isStaff) orderQuery = orderQuery.eq('company', mapToDbCompany(user.company));
+      else orderQuery = orderQuery.eq('company', dbCo);
+      
+      const { count: oCount } = await orderQuery;
+      setPendingOrders(oCount || 0);
+      
     } catch (e) {}
   };
 
@@ -79,8 +106,8 @@ const Sidebar: React.FC<SidebarProps> = ({
     { id: 'portal_catalog', label: '📢 অফার ও রেট', roles: ['CUSTOMER'] },
     { id: 'ad_manager', label: '📢 ক্যাটালগ ম্যানেজার', roles: ['ADMIN'] },
     { id: 'sales', label: '📝 সেলস মেমো (POS)', roles: ['ADMIN'] },
-    { id: 'collections', label: '💰 টাকা কালেকশন', roles: ['ADMIN', 'STAFF', 'DELIVERY'], badge: 'pending' },
-    { id: 'order_management', label: '🛒 মার্কেট অর্ডার', roles: ['ADMIN', 'STAFF'] },
+    { id: 'collections', label: '💰 টাকা কালেকশন', roles: ['ADMIN', 'STAFF', 'DELIVERY'], badge: 'pending_collections' },
+    { id: 'order_management', label: '🛒 মার্কেট অর্ডার', roles: ['ADMIN', 'STAFF'], badge: 'pending_orders' },
     { id: 'bookings', label: '📅 বুকিং অর্ডার', roles: ['ADMIN', 'STAFF'] },
     { id: 'replacements', label: '🔄 রিপ্লেসমেন্ট (Claim)', roles: ['ADMIN'] },
     { id: 'delivery_hub', label: '🚚 ডেলিভারি হাব', roles: ['ADMIN', 'DELIVERY', 'STAFF'] },
@@ -144,8 +171,16 @@ const Sidebar: React.FC<SidebarProps> = ({
 
         <nav className="flex-1 px-4 space-y-1.5 overflow-y-auto custom-scroll pb-10 mt-4">
           {menu.map((item, idx) => {
-            const showBadge = (item.badge === 'pending' && pendingCount > 0) || (item.badge === 'due' && hasCustomerDue);
+            let badgeCount = 0;
+            let badgeColor = "bg-red-600";
             
+            if (item.badge === 'pending_collections') badgeCount = pendingCollections;
+            if (item.badge === 'pending_orders') {
+              badgeCount = pendingOrders;
+              badgeColor = "bg-rose-600 shadow-[0_0_15px_rgba(225,29,72,0.4)]";
+            }
+            if (item.badge === 'due' && hasCustomerDue) badgeCount = 1;
+
             return (
               <button 
                 key={item.id} 
@@ -160,11 +195,13 @@ const Sidebar: React.FC<SidebarProps> = ({
                   {item.label.split(' ')[0]}
                 </span>
                 <span className="flex-1 text-left tracking-tight">{item.label.split(' ').slice(1).join(' ')}</span>
-                {showBadge && (
-                  <div className={`absolute right-4 w-2.5 h-2.5 ${item.badge === 'due' ? 'bg-rose-500' : 'bg-red-600'} rounded-full border-2 border-white shadow-lg animate-pulse`}>
-                    {item.badge === 'pending' && <span className="absolute -top-3 left-0 text-[8px]">{pendingCount}</span>}
+                
+                {badgeCount > 0 && (
+                  <div className={`flex items-center justify-center min-w-[1.4rem] h-[1.4rem] px-1.5 rounded-full ${badgeColor} text-white text-[9px] font-black animate-pulse border-2 border-white shadow-sm`}>
+                    {item.badge === 'due' ? '!' : badgeCount}
                   </div>
                 )}
+                
                 {activeTab === item.id && <div className="absolute left-1 w-1 h-6 bg-white/40 rounded-full"></div>}
               </button>
             );

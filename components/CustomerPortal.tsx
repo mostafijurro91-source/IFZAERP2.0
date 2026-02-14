@@ -214,12 +214,33 @@ const CustomerPortal: React.FC<PortalProps> = ({ type, user }) => {
     try {
       const dbCo = mapToDbCompany(activeCompany);
       const totalAmount = calculateTotal();
+      
+      // Get customer address/area for the order
+      const { data: custInfo } = await supabase.from('customers').select('address').eq('id', user.customer_id).maybeSingle();
+
+      // Transform items to match internal order structure (tp -> price)
+      const mappedItems = orderCart.map(item => ({
+        id: item.id,
+        name: item.name,
+        price: item.tp,
+        qty: item.qty,
+        company: item.company,
+        action: item.action
+      }));
+
       const { error } = await supabase.from('market_orders').insert([{
-        customer_id: user.customer_id, company: dbCo, total_amount: totalAmount,
-        status: 'PENDING', items: orderCart, created_by: user.name
+        customer_id: user.customer_id, 
+        company: dbCo, 
+        total_amount: totalAmount,
+        status: 'PENDING', 
+        items: mappedItems, 
+        created_by: user.name,
+        area: custInfo?.address || 'Portal'
       }]);
+
       if (error) throw error;
-      alert("অর্ডার সফলভাবে সাবমিট হয়েছে! ✅");
+
+      alert("অর্ডার সফলভাবে সাবমিট হয়েছে! এটি আপনার কোম্পানির প্যানেলে 'মার্কেট অর্ডার' হিসেবে জমা হয়েছে। ✅");
       setOrderCart([]);
       setOrderView('BROWSE');
     } catch (err: any) {
@@ -346,34 +367,93 @@ const CustomerPortal: React.FC<PortalProps> = ({ type, user }) => {
       )}
 
       {type === 'DASHBOARD' && (
-        <div className="space-y-14 pb-20">
-          <div className="relative group overflow-hidden rounded-[4.5rem] shadow-2xl border-8 border-white h-[450px] md:h-[600px] bg-slate-950">
-             {ads.length > 0 ? ads.map((ad, idx) => {
-               const theme = getBrandTheme(ad.company);
-               return (
-                  <div key={ad.id} className={`absolute inset-0 transition-all duration-1000 ${idx === currentAdIndex ? 'opacity-100 scale-100' : 'opacity-0 scale-110'}`}>
-                     {ad.image_url && <img src={ad.image_url} className="w-full h-full object-cover opacity-60" alt="" />}
-                     <div className="absolute inset-0 bg-gradient-to-t from-black via-black/20 to-transparent p-12 flex flex-col justify-end">
-                        <span className={`bg-gradient-to-r ${theme.gradient} text-white px-6 py-2 rounded-full text-[10px] font-black uppercase italic mb-6 w-fit`}>{theme.icon} {ad.company}</span>
-                        <h3 className="text-4xl md:text-8xl font-black text-white uppercase italic tracking-tighter leading-tight">{ad.title}</h3>
-                     </div>
-                  </div>
-               )
-             }) : <div className="h-full flex items-center justify-center text-white/10 font-black text-6xl italic">IFZA HUB</div>}
+        <div className="space-y-12 pb-20 px-4 md:px-0">
+          {/* 🏠 Welcome Header */}
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 bg-white p-10 rounded-[3rem] shadow-xl border border-slate-100 relative overflow-hidden">
+             <div className="absolute top-[-20%] right-[-10%] w-64 h-64 bg-blue-50 rounded-full blur-[80px] opacity-50"></div>
+             <div className="relative z-10">
+                <p className="text-blue-600 font-black uppercase italic tracking-widest text-[11px] mb-2">Retailer Dashboard</p>
+                <h2 className="text-4xl md:text-6xl font-black italic tracking-tighter text-slate-900 leading-none">
+                  স্বাগতম, <span className="text-blue-600">{user.name}</span>
+                </h2>
+             </div>
+             <div className="bg-slate-900 text-white p-6 rounded-[2.2rem] shadow-2xl relative z-10 group transition-all hover:scale-105 active:scale-95">
+                <p className="text-[9px] font-black text-indigo-400 uppercase tracking-widest mb-1 italic">অফিসিয়াল হেল্পলাইন</p>
+                <p className="text-xl font-black italic tracking-tighter text-emerald-400">০১৭২৭৫৪৪২৭৫</p>
+             </div>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-10">
-             {companies.map(co => {
-                const theme = getBrandTheme(co);
-                const stat = multiStats[co] || { balance: 0 };
-                return (
-                  <div key={co} className="bg-white rounded-[4rem] p-12 shadow-xl border border-slate-100 relative overflow-hidden group">
-                     <div className={`w-20 h-20 rounded-[2.2rem] bg-gradient-to-br ${theme.gradient} flex items-center justify-center text-white text-4xl font-black mb-10 shadow-2xl`}>{theme.icon}</div>
-                     <h4 className="text-2xl font-black uppercase italic text-slate-800 tracking-tighter mb-4">{co}</h4>
-                     <p className="text-[11px] font-black text-slate-400 uppercase italic mb-2">Active Balance Due</p>
-                     <p className={`text-5xl font-black italic tracking-tighter ${(stat.balance || 0) > 0 ? 'text-red-600' : 'text-emerald-600'}`}>৳{(stat.balance || 0).toLocaleString()}</p>
-                  </div>
-                )
-             })}
+
+          {/* 🏛️ Company Wise Dues List */}
+          <div className="space-y-6">
+             <div className="flex items-center gap-4 px-6">
+                <span className="h-px flex-1 bg-slate-200"></span>
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.4em] italic">Your Ledger Portfolio</p>
+                <span className="h-px flex-1 bg-slate-200"></span>
+             </div>
+
+             <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                {companies.map(co => {
+                   const theme = getBrandTheme(co);
+                   const stat = multiStats[co] || { balance: 0 };
+                   return (
+                     <div key={co} className="bg-white rounded-[4rem] p-10 shadow-xl border border-slate-100 relative overflow-hidden group transition-all hover:-translate-y-2 duration-500">
+                        <div className={`w-16 h-16 rounded-[1.8rem] bg-gradient-to-br ${theme.gradient} flex items-center justify-center text-white text-3xl font-black mb-10 shadow-2xl group-hover:rotate-6 transition-transform`}>{theme.icon}</div>
+                        
+                        <div className="flex justify-between items-end mb-6">
+                           <div>
+                              <h4 className="text-2xl font-black uppercase italic text-slate-800 tracking-tighter leading-none">{co}</h4>
+                              <p className="text-[10px] font-black text-slate-400 uppercase italic mt-2">Active Balance</p>
+                           </div>
+                           <button 
+                             onClick={() => { setActiveCompany(co); /* Note: Parent controls tab, but we set local brand context */ }}
+                             className="bg-slate-50 text-slate-400 px-5 py-2.5 rounded-full text-[9px] font-black uppercase tracking-widest hover:bg-blue-600 hover:text-white transition-all shadow-sm active:scale-90"
+                           >
+                             সি অল ➔
+                           </button>
+                        </div>
+
+                        <p className={`text-5xl font-black italic tracking-tighter ${(stat.balance || 0) > 0 ? 'text-red-600' : 'text-emerald-600'}`}>
+                           ৳{(stat.balance || 0).toLocaleString()}
+                        </p>
+                        
+                        <div className="mt-8 h-1 w-full bg-slate-50 rounded-full overflow-hidden">
+                           <div className={`h-full bg-gradient-to-r ${theme.gradient} opacity-20`} style={{ width: '100%' }}></div>
+                        </div>
+                     </div>
+                   )
+                })}
+             </div>
+          </div>
+
+          {/* 🎡 BOTTOM SLIDER */}
+          <div className="space-y-6">
+             <div className="flex items-center gap-4 px-6">
+                <span className="h-px flex-1 bg-slate-200"></span>
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.4em] italic">Latest Feed & Offers</p>
+                <span className="h-px flex-1 bg-slate-200"></span>
+             </div>
+             
+             <div className="relative group overflow-hidden rounded-[4.5rem] shadow-2xl border-8 border-white h-[400px] md:h-[550px] bg-slate-950">
+                {ads.length > 0 ? ads.map((ad, idx) => {
+                  const theme = getBrandTheme(ad.company);
+                  return (
+                     <div key={ad.id} className={`absolute inset-0 transition-all duration-1000 ${idx === currentAdIndex ? 'opacity-100 scale-100' : 'opacity-0 scale-110'}`}>
+                        {ad.image_url && <img src={ad.image_url} className="w-full h-full object-cover opacity-50" alt="" />}
+                        <div className="absolute inset-0 bg-gradient-to-t from-black via-black/30 to-transparent p-12 flex flex-col justify-end">
+                           <span className={`bg-gradient-to-r ${theme.gradient} text-white px-6 py-2 rounded-full text-[10px] font-black uppercase italic mb-6 w-fit shadow-xl`}>{theme.icon} {ad.company}</span>
+                           <h3 className="text-3xl md:text-7xl font-black text-white uppercase italic tracking-tighter leading-tight drop-shadow-2xl">{ad.title}</h3>
+                        </div>
+                     </div>
+                  )
+                }) : <div className="h-full flex items-center justify-center text-white/10 font-black text-6xl italic">IFZA HUB</div>}
+                
+                {/* Dots */}
+                <div className="absolute bottom-8 right-12 flex gap-3 z-20">
+                   {ads.map((_, i) => (
+                      <div key={i} className={`h-1 rounded-full transition-all duration-500 ${i === currentAdIndex ? 'w-10 bg-blue-500' : 'w-2 bg-white/20'}`}></div>
+                   ))}
+                </div>
+             </div>
           </div>
         </div>
       )}
