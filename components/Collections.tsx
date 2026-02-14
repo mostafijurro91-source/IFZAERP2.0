@@ -18,7 +18,7 @@ const Collections: React.FC<CollectionsProps> = ({ company, user }) => {
   // Entry Form State
   const [selectedArea, setSelectedArea] = useState("");
   const [selectedCust, setSelectedCust] = useState<any>(null);
-  const [targetCompany, setTargetCompany] = useState<Company>('SQ Cables');
+  const [targetCompany, setTargetCompany] = useState<Company>(user.role === 'STAFF' ? user.company : 'SQ Cables');
   const [amount, setAmount] = useState<string>("");
   const [deliveryExpense, setDeliveryExpense] = useState<string>("");
 
@@ -39,6 +39,8 @@ const Collections: React.FC<CollectionsProps> = ({ company, user }) => {
   });
 
   const isAdmin = user.role === 'ADMIN';
+  const isStaff = user.role === 'STAFF';
+  const isDelivery = user.role === 'DELIVERY';
 
   useEffect(() => {
     fetchData();
@@ -56,6 +58,8 @@ const Collections: React.FC<CollectionsProps> = ({ company, user }) => {
     setLoading(true);
     try {
       const today = new Date().toISOString().split('T')[0];
+      const dbUserCompany = mapToDbCompany(user.company);
+
       const [custRes, reqRes, txRes] = await Promise.all([
         db.getCustomers(),
         supabase.from('collection_requests')
@@ -69,35 +73,46 @@ const Collections: React.FC<CollectionsProps> = ({ company, user }) => {
       ]);
 
       setCustomers(custRes || []);
-      setPendingRequests(reqRes.data || []);
       
-      const confirmed = (txRes.data || []).filter(tx => tx.payment_type === 'COLLECTION');
+      // Filter requests based on role
+      let filteredRequests = reqRes.data || [];
+      if (isStaff) {
+        filteredRequests = filteredRequests.filter(r => r.company === dbUserCompany);
+      }
+      setPendingRequests(filteredRequests);
+      
+      // Filter today's history based on role
+      let confirmed = (txRes.data || []).filter(tx => tx.payment_type === 'COLLECTION');
+      if (isStaff) {
+        confirmed = confirmed.filter(tx => tx.company === dbUserCompany);
+      }
       setConfirmedToday(confirmed);
 
+      // Calculate Stats
       let t_tot = 0, t_tr = 0, t_sl = 0, t_sc = 0;
       txRes.data?.forEach(tx => {
         const amt = Number(tx.amount) || 0;
         const co = mapToDbCompany(tx.company);
         
         if (tx.payment_type === 'COLLECTION') {
-          t_tot += amt;
           if (co === 'Transtec') t_tr += amt;
           if (co === 'SQ Light') t_sl += amt;
           if (co === 'SQ Cables') t_sc += amt;
         } else if (tx.payment_type === 'EXPENSE' && tx.meta?.type === 'DELIVERY') {
-          t_tot -= amt;
           if (co === 'Transtec') t_tr -= amt;
           if (co === 'SQ Light') t_sl -= amt;
           if (co === 'SQ Cables') t_sc -= amt;
         }
       });
 
+      t_tot = t_tr + t_sl + t_sc;
+
       setGlobalStats({
         todayTotal: t_tot,
         transtec: t_tr,
         sqLight: t_sl,
         sqCables: t_sc,
-        pendingTotal: (reqRes.data || []).reduce((sum: number, r: any) => sum + Number(r.amount), 0)
+        pendingTotal: filteredRequests.reduce((sum: number, r: any) => sum + Number(r.amount), 0)
       });
     } finally { setLoading(false); }
   };
@@ -160,7 +175,6 @@ const Collections: React.FC<CollectionsProps> = ({ company, user }) => {
 
       const txIdShort = String(txData.id).slice(-6).toUpperCase();
 
-      // 🔔 Trigger Notification to Customer
       await supabase.from('notifications').insert([{
         customer_id: req.customer_id,
         title: `কালেকশন জমা রিসিট #${txIdShort}`,
@@ -196,14 +210,12 @@ const Collections: React.FC<CollectionsProps> = ({ company, user }) => {
     try {
       const txIdShort = String(tx.id).slice(-6).toUpperCase();
 
-      // 1. 🔔 Delete associated notification from customer inbox
       await supabase
         .from('notifications')
         .delete()
         .eq('customer_id', tx.customer_id)
         .ilike('message', `%#${txIdShort}%`);
 
-      // 2. Delete transaction
       const { error } = await supabase.from('transactions').delete().eq('id', tx.id);
       if (error) throw error;
       
@@ -221,27 +233,42 @@ const Collections: React.FC<CollectionsProps> = ({ company, user }) => {
     return custBalances.sqCables;
   }, [targetCompany, custBalances]);
 
+  // Show stats based on role
+  const displayTranstec = !isStaff || user.company === 'Transtec';
+  const displaySqLight = !isStaff || user.company === 'SQ Light';
+  const displaySqCables = !isStaff || user.company === 'SQ Cables';
+
   return (
     <div className="space-y-10 pb-40 animate-reveal text-slate-800 font-sans">
       
       {/* 📊 Top Stats Grid */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
          <div className="bg-white p-5 rounded-[1.8rem] border border-slate-100 shadow-sm text-center">
-            <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1 italic">আজকের নিট আদায়</p>
-            <p className="text-xl font-black text-slate-900 leading-none italic">{globalStats.todayTotal.toLocaleString()} ৳</p>
+            <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1 italic">
+              {isStaff ? `${user.company.toUpperCase()} আদায়` : 'আজকের নিট আদায়'}
+            </p>
+            <p className="text-xl font-black text-slate-900 leading-none italic">
+              {isStaff ? globalStats[mapToDbCompany(user.company).replace(' ', '').toLowerCase() as keyof typeof globalStats].toLocaleString() : globalStats.todayTotal.toLocaleString()} ৳
+            </p>
          </div>
-         <div className="bg-white p-5 rounded-[1.8rem] border border-slate-100 shadow-sm text-center">
-            <p className="text-[9px] font-black text-amber-500 uppercase tracking-widest mb-1 italic">TRANSTEC</p>
-            <p className="text-xl font-black text-amber-600 leading-none italic">{globalStats.transtec.toLocaleString()} ৳</p>
-         </div>
-         <div className="bg-white p-5 rounded-[1.8rem] border border-slate-100 shadow-sm text-center">
-            <p className="text-[9px] font-black text-cyan-500 uppercase tracking-widest mb-1 italic">SQ LIGHT</p>
-            <p className="text-xl font-black text-cyan-600 leading-none italic">{globalStats.sqLight.toLocaleString()} ৳</p>
-         </div>
-         <div className="bg-white p-5 rounded-[1.8rem] border border-slate-100 shadow-sm text-center">
-            <p className="text-[9px] font-black text-rose-500 uppercase tracking-widest mb-1 italic">SQ CABLES</p>
-            <p className="text-xl font-black text-rose-600 leading-none italic">{globalStats.sqCables.toLocaleString()} ৳</p>
-         </div>
+         {displayTranstec && (
+           <div className="bg-white p-5 rounded-[1.8rem] border border-slate-100 shadow-sm text-center">
+              <p className="text-[9px] font-black text-amber-500 uppercase tracking-widest mb-1 italic">TRANSTEC</p>
+              <p className="text-xl font-black text-amber-600 leading-none italic">{globalStats.transtec.toLocaleString()} ৳</p>
+           </div>
+         )}
+         {displaySqLight && (
+           <div className="bg-white p-5 rounded-[1.8rem] border border-slate-100 shadow-sm text-center">
+              <p className="text-[9px] font-black text-cyan-500 uppercase tracking-widest mb-1 italic">SQ LIGHT</p>
+              <p className="text-xl font-black text-cyan-600 leading-none italic">{globalStats.sqLight.toLocaleString()} ৳</p>
+           </div>
+         )}
+         {displaySqCables && (
+           <div className="bg-white p-5 rounded-[1.8rem] border border-slate-100 shadow-sm text-center">
+              <p className="text-[9px] font-black text-rose-500 uppercase tracking-widest mb-1 italic">SQ CABLES</p>
+              <p className="text-xl font-black text-rose-600 leading-none italic">{globalStats.sqCables.toLocaleString()} ৳</p>
+           </div>
+         )}
          <div className="bg-white p-5 rounded-[1.8rem] border border-slate-100 shadow-sm text-center col-span-2 md:col-span-1">
             <p className="text-[9px] font-black text-orange-400 uppercase tracking-widest mb-1 italic">পেন্ডিং রিকোয়েস্ট</p>
             <p className="text-xl font-black text-orange-600 leading-none italic">{globalStats.pendingTotal.toLocaleString()} ৳</p>
@@ -272,7 +299,14 @@ const Collections: React.FC<CollectionsProps> = ({ company, user }) => {
                </div>
                <div className="flex gap-2">
                   {['Transtec', 'SQ Light', 'SQ Cables'].map(co => (
-                    <button key={co} onClick={() => setTargetCompany(co as Company)} className={`flex-1 py-4 rounded-2xl font-black uppercase text-[9px] transition-all ${targetCompany === co ? 'bg-blue-600 text-white shadow-xl scale-105' : 'bg-slate-50 text-slate-400'}`}>{co}</button>
+                    <button 
+                      key={co} 
+                      disabled={isStaff && user.company !== co}
+                      onClick={() => setTargetCompany(co as Company)} 
+                      className={`flex-1 py-4 rounded-2xl font-black uppercase text-[9px] transition-all ${targetCompany === co ? 'bg-blue-600 text-white shadow-xl scale-105' : 'bg-slate-50 text-slate-400'} ${isStaff && user.company !== co ? 'opacity-20 cursor-not-allowed' : ''}`}
+                    >
+                      {co}
+                    </button>
                   ))}
                </div>
                <div className="grid grid-cols-3 gap-4 pt-4">
@@ -297,8 +331,12 @@ const Collections: React.FC<CollectionsProps> = ({ company, user }) => {
                        </div>
                        <div className="text-right flex items-center gap-4">
                           <p className="text-xl font-black italic">৳{Number(req.amount).toLocaleString()}</p>
-                          {isAdmin && <button onClick={() => handleApprove(req)} className="bg-emerald-600 text-white px-5 py-2 rounded-xl font-black text-[9px] uppercase shadow-lg">APPROVE</button>}
-                          <button onClick={async () => { if(confirm("ডিলিট?")) { await supabase.from('collection_requests').delete().eq('id', req.id); fetchData(); } }} className="text-red-300 hover:text-red-600 text-xl font-black px-2">×</button>
+                          {isAdmin && (
+                            <>
+                              <button onClick={() => handleApprove(req)} className="bg-emerald-600 text-white px-5 py-2 rounded-xl font-black text-[9px] uppercase shadow-lg">APPROVE</button>
+                              <button onClick={async () => { if(confirm("ডিলিট?")) { await supabase.from('collection_requests').delete().eq('id', req.id); fetchData(); } }} className="text-red-300 hover:text-red-600 text-xl font-black px-2">×</button>
+                            </>
+                          )}
                        </div>
                     </div>
                   ))}
