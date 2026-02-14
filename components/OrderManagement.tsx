@@ -52,7 +52,6 @@ const OrderManagement: React.FC<OrderManagementProps> = ({ company, user }) => {
   const handleDeleteOrder = async (id: string, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
     if (!isAdmin && !isStaff) return alert("আপনার অর্ডার ডিলিট করার অনুমতি নেই।");
-    
     if (!confirm("আপনি কি নিশ্চিত এই মার্কেট অর্ডারটি ডিলিট করতে চান?")) return;
     
     setLoading(true);
@@ -89,7 +88,6 @@ const OrderManagement: React.FC<OrderManagementProps> = ({ company, user }) => {
     setIsSaving(true);
     try {
       const dbCo = mapToDbCompany(company);
-      // RE-ADDED 'area' column here too for consistency
       const { error } = await supabase.from('market_orders').insert([{ 
         customer_id: selectedCust.id, 
         company: dbCo, 
