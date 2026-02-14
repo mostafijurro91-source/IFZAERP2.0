@@ -89,14 +89,15 @@ const OrderManagement: React.FC<OrderManagementProps> = ({ company, user }) => {
     setIsSaving(true);
     try {
       const dbCo = mapToDbCompany(company);
-      // FIX: Removed 'area' column to match database expectation
+      // RE-ADDED 'area' column here too for consistency
       const { error } = await supabase.from('market_orders').insert([{ 
         customer_id: selectedCust.id, 
         company: dbCo, 
         total_amount: Math.round(calculateTotal()), 
         status: 'PENDING', 
         items: cart, 
-        created_by: user.name
+        created_by: user.name,
+        area: selectedCust.address || ''
       }]);
       
       if (error) throw error;
@@ -184,7 +185,6 @@ const OrderManagement: React.FC<OrderManagementProps> = ({ company, user }) => {
                 )}
              </div>
              <h4 className="font-black text-slate-900 text-xl uppercase italic leading-none truncate mb-2">{order.customers?.name}</h4>
-             {/* Show address from joined customer object */}
              <p className="text-[10px] text-slate-400 font-black uppercase italic truncate tracking-widest">📍 এরিয়া: {order.customers?.address || 'অনির্ধারিত'}</p>
              <div className="mt-8 flex justify-between items-end border-t pt-6">
                 <div>
