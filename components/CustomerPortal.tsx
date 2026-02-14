@@ -32,6 +32,7 @@ const CustomerPortal: React.FC<PortalProps> = ({ type, user }) => {
   const [ads, setAds] = useState<Advertisement[]>([]);
   const [ledger, setLedger] = useState<any[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
+  const [customerProfile, setCustomerProfile] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [isSyncing, setIsSyncing] = useState(false);
   const [currentAdIndex, setCurrentAdIndex] = useState(0);
@@ -55,6 +56,7 @@ const CustomerPortal: React.FC<PortalProps> = ({ type, user }) => {
 
   useEffect(() => {
     if (user.customer_id) {
+      fetchCustomerProfile();
       fetchAllData();
       if (type === 'DASHBOARD') fetchAds();
     }
@@ -75,6 +77,11 @@ const CustomerPortal: React.FC<PortalProps> = ({ type, user }) => {
     }
     return () => { if (sliderTimerRef.current) clearInterval(sliderTimerRef.current); };
   }, [ads.length]);
+
+  const fetchCustomerProfile = async () => {
+    const { data } = await supabase.from('customers').select('*').eq('id', user.customer_id).maybeSingle();
+    setCustomerProfile(data);
+  };
 
   const fetchAds = async () => {
     const { data } = await supabase.from('advertisements').select('*').order('created_at', { ascending: false });
@@ -210,15 +217,12 @@ const CustomerPortal: React.FC<PortalProps> = ({ type, user }) => {
   const submitOrder = async () => {
     if (!user.customer_id || orderCart.length === 0 || isSavingOrder) return;
     if (!confirm("আপনি কি নিশ্চিতভাবে এই অর্ডারটি সাবমিট করতে চান?")) return;
+    
     setIsSavingOrder(true);
     try {
       const dbCo = mapToDbCompany(activeCompany);
       const totalAmount = calculateTotal();
       
-      // Get customer address/area for the order
-      const { data: custInfo } = await supabase.from('customers').select('address').eq('id', user.customer_id).maybeSingle();
-
-      // Transform items to match internal order structure (tp -> price)
       const mappedItems = orderCart.map(item => ({
         id: item.id,
         name: item.name,
@@ -228,14 +232,15 @@ const CustomerPortal: React.FC<PortalProps> = ({ type, user }) => {
         action: item.action
       }));
 
+      // Restored 'area' from customerProfile and improved insert
       const { error } = await supabase.from('market_orders').insert([{
         customer_id: user.customer_id, 
         company: dbCo, 
-        total_amount: totalAmount,
+        total_amount: Math.round(totalAmount),
         status: 'PENDING', 
         items: mappedItems, 
         created_by: user.name,
-        area: custInfo?.address || 'Portal'
+        area: customerProfile?.address || ''
       }]);
 
       if (error) throw error;
@@ -244,7 +249,7 @@ const CustomerPortal: React.FC<PortalProps> = ({ type, user }) => {
       setOrderCart([]);
       setOrderView('BROWSE');
     } catch (err: any) {
-      alert("অর্ডার সাবমিট ব্যর্থ: " + err.message);
+      alert("অর্ডার সাবমিট ব্যর্থ: " + (err.message || "সার্ভার এরর!"));
     } finally {
       setIsSavingOrder(false);
     }
@@ -331,7 +336,7 @@ const CustomerPortal: React.FC<PortalProps> = ({ type, user }) => {
                    </thead>
                    <tbody className="divide-y divide-slate-100">
                       {loading ? (
-                         <tr><td colSpan={4} className="p-40 text-center animate-pulse font-black uppercase text-slate-300">তথ্য সিঙ্ক হচ্ছে...</td></tr>
+                         <tr><td colSpan={4} className="p-40 text-center animate-pulse font-black uppercase text-slate-300"> hisাব সিঙ্ক হচ্ছে...</td></tr>
                       ) : ledger.length === 0 ? (
                          <tr><td colSpan={4} className="p-40 text-center italic font-black text-slate-200 text-xl uppercase tracking-widest">No Transactions Found</td></tr>
                       ) : ledger.map((tx, idx) => (
@@ -368,7 +373,6 @@ const CustomerPortal: React.FC<PortalProps> = ({ type, user }) => {
 
       {type === 'DASHBOARD' && (
         <div className="space-y-12 pb-20 px-4 md:px-0">
-          {/* 🏠 Welcome Header */}
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 bg-white p-10 rounded-[3rem] shadow-xl border border-slate-100 relative overflow-hidden">
              <div className="absolute top-[-20%] right-[-10%] w-64 h-64 bg-blue-50 rounded-full blur-[80px] opacity-50"></div>
              <div className="relative z-10">
@@ -383,7 +387,6 @@ const CustomerPortal: React.FC<PortalProps> = ({ type, user }) => {
              </div>
           </div>
 
-          {/* 🏛️ Company Wise Dues List */}
           <div className="space-y-6">
              <div className="flex items-center gap-4 px-6">
                 <span className="h-px flex-1 bg-slate-200"></span>
@@ -405,7 +408,7 @@ const CustomerPortal: React.FC<PortalProps> = ({ type, user }) => {
                               <p className="text-[10px] font-black text-slate-400 uppercase italic mt-2">Active Balance</p>
                            </div>
                            <button 
-                             onClick={() => { setActiveCompany(co); /* Note: Parent controls tab, but we set local brand context */ }}
+                             onClick={() => { setActiveCompany(co); }}
                              className="bg-slate-50 text-slate-400 px-5 py-2.5 rounded-full text-[9px] font-black uppercase tracking-widest hover:bg-blue-600 hover:text-white transition-all shadow-sm active:scale-90"
                            >
                              সি অল ➔
@@ -425,7 +428,6 @@ const CustomerPortal: React.FC<PortalProps> = ({ type, user }) => {
              </div>
           </div>
 
-          {/* 🎡 BOTTOM SLIDER */}
           <div className="space-y-6">
              <div className="flex items-center gap-4 px-6">
                 <span className="h-px flex-1 bg-slate-200"></span>
@@ -447,7 +449,6 @@ const CustomerPortal: React.FC<PortalProps> = ({ type, user }) => {
                   )
                 }) : <div className="h-full flex items-center justify-center text-white/10 font-black text-6xl italic">IFZA HUB</div>}
                 
-                {/* Dots */}
                 <div className="absolute bottom-8 right-12 flex gap-3 z-20">
                    {ads.map((_, i) => (
                       <div key={i} className={`h-1 rounded-full transition-all duration-500 ${i === currentAdIndex ? 'w-10 bg-blue-500' : 'w-2 bg-white/20'}`}></div>
@@ -475,12 +476,10 @@ const CustomerPortal: React.FC<PortalProps> = ({ type, user }) => {
         </div>
       )}
 
-      {/* 🛒 PREMIUM REDESIGNED ORDER VIEW */}
       {type === 'ORDER' && (
         <div className="max-w-xl mx-auto px-4 md:px-0 animate-reveal">
            {orderView === 'BROWSE' ? (
               <div className="space-y-10 pb-40">
-                 {/* Top Navigation & Search */}
                  <div className="bg-white p-8 rounded-[3.5rem] border-2 border-slate-50 shadow-xl sticky top-4 z-50">
                     <div className="flex gap-2 mb-8">
                        {companies.map(co => (
@@ -504,7 +503,6 @@ const CustomerPortal: React.FC<PortalProps> = ({ type, user }) => {
                     </div>
                  </div>
 
-                 {/* Product List */}
                  <div className="grid grid-cols-1 gap-5">
                     {loading ? (
                       <div className="py-20 text-center">
@@ -532,7 +530,6 @@ const CustomerPortal: React.FC<PortalProps> = ({ type, user }) => {
                  </div>
               </div>
            ) : (
-              /* 🛒 CART VIEW - PREMIUM MOBILE STYLE */
               <div className="space-y-10 pb-[500px] animate-reveal">
                  <div className="flex justify-between items-end px-6">
                     <div>
@@ -545,16 +542,13 @@ const CustomerPortal: React.FC<PortalProps> = ({ type, user }) => {
                  <div className="space-y-6">
                     {orderCart.map((item, idx) => (
                       <div key={item.id} className="bg-white p-10 rounded-[4rem] border shadow-xl relative animate-reveal overflow-hidden group" style={{ animationDelay: `${idx * 0.05}s` }}>
-                         {/* Remove Button */}
                          <button onClick={() => removeFromCart(item.id)} className="absolute top-6 right-6 w-12 h-12 bg-rose-500 rounded-full flex items-center justify-center text-white text-xl font-black shadow-lg hover:scale-110 active:scale-90 transition-all z-10">✕</button>
                          
-                         {/* Header Info */}
                          <div className="mb-10 pr-12">
                             <h5 className="text-[20px] font-black uppercase italic text-slate-800 leading-tight">{item.name}</h5>
                             <p className="text-[10px] font-bold text-slate-400 mt-2 uppercase tracking-widest italic">{activeCompany} DIVISION</p>
                          </div>
 
-                         {/* Quantity & Total Row */}
                          <div className="flex flex-col md:flex-row items-center justify-between gap-8 mb-10">
                             <div className="flex items-center bg-slate-50 rounded-[2.5rem] p-2 border shadow-inner w-full md:w-auto">
                                <button onClick={() => updateCartItem(item.id, { qty: item.qty - 1 })} className="w-16 h-16 rounded-[1.8rem] bg-white shadow-md flex items-center justify-center text-4xl font-black text-slate-300 hover:text-rose-500 transition-colors active:scale-90">-</button>
@@ -567,7 +561,6 @@ const CustomerPortal: React.FC<PortalProps> = ({ type, user }) => {
                             </div>
                          </div>
 
-                         {/* ACTION TOGGLE BUTTONS (S, R, RP Style) */}
                          <div className="bg-slate-50 p-2 rounded-[2.5rem] flex gap-2 border shadow-inner">
                             <button 
                               onClick={() => updateCartItem(item.id, { action: 'SALE' })} 
@@ -598,7 +591,6 @@ const CustomerPortal: React.FC<PortalProps> = ({ type, user }) => {
                     )}
                  </div>
 
-                 {/* 💳 STICKY BOTTOM CONFIRMATION BAR */}
                  <div className="fixed bottom-0 left-0 right-0 z-[6000] p-6 pointer-events-none flex justify-center">
                     <div className="bg-white p-10 md:p-12 rounded-[4rem] shadow-[0_-40px_100px_rgba(0,0,0,0.15),0_40px_100px_rgba(0,0,0,0.3)] border-2 border-slate-50 space-y-8 animate-reveal pointer-events-auto w-full max-w-lg md:max-w-xl">
                        <div className="flex justify-between items-end border-b-2 border-slate-50 pb-8">

@@ -51,7 +51,6 @@ const OrderManagement: React.FC<OrderManagementProps> = ({ company, user }) => {
 
   const handleDeleteOrder = async (id: string, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
-    // Allow both ADMIN and STAFF to delete orders (to fix customer mistakes)
     if (!isAdmin && !isStaff) return alert("আপনার অর্ডার ডিলিট করার অনুমতি নেই।");
     
     if (!confirm("আপনি কি নিশ্চিত এই মার্কেট অর্ডারটি ডিলিট করতে চান?")) return;
@@ -90,12 +89,30 @@ const OrderManagement: React.FC<OrderManagementProps> = ({ company, user }) => {
     setIsSaving(true);
     try {
       const dbCo = mapToDbCompany(company);
-      await supabase.from('market_orders').insert([{ 
-        customer_id: selectedCust.id, company: dbCo, total_amount: calculateTotal(), status: 'PENDING', items: cart, created_by: user.name, area: selectedCust.address
+      // Restored 'area' column to match database expectation
+      const { error } = await supabase.from('market_orders').insert([{ 
+        customer_id: selectedCust.id, 
+        company: dbCo, 
+        total_amount: Math.round(calculateTotal()), 
+        status: 'PENDING', 
+        items: cart, 
+        created_by: user.name,
+        area: selectedCust.address || ''
       }]);
+      
+      if (error) throw error;
+      
       alert("অর্ডার সেভ হয়েছে!");
-      setShowAddModal(false); setCart([]); setSelectedCust(null); setCurrentStep(1); fetchData();
-    } catch (err: any) { alert(err.message); } finally { setIsSaving(false); }
+      setShowAddModal(false); 
+      setCart([]); 
+      setSelectedCust(null); 
+      setCurrentStep(1); 
+      fetchData();
+    } catch (err: any) { 
+      alert("অর্ডার সাবমিট ব্যর্থ: " + (err.message || "সার্ভার কানেকশন এরর!")); 
+    } finally { 
+      setIsSaving(false); 
+    }
   };
 
   const handleApproveOrder = async () => {
@@ -157,7 +174,6 @@ const OrderManagement: React.FC<OrderManagementProps> = ({ company, user }) => {
           <div key={order.id} onClick={() => { setSelectedOrder(order); setShowDetailModal(true); }} className="bg-white p-8 rounded-[3rem] border border-slate-100 shadow-sm hover:shadow-xl transition-all cursor-pointer group animate-reveal">
              <div className="flex justify-between items-start mb-6">
                 <span className={`px-4 py-1.5 rounded-xl text-[8px] font-black uppercase tracking-widest ${order.status === 'PENDING' ? 'bg-orange-50 text-orange-600' : 'bg-emerald-50 text-emerald-600'}`}>{order.status}</span>
-                {/* 🗑️ Delete Button for Admin and Staff */}
                 {(isAdmin || isStaff) && (
                   <button 
                     onClick={(e) => handleDeleteOrder(order.id, e)} 
