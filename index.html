@@ -17,9 +17,11 @@
         body { font-family: 'Plus Jakarta Sans', 'Hind Siliguri', sans-serif; overflow-x: hidden; font-weight: 500; }
         #root { min-height: 100%; }
         
-        .custom-scroll::-webkit-scrollbar { width: 4px; }
+        /* Premium System-like Scrollbar */
+        .custom-scroll::-webkit-scrollbar { width: 6px; }
         .custom-scroll::-webkit-scrollbar-track { background: transparent; }
         .custom-scroll::-webkit-scrollbar-thumb { background: rgba(0, 0, 0, 0.1); border-radius: 20px; }
+        .custom-scroll:hover::-webkit-scrollbar-thumb { background: rgba(0, 0, 0, 0.2); }
 
         /* Enhanced Animations */
         @keyframes reveal {
@@ -90,7 +92,7 @@
 <link rel="stylesheet" href="/index.css">
 </head>
 <body>
-    <div id="root"></div>
+    <div id="root" class="custom-scroll"></div>
     <script type="module" src="./index.tsx"></script>
 <script type="module" src="/index.tsx"></script>
 </body>
