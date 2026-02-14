@@ -18,6 +18,15 @@ interface CompanyStats {
   totalPaid: number;
 }
 
+interface OrderItem {
+  id: string;
+  name: string;
+  tp: number;
+  qty: number;
+  company: string;
+  action: 'SALE' | 'RETURN' | 'REPLACE';
+}
+
 const CustomerPortal: React.FC<PortalProps> = ({ type, user }) => {
   const [activeCompany, setActiveCompany] = useState<Company>('Transtec');
   const [ads, setAds] = useState<Advertisement[]>([]);
@@ -29,9 +38,9 @@ const CustomerPortal: React.FC<PortalProps> = ({ type, user }) => {
   const [productSearch, setProductSearch] = useState("");
   const [isDownloading, setIsDownloading] = useState(false);
   const [isSavingOrder, setIsSavingOrder] = useState(false);
-
-  // Order Cart State
-  const [orderCart, setOrderCart] = useState<any[]>([]);
+  
+  const [orderCart, setOrderCart] = useState<OrderItem[]>([]);
+  const [orderView, setOrderView] = useState<'BROWSE' | 'CART'>('BROWSE');
 
   const ledgerRef = useRef<HTMLDivElement>(null);
   const sliderTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -45,16 +54,19 @@ const CustomerPortal: React.FC<PortalProps> = ({ type, user }) => {
   const companies: Company[] = ['Transtec', 'SQ Light', 'SQ Cables'];
 
   useEffect(() => {
-    fetchAllData();
-    if (type === 'DASHBOARD') fetchAds();
+    if (user.customer_id) {
+      fetchAllData();
+      if (type === 'DASHBOARD') fetchAds();
+    }
   }, [user.customer_id, type]);
 
   useEffect(() => {
-    if (type === 'CATALOG' || type === 'ORDER') fetchProducts();
-    if (type === 'LEDGER') fetchLedgerForCompany(activeCompany);
-  }, [type, activeCompany]);
+    if (user.customer_id) {
+      if (type === 'CATALOG' || type === 'ORDER') fetchProducts();
+      if (type === 'LEDGER') fetchLedgerForCompany(activeCompany);
+    }
+  }, [type, activeCompany, user.customer_id]);
 
-  // 🎡 Slider Timer
   useEffect(() => {
     if (ads.length > 1) {
       sliderTimerRef.current = setInterval(() => {
@@ -78,7 +90,6 @@ const CustomerPortal: React.FC<PortalProps> = ({ type, user }) => {
         .select('*')
         .eq('company', dbCo)
         .order('name');
-      
       if (error) throw error;
       setProducts(data || []);
     } catch (err) {
@@ -93,13 +104,13 @@ const CustomerPortal: React.FC<PortalProps> = ({ type, user }) => {
     if (!user.customer_id) return;
     setLoading(true);
     try {
+      const dbCo = mapToDbCompany(co);
       const { data, error } = await supabase
         .from('transactions')
         .select('*')
         .eq('customer_id', user.customer_id)
-        .eq('company', mapToDbCompany(co))
+        .eq('company', dbCo)
         .order('created_at', { ascending: false });
-      
       if (error) throw error;
       setLedger(data || []);
     } catch (err) {
@@ -118,7 +129,6 @@ const CustomerPortal: React.FC<PortalProps> = ({ type, user }) => {
         .from('transactions')
         .select('amount, payment_type, company')
         .eq('customer_id', user.customer_id);
-      
       if (error) throw error;
 
       const stats: Record<string, CompanyStats> = {
@@ -154,79 +164,66 @@ const CustomerPortal: React.FC<PortalProps> = ({ type, user }) => {
     setIsDownloading(true);
     try {
       const element = ledgerRef.current;
-      const canvas = await html2canvas(element, { scale: 3, useCORS: true, backgroundColor: '#ffffff' });
+      const canvas = await html2canvas(element, { 
+        scale: 3, 
+        useCORS: true, 
+        backgroundColor: '#ffffff',
+        logging: false
+      });
       const imgData = canvas.toDataURL('image/jpeg', 1.0);
       const pdf = new jsPDF('p', 'mm', 'a4');
       const pdfWidth = pdf.internal.pageSize.getWidth();
       const imgHeight = (canvas.height * pdfWidth) / canvas.width;
       pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, imgHeight);
-      pdf.save(`Statement_${user.name}_${activeCompany}_${new Date().getTime()}.pdf`);
+      pdf.save(`Statement_${user.name.replace(/\s+/g, '_')}_${activeCompany}.pdf`);
     } catch (err) {
-      alert("পিডিএফ ডাউনলোড ব্যর্থ হয়েছে।");
+      alert("PDF ডাউনলোড ব্যর্থ হয়েছে।");
     } finally {
       setIsDownloading(false);
     }
   };
 
   const addToCart = (p: Product) => {
-    const existing = orderCart.find(item => item.id === p.id);
-    if (existing) {
-      setOrderCart(orderCart.map(item => item.id === p.id ? { ...item, qty: (Number(item.qty) || 0) + 1 } : item));
-    } else {
-      setOrderCart([...orderCart, { ...p, qty: 1, action: 'SALE' }]);
-    }
+    setOrderCart(prev => {
+      const existing = prev.find(item => item.id === p.id);
+      if (existing) return prev.map(item => item.id === p.id ? { ...item, qty: item.qty + 1 } : item);
+      return [...prev, { id: p.id, name: p.name, tp: p.tp, qty: 1, company: p.company, action: 'SALE' }];
+    });
   };
 
-  const updateCartItem = (id: string, updates: any) => {
-    setOrderCart(prev => 
-      prev.map(item => item.id === id ? { ...item, ...updates } : item)
-    );
+  const updateCartItem = (id: string, updates: Partial<OrderItem>) => {
+    setOrderCart(prev => prev.map(item => item.id === id ? { ...item, ...updates } : item).filter(item => item.qty > 0));
   };
 
   const removeFromCart = (id: string) => {
     setOrderCart(prev => prev.filter(item => item.id !== id));
   };
 
-  const submitOrder = async () => {
-    if (orderCart.length === 0 || isSavingOrder) return;
-    if (orderCart.some(i => (Number(i.qty) || 0) <= 0)) {
-       alert("দয়া করে সকল পণ্যের পরিমাণ (Quantity) ১ বা তার বেশি দিন।");
-       return;
-    }
-    if (!confirm("আপনি কি নিশ্চিতভাবে এই অর্ডারটি কনফার্ম করতে চান?")) return;
+  const calculateTotal = () => {
+    return orderCart.reduce((s, i) => {
+      if (i.action === 'REPLACE') return s;
+      const amt = i.tp * i.qty;
+      return i.action === 'RETURN' ? s - amt : s + amt;
+    }, 0);
+  };
 
+  const submitOrder = async () => {
+    if (!user.customer_id || orderCart.length === 0 || isSavingOrder) return;
+    if (!confirm("আপনি কি নিশ্চিতভাবে এই অর্ডারটি সাবমিট করতে চান?")) return;
     setIsSavingOrder(true);
     try {
       const dbCo = mapToDbCompany(activeCompany);
-      const totalAmt = orderCart.reduce((sum, item) => {
-         const q = Number(item.qty) || 0;
-         if (item.action === 'RETURN') return sum - (item.tp * q);
-         if (item.action === 'REPLACE') return sum;
-         return sum + (item.tp * q);
-      }, 0);
-      
+      const totalAmount = calculateTotal();
       const { error } = await supabase.from('market_orders').insert([{
-        customer_id: user.customer_id,
-        company: dbCo,
-        total_amount: totalAmt,
-        status: 'PENDING',
-        items: orderCart.map(i => ({ 
-          id: i.id, 
-          name: i.name, 
-          price: i.tp, 
-          qty: Number(i.qty) || 0, 
-          mrp: i.mrp, 
-          action: i.action || 'SALE' 
-        })),
-        created_by: `CUSTOMER: ${user.name}`
+        customer_id: user.customer_id, company: dbCo, total_amount: totalAmount,
+        status: 'PENDING', items: orderCart, created_by: user.name
       }]);
-
       if (error) throw error;
-
-      alert("আপনার অর্ডারটি সফলভাবে পাঠানো হয়েছে! কর্তৃপক্ষ শীঘ্রই আপনার সাথে যোগাযোগ করবে।");
+      alert("অর্ডার সফলভাবে সাবমিট হয়েছে! ✅");
       setOrderCart([]);
+      setOrderView('BROWSE');
     } catch (err: any) {
-      alert("অর্ডার পাঠাতে সমস্যা হয়েছে: " + err.message);
+      alert("অর্ডার সাবমিট ব্যর্থ: " + err.message);
     } finally {
       setIsSavingOrder(false);
     }
@@ -241,54 +238,136 @@ const CustomerPortal: React.FC<PortalProps> = ({ type, user }) => {
     }
   };
 
-  const filteredProducts = products.filter(p => 
-    (p.name || "").toLowerCase().includes((productSearch || "").toLowerCase()) &&
-    (Number(p.stock) || 0) > 0
-  );
-
-  const currentStat = multiStats[activeCompany] || { balance: 0 };
-  const totalCartValue = orderCart.reduce((sum, item) => {
-    const amt = item.mrp * (Number(item.qty) || 0);
-    if (item.action === 'RETURN') return sum - amt;
-    if (item.action === 'REPLACE') return sum;
-    return sum + amt;
-  }, 0);
-
   return (
-    <div className="space-y-12 pb-40 animate-reveal font-sans text-slate-900 bg-[#f8fafc]">
-      
-      {/* 🟢 VIEW 1: DASHBOARD */}
-      {type === 'DASHBOARD' && (
-        <div className="space-y-14">
-          <div className="relative group overflow-hidden rounded-[4.5rem] shadow-2xl border-8 border-white h-[450px] md:h-[600px] bg-slate-950">
-             {ads.length > 0 ? (
-               ads.map((ad, idx) => {
-                 const theme = getBrandTheme(ad.company);
-                 return (
-                    <div 
-                      key={ad.id} 
-                      className={`absolute inset-0 transition-all duration-1000 ${idx === currentAdIndex ? 'opacity-100 scale-100' : 'opacity-0 scale-110'}`}
-                    >
-                       {ad.image_url && <img src={ad.image_url} className="w-full h-full object-cover opacity-60" alt="" />}
-                       <div className="absolute inset-0 bg-gradient-to-t from-black via-black/20 to-transparent p-12 flex flex-col justify-end">
-                          <span className={`bg-gradient-to-r ${theme.gradient} text-white px-6 py-2 rounded-full text-[10px] font-black uppercase italic mb-6 w-fit`}>
-                             {theme.icon} {ad.company} | {(ad.type || "").replace('_', ' ')}
-                          </span>
-                          <h3 className="text-4xl md:text-8xl font-black text-white uppercase italic tracking-tighter leading-tight drop-shadow-2xl">{ad.title}</h3>
-                       </div>
-                    </div>
-                 )
-               })
-             ) : <div className="h-full flex items-center justify-center text-white/10 font-black text-6xl italic">IFZA HUB</div>}
-          </div>
+    <div className="space-y-12 animate-reveal font-sans text-slate-900 bg-[#f8fafc]">
+      {type === 'LEDGER' && (
+        <div className="space-y-10 animate-reveal pb-20">
+           <div className="bg-[#0f172a] p-10 md:p-14 rounded-[4rem] text-white shadow-2xl flex flex-col md:flex-row justify-between items-center gap-10 relative overflow-hidden">
+              <div className="absolute top-0 right-0 w-96 h-96 bg-blue-600/10 blur-[100px] rounded-full"></div>
+              <div className="relative z-10">
+                 <h2 className="text-4xl md:text-5xl font-black uppercase italic tracking-tighter leading-none mb-4">ব্যক্তিগত স্টেটমেন্ট</h2>
+                 <p className="text-blue-400 font-bold uppercase tracking-[0.4em] italic text-[11px]">Ledger History • {activeCompany}</p>
+              </div>
+              <div className="flex flex-wrap justify-center gap-4 relative z-10">
+                 <button 
+                   disabled={isDownloading || loading}
+                   onClick={handleDownloadPDF}
+                   className="bg-emerald-600 text-white px-10 py-5 rounded-[2.5rem] font-black uppercase text-[11px] tracking-widest shadow-xl active:scale-95 transition-all flex items-center gap-4"
+                 >
+                   {isDownloading ? "পিডিএফ জেনারেট হচ্ছে..." : "PDF রিপোর্ট ডাউনলোড ⎙"}
+                 </button>
+                 <div className="flex gap-2 bg-white/5 p-1.5 rounded-3xl backdrop-blur-xl border border-white/5">
+                    {companies.map(co => (
+                      <button key={co} onClick={() => setActiveCompany(co)} className={`px-6 py-3 rounded-2xl font-black uppercase text-[9px] transition-all ${activeCompany === co ? 'bg-white text-slate-900 shadow-md' : 'text-slate-500 hover:text-white'}`}>{co}</button>
+                    ))}
+                 </div>
+              </div>
+           </div>
 
+           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+              <div className="bg-white p-10 rounded-[3.5rem] shadow-xl border border-slate-100 group overflow-hidden relative">
+                 <div className="absolute top-0 right-0 w-24 h-24 bg-rose-50 rounded-bl-[4rem] -z-0 opacity-40"></div>
+                 <p className="text-[11px] font-black text-slate-400 uppercase italic mb-2 relative z-10">মোট বিল</p>
+                 <p className="text-4xl font-black italic text-slate-800 tracking-tighter relative z-10">৳{(multiStats[activeCompany]?.totalBill || 0).toLocaleString()}</p>
+              </div>
+              <div className="bg-white p-10 rounded-[3.5rem] shadow-xl border border-slate-100 group overflow-hidden relative">
+                 <div className="absolute top-0 right-0 w-24 h-24 bg-emerald-50 rounded-bl-[4rem] -z-0 opacity-40"></div>
+                 <p className="text-[11px] font-black text-slate-400 uppercase italic mb-2 relative z-10">মোট জমা</p>
+                 <p className="text-4xl font-black italic text-emerald-600 tracking-tighter relative z-10">৳{(multiStats[activeCompany]?.totalPaid || 0).toLocaleString()}</p>
+              </div>
+              <div className="bg-slate-900 p-10 rounded-[3.5rem] shadow-2xl text-white group overflow-hidden relative">
+                 <div className="absolute top-0 right-0 w-24 h-24 bg-white/5 rounded-bl-[4rem] -z-0"></div>
+                 <p className="text-[11px] font-black text-indigo-400 uppercase italic mb-2 relative z-10">বর্তমান বকেয়া</p>
+                 <p className="text-4xl font-black italic text-rose-400 tracking-tighter relative z-10">৳{(multiStats[activeCompany]?.balance || 0).toLocaleString()}</p>
+              </div>
+           </div>
+
+           <div ref={ledgerRef} className="bg-white rounded-[4rem] border border-slate-100 shadow-xl overflow-hidden p-2">
+              <div className="bg-slate-900 text-white p-14 text-center border-b-[10px] border-blue-600">
+                 <h1 className="text-5xl font-black uppercase italic tracking-tighter mb-2">IFZA ELECTRONICS</h1>
+                 <p className="text-md font-black uppercase tracking-[0.5em] text-blue-400 mb-8">{activeCompany} STATEMENT</p>
+                 <div className="mt-10 text-left border-t border-white/10 pt-10 flex justify-between">
+                    <div>
+                       <p className="text-[10px] font-black text-slate-500 uppercase italic mb-1 tracking-widest">Customer Details:</p>
+                       <p className="text-3xl font-black uppercase italic text-white leading-tight">{user.name}</p>
+                    </div>
+                    <div className="text-right flex flex-col justify-end">
+                       <p className="text-[10px] font-black text-slate-500 uppercase italic mb-1 tracking-widest">Date Generated:</p>
+                       <p className="text-xl font-black text-white">{new Date().toLocaleDateString('bn-BD', { day: '2-digit', month: 'long', year: 'numeric' })}</p>
+                    </div>
+                 </div>
+              </div>
+              
+              <div className="overflow-x-auto custom-scroll">
+                <table className="w-full text-left border-collapse">
+                   <thead>
+                      <tr className="bg-slate-50 text-[11px] font-black text-slate-400 uppercase tracking-[0.3em] border-b">
+                         <th className="px-12 py-10">তারিখ</th>
+                         <th className="px-12 py-10">বিবরণ</th>
+                         <th className="px-12 py-10 text-right">ডেবিট (বাকি)</th>
+                         <th className="px-12 py-10 text-right">ক্রেডিট (জমা)</th>
+                      </tr>
+                   </thead>
+                   <tbody className="divide-y divide-slate-100">
+                      {loading ? (
+                         <tr><td colSpan={4} className="p-40 text-center animate-pulse font-black uppercase text-slate-300">তথ্য সিঙ্ক হচ্ছে...</td></tr>
+                      ) : ledger.length === 0 ? (
+                         <tr><td colSpan={4} className="p-40 text-center italic font-black text-slate-200 text-xl uppercase tracking-widest">No Transactions Found</td></tr>
+                      ) : ledger.map((tx, idx) => (
+                        <tr key={tx.id} className="hover:bg-blue-50/40 transition-all font-bold group animate-reveal" style={{ animationDelay: `${idx * 0.02}s` }}>
+                           <td className="px-12 py-10 text-slate-400 italic font-black text-sm">{new Date(tx.created_at).toLocaleDateString('bn-BD')}</td>
+                           <td className="px-12 py-10 uppercase italic font-black text-slate-800">
+                              <span className={tx.payment_type === 'COLLECTION' ? 'text-emerald-600' : 'text-indigo-600'}>
+                                 {tx.payment_type === 'COLLECTION' ? '💰 টাকা জমা' : '📄 সেলস মেমো'}
+                              </span>
+                              <p className="text-[8px] opacity-40 font-bold mt-1 tracking-widest uppercase">ID: #{tx.id.slice(-6).toUpperCase()}</p>
+                           </td>
+                           <td className="px-12 py-10 text-right text-rose-600 text-2xl font-black italic tracking-tighter">
+                              {tx.payment_type !== 'COLLECTION' ? `৳${Math.round(tx.amount || 0).toLocaleString()}` : '—'}
+                           </td>
+                           <td className="px-12 py-10 text-right text-emerald-600 text-2xl font-black italic tracking-tighter">
+                              {tx.payment_type === 'COLLECTION' ? `৳${Math.round(tx.amount || 0).toLocaleString()}` : '—'}
+                           </td>
+                        </tr>
+                      ))}
+                   </tbody>
+                </table>
+              </div>
+              <div className="p-14 border-t-2 border-slate-100 bg-slate-50/30 flex justify-between items-end">
+                 <div className="w-60 border-t border-black pt-4 text-center font-black italic uppercase text-[10px]">Accounts Authority</div>
+                 <div className="text-right">
+                    <p className="text-[10px] font-black uppercase italic text-slate-400">Final Summary</p>
+                    <p className="text-3xl font-black italic text-slate-900">৳{(multiStats[activeCompany]?.balance || 0).toLocaleString()}</p>
+                    <p className="text-[8px] font-black uppercase text-rose-500 mt-1">Net Balance Due</p>
+                 </div>
+              </div>
+           </div>
+        </div>
+      )}
+
+      {type === 'DASHBOARD' && (
+        <div className="space-y-14 pb-20">
+          <div className="relative group overflow-hidden rounded-[4.5rem] shadow-2xl border-8 border-white h-[450px] md:h-[600px] bg-slate-950">
+             {ads.length > 0 ? ads.map((ad, idx) => {
+               const theme = getBrandTheme(ad.company);
+               return (
+                  <div key={ad.id} className={`absolute inset-0 transition-all duration-1000 ${idx === currentAdIndex ? 'opacity-100 scale-100' : 'opacity-0 scale-110'}`}>
+                     {ad.image_url && <img src={ad.image_url} className="w-full h-full object-cover opacity-60" alt="" />}
+                     <div className="absolute inset-0 bg-gradient-to-t from-black via-black/20 to-transparent p-12 flex flex-col justify-end">
+                        <span className={`bg-gradient-to-r ${theme.gradient} text-white px-6 py-2 rounded-full text-[10px] font-black uppercase italic mb-6 w-fit`}>{theme.icon} {ad.company}</span>
+                        <h3 className="text-4xl md:text-8xl font-black text-white uppercase italic tracking-tighter leading-tight">{ad.title}</h3>
+                     </div>
+                  </div>
+               )
+             }) : <div className="h-full flex items-center justify-center text-white/10 font-black text-6xl italic">IFZA HUB</div>}
+          </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-10">
              {companies.map(co => {
                 const theme = getBrandTheme(co);
-                const stat = multiStats[co] || { balance: 0, totalBill: 0, totalPaid: 0 };
+                const stat = multiStats[co] || { balance: 0 };
                 return (
                   <div key={co} className="bg-white rounded-[4rem] p-12 shadow-xl border border-slate-100 relative overflow-hidden group">
-                     <div className={`w-20 h-20 rounded-[2.2rem] bg-gradient-to-br ${theme.gradient} flex items-center justify-center text-white text-4xl font-black mb-10 shadow-2xl ${theme.shadow}`}>{theme.icon}</div>
+                     <div className={`w-20 h-20 rounded-[2.2rem] bg-gradient-to-br ${theme.gradient} flex items-center justify-center text-white text-4xl font-black mb-10 shadow-2xl`}>{theme.icon}</div>
                      <h4 className="text-2xl font-black uppercase italic text-slate-800 tracking-tighter mb-4">{co}</h4>
                      <p className="text-[11px] font-black text-slate-400 uppercase italic mb-2">Active Balance Due</p>
                      <p className={`text-5xl font-black italic tracking-tighter ${(stat.balance || 0) > 0 ? 'text-red-600' : 'text-emerald-600'}`}>৳{(stat.balance || 0).toLocaleString()}</p>
@@ -296,241 +375,173 @@ const CustomerPortal: React.FC<PortalProps> = ({ type, user }) => {
                 )
              })}
           </div>
+        </div>
+      )}
 
-          <div className="bg-slate-900 p-14 rounded-[5rem] text-white flex flex-col md:flex-row justify-between items-center gap-10 shadow-2xl relative overflow-hidden">
-             <div className="relative z-10 flex flex-col md:flex-row items-center gap-10 text-center md:text-left">
-                <div className="w-40 h-40 bg-white/5 rounded-[3.5rem] border border-white/10 flex items-center justify-center text-7xl shadow-inner animate-float">📱</div>
-                <div>
-                   <h3 className="text-4xl font-black uppercase italic tracking-tighter mb-4">স্বাগতম, {user.name}</h3>
-                   <p className="text-slate-400 text-lg mb-8 uppercase tracking-widest italic">হেড অফিস যোগাযোগ: 01727544275</p>
-                   <a href="tel:01727544275" className="bg-emerald-600 px-12 py-5 rounded-full font-black text-sm uppercase tracking-widest inline-flex items-center gap-4 hover:bg-emerald-700 transition-all active:scale-95">📞 কল করুন (Call Now)</a>
+      {type === 'CATALOG' && (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 pb-20">
+           {ads.map(ad => (
+             <div key={ad.id} className="bg-white rounded-[3.5rem] overflow-hidden border border-slate-100 shadow-lg group">
+                <div className="aspect-video bg-slate-100 overflow-hidden">
+                   {ad.image_url && <img src={ad.image_url} className="w-full h-full object-cover group-hover:scale-110 transition-all duration-1000" alt="" />}
+                </div>
+                <div className="p-10">
+                   <span className="bg-blue-50 text-blue-600 px-4 py-1.5 rounded-xl text-[8px] font-black uppercase tracking-widest italic">{ad.company}</span>
+                   <h4 className="text-xl font-black uppercase italic mt-4 mb-2 text-slate-800">{ad.title}</h4>
+                   <p className="text-slate-400 text-sm font-medium italic line-clamp-3 leading-relaxed">"{ad.content}"</p>
                 </div>
              </div>
-          </div>
+           ))}
         </div>
       )}
 
-      {/* 📒 VIEW 2: LEDGER */}
-      {type === 'LEDGER' && (
-        <div className="space-y-10 animate-reveal">
-           <div className="bg-slate-900 p-10 md:p-12 rounded-[4rem] text-white shadow-2xl flex flex-col md:flex-row justify-between items-center gap-8">
-              <div>
-                 <h2 className="text-4xl md:text-5xl font-black uppercase italic tracking-tighter leading-none mb-4">ব্যক্তিগত লেজার</h2>
-                 <p className="text-slate-500 font-bold uppercase tracking-widest italic">Statement History • {activeCompany}</p>
-              </div>
-              <div className="flex flex-wrap justify-center gap-3">
-                 <button 
-                   disabled={isDownloading || loading}
-                   onClick={handleDownloadPDF}
-                   className="bg-emerald-600 text-white px-8 py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-xl active:scale-95 transition-all flex items-center gap-3"
-                 >
-                   {isDownloading ? "তৈরি হচ্ছে..." : "স্টেটমেন্ট ডাউনলোড ⎙"}
-                 </button>
-                 <div className="flex gap-2 bg-white/5 p-1 rounded-2xl">
-                    {companies.map(co => (
-                      <button key={co} onClick={() => setActiveCompany(co)} className={`px-6 py-3 rounded-xl font-black uppercase text-[9px] whitespace-nowrap transition-all ${activeCompany === co ? 'bg-white text-slate-900 shadow-md scale-105' : 'text-slate-500 hover:text-white'}`}>{co}</button>
-                    ))}
-                 </div>
-              </div>
-           </div>
-
-           <div className="bg-white rounded-[4rem] border shadow-xl overflow-hidden">
-              <table className="w-full text-left border-collapse">
-                 <thead>
-                    <tr className="bg-slate-50 text-[11px] font-black text-slate-400 uppercase tracking-widest border-b">
-                       <th className="px-6 md:px-14 py-8 md:py-10">তারিখ</th>
-                       <th className="px-6 md:px-14 py-8 md:py-10">বিবরণ</th>
-                       <th className="px-6 md:px-14 py-8 md:py-10 text-right">ডেবিট (বাকি)</th>
-                       <th className="px-6 md:px-14 py-8 md:py-10 text-right">ক্রেডিট (জমা)</th>
-                    </tr>
-                 </thead>
-                 <tbody className="divide-y divide-slate-100">
-                    {loading ? (
-                       <tr><td colSpan={4} className="p-40 text-center animate-pulse font-black uppercase text-slate-300">তথ্য লোড হচ্ছে...</td></tr>
-                    ) : ledger.map(tx => (
-                      <tr key={tx.id} className="hover:bg-blue-50/30 transition-all font-bold group">
-                         <td className="px-6 md:px-14 py-8 md:py-12 text-slate-400 italic font-black">{new Date(tx.created_at).toLocaleDateString('bn-BD')}</td>
-                         <td className="px-6 md:px-14 py-8 md:py-12 uppercase italic font-black">
-                            {tx.payment_type === 'COLLECTION' ? '💰 নগদ জমা' : '📄 সেলস মেমো'}
-                            <p className="text-[8px] opacity-40 font-normal">Ref: #{tx.id.slice(-6).toUpperCase()}</p>
-                         </td>
-                         <td className="px-6 md:px-14 py-8 md:py-12 text-right text-red-600 text-lg md:text-2xl font-black italic">
-                            {tx.payment_type !== 'COLLECTION' ? `৳${Math.round(tx.amount || 0).toLocaleString()}` : '—'}
-                         </td>
-                         <td className="px-6 md:px-14 py-8 md:py-12 text-right text-emerald-600 text-lg md:text-2xl font-black italic">
-                            {tx.payment_type === 'COLLECTION' ? `৳${Math.round(tx.amount || 0).toLocaleString()}` : '—'}
-                         </td>
-                      </tr>
-                    ))}
-                 </tbody>
-              </table>
-           </div>
-        </div>
-      )}
-
-      {/* 🛒 VIEW 3: ORDER */}
+      {/* 🛒 PREMIUM REDESIGNED ORDER VIEW */}
       {type === 'ORDER' && (
-        <div className="space-y-10 animate-reveal">
-           <div className="bg-slate-900 p-10 md:p-12 rounded-[4rem] text-white shadow-2xl flex flex-col md:flex-row justify-between items-center gap-8">
-              <div>
-                 <h2 className="text-4xl md:text-5xl font-black uppercase italic tracking-tighter leading-none mb-4">অর্ডার কাটুন</h2>
-                 <p className="text-slate-500 font-bold uppercase tracking-widest italic">Place Your Market Order • {activeCompany}</p>
-              </div>
-              <div className="flex gap-2 bg-white/5 p-1 rounded-2xl">
-                 {companies.map(co => (
-                   <button key={co} onClick={() => setActiveCompany(co)} className={`px-6 py-3 rounded-xl font-black uppercase text-[9px] whitespace-nowrap transition-all ${activeCompany === co ? 'bg-blue-600 text-white shadow-md scale-105' : 'text-slate-500 hover:text-white'}`}>{co}</button>
-                 ))}
-              </div>
-           </div>
-
-           <div className="flex flex-col lg:flex-row gap-10">
-              <div className="flex-1 space-y-6">
-                 <div className="relative">
-                    <input 
-                      className="w-full p-8 md:p-10 bg-white border-2 rounded-[3.5rem] text-xl md:text-2xl font-black uppercase italic shadow-sm outline-none focus:border-blue-600 transition-all pl-16 md:pl-20 text-black" 
-                      placeholder="মডেল সার্চ করুন..." 
-                      value={productSearch} 
-                      onChange={e => setProductSearch(e.target.value)} 
-                    />
-                    <span className="absolute left-6 md:left-8 top-1/2 -translate-y-1/2 text-2xl md:text-4xl opacity-20">🔍</span>
-                 </div>
-
-                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-h-[600px] overflow-y-auto custom-scroll pr-2">
-                    {loading ? (
-                       <div className="col-span-full py-20 text-center animate-pulse text-slate-300 font-black uppercase italic">লোড হচ্ছে...</div>
-                    ) : filteredProducts.map(p => (
-                       <div key={p.id} onClick={() => addToCart(p)} className="bg-white p-8 rounded-[3.5rem] border-2 border-transparent shadow-sm hover:border-blue-600 hover:shadow-xl transition-all cursor-pointer flex justify-between items-center group active:scale-95">
-                          <div className="min-w-0 pr-4">
-                             <h4 className="text-lg font-black uppercase italic text-slate-800 leading-tight mb-2 truncate">{p.name}</h4>
-                             <div className="flex flex-col gap-1">
-                                <p className="text-[11px] font-black text-blue-600 italic leading-none">MRP: ৳{(p.mrp || 0).toLocaleString()}</p>
-                                <p className="text-[10px] font-black uppercase tracking-widest leading-none text-emerald-500">Available In Stock</p>
-                             </div>
-                          </div>
-                          <div className="w-12 h-12 bg-blue-50 rounded-2xl flex items-center justify-center text-blue-600 font-black text-xl group-hover:bg-blue-600 group-hover:text-white transition-all shadow-sm">+</div>
-                       </div>
-                    ))}
-                 </div>
-              </div>
-
-              <div className="w-full lg:w-[450px] space-y-6">
-                 <div className="bg-white p-10 rounded-[4rem] shadow-xl border border-slate-100 flex flex-col h-[700px]">
-                    <div className="border-b pb-8 mb-8 flex justify-between items-center">
-                       <h3 className="text-xl font-black uppercase italic text-slate-900">অর্ডার লিস্ট 🛒</h3>
-                       <span className="bg-blue-100 text-blue-600 px-4 py-1 rounded-full text-[10px] font-black">{orderCart.length} আইটেম</span>
-                    </div>
-
-                    <div className="flex-1 overflow-y-auto custom-scroll space-y-4 pr-2">
-                       {orderCart.length === 0 ? (
-                         <div className="h-full flex flex-col items-center justify-center opacity-10 text-center py-20">
-                            <span className="text-8xl mb-4">👜</span>
-                            <p className="font-black uppercase tracking-widest text-sm">আপনার ব্যাগ খালি</p>
-                         </div>
-                       ) : orderCart.map(item => (
-                         <div key={item.id} className="bg-slate-50 p-6 rounded-[2.5rem] border border-slate-100 animate-reveal relative group">
-                            <button 
-                              onClick={() => removeFromCart(item.id)} 
-                              className="absolute top-4 right-4 w-10 h-10 bg-red-600 text-white rounded-full flex items-center justify-center text-sm shadow-xl active:scale-90 transition-all z-10"
-                              title="মুছে ফেলুন"
-                            >
-                              ✕
-                            </button>
-                            <p className="text-[11px] font-black uppercase italic text-slate-800 mb-4 pr-10">{item.name}</p>
-                            
-                            <div className="flex flex-col gap-4">
-                               <div className="flex justify-between items-center">
-                                  <div className="flex items-center gap-2 bg-white p-1.5 rounded-2xl border shadow-inner">
-                                     <button onClick={() => updateCartItem(item.id, { qty: Math.max(0, (Number(item.qty) || 0) - 1) })} className="w-10 h-10 font-black text-xl hover:text-red-500 transition-colors text-black">−</button>
-                                     <input 
-                                       type="number" 
-                                       className="w-16 h-10 text-center font-black text-lg bg-slate-50 rounded-lg outline-none focus:ring-2 ring-blue-200 transition-all text-black"
-                                       value={item.qty === 0 ? "" : item.qty}
-                                       onChange={(e) => {
-                                          const val = e.target.value === "" ? 0 : parseInt(e.target.value);
-                                          updateCartItem(item.id, { qty: isNaN(val) ? 0 : val });
-                                       }}
-                                       min="0"
-                                     />
-                                     <button onClick={() => updateCartItem(item.id, { qty: (Number(item.qty) || 0) + 1 })} className="w-10 h-10 font-black text-xl hover:text-blue-600 transition-colors text-black">+</button>
-                                  </div>
-                                  <div className="text-right">
-                                     <p className="text-[10px] font-black text-slate-400 leading-none">Total MRP</p>
-                                     <p className="text-lg font-black italic text-slate-900 mt-1">৳{((item.mrp || 0) * (Number(item.qty) || 0)).toLocaleString()}</p>
-                                  </div>
-                               </div>
-
-                               <div className="flex gap-2 p-1 bg-white/50 rounded-2xl border border-slate-100">
-                                  <button onClick={() => updateCartItem(item.id, { action: 'SALE' })} className={`flex-1 py-2 rounded-xl font-black text-[9px] uppercase tracking-tighter transition-all ${item.action === 'SALE' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-400 hover:text-slate-600'}`}>Order (S)</button>
-                                  <button onClick={() => updateCartItem(item.id, { action: 'RETURN' })} className={`flex-1 py-2 rounded-xl font-black text-[9px] uppercase tracking-tighter transition-all ${item.action === 'RETURN' ? 'bg-rose-600 text-white shadow-md' : 'text-slate-400 hover:text-slate-600'}`}>Return (R)</button>
-                                  <button onClick={() => updateCartItem(item.id, { action: 'REPLACE' })} className={`flex-1 py-2 rounded-xl font-black text-[9px] uppercase tracking-tighter transition-all ${item.action === 'REPLACE' ? 'bg-cyan-600 text-white shadow-md' : 'text-slate-400 hover:text-slate-600'}`}>Replace (Rp)</button>
-                               </div>
-                            </div>
-                         </div>
+        <div className="max-w-xl mx-auto px-4 md:px-0 animate-reveal">
+           {orderView === 'BROWSE' ? (
+              <div className="space-y-10 pb-40">
+                 {/* Top Navigation & Search */}
+                 <div className="bg-white p-8 rounded-[3.5rem] border-2 border-slate-50 shadow-xl sticky top-4 z-50">
+                    <div className="flex gap-2 mb-8">
+                       {companies.map(co => (
+                         <button key={co} onClick={() => setActiveCompany(co)} className={`flex-1 py-5 rounded-[2rem] font-black uppercase text-[10px] transition-all tracking-widest ${activeCompany === co ? 'bg-blue-600 text-white shadow-xl scale-105' : 'bg-slate-50 text-slate-400'}`}>{co}</button>
                        ))}
                     </div>
+                    <div className="relative">
+                       <input 
+                         className="w-full p-6 bg-slate-50 border-none rounded-[2.5rem] font-black text-sm uppercase italic outline-none focus:ring-4 ring-blue-50 transition-all placeholder:text-slate-300" 
+                         placeholder="মডেল সার্চ করুন..." 
+                         value={productSearch} 
+                         onChange={e => setProductSearch(e.target.value)} 
+                       />
+                       <div className="absolute right-6 top-1/2 -translate-y-1/2 flex items-center gap-4">
+                          {orderCart.length > 0 && (
+                             <button onClick={() => setOrderView('CART')} className="bg-emerald-500 text-white px-6 py-2.5 rounded-full text-[10px] font-black uppercase shadow-lg animate-bounce flex items-center gap-2">
+                                🛒 ({orderCart.length})
+                             </button>
+                          )}
+                       </div>
+                    </div>
+                 </div>
 
-                    <div className="mt-8 pt-8 border-t space-y-8">
-                       <div className="flex justify-between items-end">
+                 {/* Product List */}
+                 <div className="grid grid-cols-1 gap-5">
+                    {loading ? (
+                      <div className="py-20 text-center">
+                         <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+                         <p className="font-black text-slate-300 uppercase italic text-xs">মডেল লোড হচ্ছে...</p>
+                      </div>
+                    ) : products.filter(p => p.name.toLowerCase().includes(productSearch.toLowerCase())).map((p, idx) => {
+                       const inCart = orderCart.find(i => i.id === p.id);
+                       return (
+                         <div key={p.id} onClick={() => addToCart(p)} className={`p-8 bg-white rounded-[3.5rem] border-2 transition-all flex justify-between items-center cursor-pointer group active:scale-95 animate-reveal ${inCart ? 'border-blue-500 bg-blue-50/20' : 'border-slate-50 hover:border-blue-100 shadow-sm'}`} style={{ animationDelay: `${idx * 0.05}s` }}>
+                            <div className="min-w-0 pr-6">
+                               <p className={`text-[15px] font-black uppercase italic leading-tight truncate ${inCart ? 'text-blue-700' : 'text-slate-800'}`}>{p.name}</p>
+                               <div className="flex gap-4 items-center mt-3">
+                                  <p className="text-[11px] font-bold text-blue-600">MRP: ৳{p.mrp}</p>
+                                  <span className="w-1 h-1 bg-slate-200 rounded-full"></span>
+                                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{activeCompany}</p>
+                               </div>
+                            </div>
+                            <div className={`w-14 h-14 rounded-[1.8rem] flex items-center justify-center text-3xl font-black transition-all ${inCart ? 'bg-blue-600 text-white shadow-xl' : 'bg-slate-50 text-slate-300 group-hover:bg-blue-50 group-hover:text-blue-500'}`}>
+                               {inCart ? <span className="animate-reveal">✓</span> : "+"}
+                            </div>
+                         </div>
+                       );
+                    })}
+                 </div>
+              </div>
+           ) : (
+              /* 🛒 CART VIEW - PREMIUM MOBILE STYLE */
+              <div className="space-y-10 pb-[500px] animate-reveal">
+                 <div className="flex justify-between items-end px-6">
+                    <div>
+                       <h4 className="text-4xl font-black uppercase italic tracking-tighter text-slate-800">অর্ডার লিস্ট 🛒</h4>
+                       <p className="text-blue-500 font-bold uppercase tracking-widest text-[10px] mt-2">আপনার কার্টে {orderCart.length} টি আইটেম আছে</p>
+                    </div>
+                    <button onClick={() => setOrderView('BROWSE')} className="bg-white border-2 border-slate-100 text-slate-400 px-6 py-3 rounded-2xl font-black uppercase text-[9px] tracking-widest hover:border-blue-600 hover:text-blue-600 transition-all active:scale-90 shadow-sm">← আরও যোগ করুন</button>
+                 </div>
+
+                 <div className="space-y-6">
+                    {orderCart.map((item, idx) => (
+                      <div key={item.id} className="bg-white p-10 rounded-[4rem] border shadow-xl relative animate-reveal overflow-hidden group" style={{ animationDelay: `${idx * 0.05}s` }}>
+                         {/* Remove Button */}
+                         <button onClick={() => removeFromCart(item.id)} className="absolute top-6 right-6 w-12 h-12 bg-rose-500 rounded-full flex items-center justify-center text-white text-xl font-black shadow-lg hover:scale-110 active:scale-90 transition-all z-10">✕</button>
+                         
+                         {/* Header Info */}
+                         <div className="mb-10 pr-12">
+                            <h5 className="text-[20px] font-black uppercase italic text-slate-800 leading-tight">{item.name}</h5>
+                            <p className="text-[10px] font-bold text-slate-400 mt-2 uppercase tracking-widest italic">{activeCompany} DIVISION</p>
+                         </div>
+
+                         {/* Quantity & Total Row */}
+                         <div className="flex flex-col md:flex-row items-center justify-between gap-8 mb-10">
+                            <div className="flex items-center bg-slate-50 rounded-[2.5rem] p-2 border shadow-inner w-full md:w-auto">
+                               <button onClick={() => updateCartItem(item.id, { qty: item.qty - 1 })} className="w-16 h-16 rounded-[1.8rem] bg-white shadow-md flex items-center justify-center text-4xl font-black text-slate-300 hover:text-rose-500 transition-colors active:scale-90">-</button>
+                               <span className="w-24 text-center font-black text-3xl italic text-slate-900">{item.qty}</span>
+                               <button onClick={() => updateCartItem(item.id, { qty: item.qty + 1 })} className="w-16 h-16 rounded-[1.8rem] bg-white shadow-md flex items-center justify-center text-3xl font-black text-slate-300 hover:text-blue-600 transition-colors active:scale-90">+</button>
+                            </div>
+                            <div className="text-right w-full md:w-auto">
+                               <p className="text-[10px] font-black text-slate-400 uppercase italic mb-1 tracking-widest">Total Value</p>
+                               <p className="text-4xl font-black italic tracking-tighter text-slate-900 leading-none">৳{(item.tp * item.qty).toLocaleString()}</p>
+                            </div>
+                         </div>
+
+                         {/* ACTION TOGGLE BUTTONS (S, R, RP Style) */}
+                         <div className="bg-slate-50 p-2 rounded-[2.5rem] flex gap-2 border shadow-inner">
+                            <button 
+                              onClick={() => updateCartItem(item.id, { action: 'SALE' })} 
+                              className={`flex-1 py-4 rounded-[1.8rem] text-[11px] font-black uppercase tracking-widest transition-all ${item.action === 'SALE' ? 'bg-blue-600 text-white shadow-xl' : 'bg-transparent text-slate-400 hover:text-slate-600'}`}
+                            >
+                               Order (S)
+                            </button>
+                            <button 
+                              onClick={() => updateCartItem(item.id, { action: 'RETURN' })} 
+                              className={`flex-1 py-4 rounded-[1.8rem] text-[11px] font-black uppercase tracking-widest transition-all ${item.action === 'RETURN' ? 'bg-rose-500 text-white shadow-xl' : 'bg-transparent text-slate-400 hover:text-slate-600'}`}
+                            >
+                               Return (R)
+                            </button>
+                            <button 
+                              onClick={() => updateCartItem(item.id, { action: 'REPLACE' })} 
+                              className={`flex-1 py-4 rounded-[1.8rem] text-[11px] font-black uppercase tracking-widest transition-all ${item.action === 'REPLACE' ? 'bg-cyan-500 text-white shadow-xl' : 'bg-transparent text-slate-400 hover:text-slate-600'}`}
+                            >
+                               Replace (RP)
+                            </button>
+                         </div>
+                      </div>
+                    ))}
+                    {orderCart.length === 0 && (
+                       <div className="py-40 text-center flex flex-col items-center opacity-10">
+                          <span className="text-9xl mb-6 italic">🛒</span>
+                          <p className="font-black text-2xl uppercase tracking-[0.5em]">আপনার কার্ট খালি</p>
+                       </div>
+                    )}
+                 </div>
+
+                 {/* 💳 STICKY BOTTOM CONFIRMATION BAR */}
+                 <div className="fixed bottom-0 left-0 right-0 z-[6000] p-6 pointer-events-none flex justify-center">
+                    <div className="bg-white p-10 md:p-12 rounded-[4rem] shadow-[0_-40px_100px_rgba(0,0,0,0.15),0_40px_100px_rgba(0,0,0,0.3)] border-2 border-slate-50 space-y-8 animate-reveal pointer-events-auto w-full max-w-lg md:max-w-xl">
+                       <div className="flex justify-between items-end border-b-2 border-slate-50 pb-8">
                           <div>
-                             <p className="text-[10px] font-black text-slate-400 uppercase italic mb-1">নিট বিল (MRP অনুযায়ী)</p>
-                             <p className={`text-4xl font-black italic tracking-tighter ${totalCartValue < 0 ? 'text-rose-600' : 'text-slate-900'}`}>৳{Math.abs(totalCartValue).toLocaleString()}{totalCartValue < 0 ? ' [Return]' : ''}</p>
+                             <p className="text-[11px] font-black text-slate-400 uppercase italic mb-3 tracking-widest">নিট বিল (MRP অনুযায়ী)</p>
+                             <p className="text-5xl md:text-6xl font-black italic tracking-tighter text-slate-900 leading-none">৳{calculateTotal().toLocaleString()}</p>
+                          </div>
+                          <div className="text-right">
+                             <div className="w-16 h-16 bg-blue-50 text-blue-600 rounded-[1.8rem] flex items-center justify-center font-black italic shadow-inner text-2xl">if</div>
                           </div>
                        </div>
-                       <button disabled={orderCart.length === 0 || isSavingOrder} onClick={submitOrder} className="w-full bg-blue-600 text-white py-8 rounded-[3rem] font-black uppercase text-xs tracking-[0.3em] shadow-2xl active:scale-95 transition-all disabled:opacity-30">
-                          {isSavingOrder ? "অর্ডার পাঠানো হচ্ছে..." : "অর্ডার কনফার্ম করুন ➔"}
+                       <button 
+                         disabled={orderCart.length === 0 || isSavingOrder} 
+                         onClick={submitOrder} 
+                         className="w-full bg-blue-600 text-white py-8 md:py-10 rounded-[3rem] font-black uppercase text-base tracking-[0.3em] shadow-[0_25px_50px_rgba(37,99,235,0.4)] active:scale-95 transition-all hover:bg-blue-700 disabled:opacity-50 flex items-center justify-center gap-6 group"
+                       >
+                          <span className="group-hover:translate-x-1 transition-transform">{isSavingOrder ? 'প্রসেস হচ্ছে...' : 'অর্ডার কনফার্ম করুন'}</span>
+                          <span className="text-3xl group-hover:translate-x-2 transition-transform">➔</span>
                        </button>
                     </div>
                  </div>
               </div>
-           </div>
-        </div>
-      )}
-
-      {/* 📢 VIEW 4: CATALOG */}
-      {type === 'CATALOG' && (
-        <div className="space-y-10 animate-reveal">
-           <div className="bg-slate-900 p-12 rounded-[4rem] text-white shadow-2xl flex flex-col md:flex-row justify-between items-center gap-8">
-              <div>
-                 <h2 className="text-5xl font-black uppercase italic tracking-tighter leading-none mb-4">অফার ও ক্যাটালগ</h2>
-                 <p className="text-slate-500 font-bold uppercase tracking-widest italic">Digital Price List • {activeCompany}</p>
-              </div>
-              <div className="flex gap-2 w-full md:w-auto overflow-x-auto no-scrollbar">
-                 {companies.map(co => (
-                   <button key={co} onClick={() => setActiveCompany(co)} className={`px-10 py-5 rounded-3xl font-black uppercase text-[11px] transition-all whitespace-nowrap ${activeCompany === co ? 'bg-amber-600 text-white shadow-xl scale-105' : 'bg-white/5 text-slate-400'}`}>{co}</button>
-                 ))}
-              </div>
-           </div>
-
-           <div className="relative">
-              <input 
-                className="w-full p-8 md:p-10 bg-white border-2 rounded-[3.5rem] text-xl md:text-2xl font-black uppercase italic shadow-sm outline-none focus:border-blue-600 transition-all pl-16 md:pl-20 text-black" 
-                placeholder="মডেল সার্চ করুন..." 
-                value={productSearch} 
-                onChange={e => setProductSearch(e.target.value)} 
-              />
-              <span className="absolute left-6 md:left-8 top-1/2 -translate-y-1/2 text-2xl md:text-4xl opacity-20">🔍</span>
-           </div>
-
-           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-              {loading ? (
-                <div className="col-span-full py-40 text-center animate-pulse font-black uppercase text-slate-300">পণ্য তালিকা লোড হচ্ছে...</div>
-              ) : filteredProducts.map(p => {
-                 const theme = getBrandTheme(activeCompany);
-                 return (
-                   <div key={p.id} className="bg-white p-8 md:p-12 rounded-[4rem] border shadow-sm group hover:shadow-2xl transition-all animate-reveal">
-                      <p className="text-[10px] font-black text-slate-400 uppercase italic mb-8">SKU: #{(p.id || "").slice(-4).toUpperCase()}</p>
-                      <h4 className="text-xl md:text-2xl font-black uppercase italic text-slate-800 leading-tight mb-12 min-h-[60px] group-hover:text-blue-600">{(p.name || "Unknown Product")}</h4>
-                      <div className="pt-10 border-t flex justify-between items-end">
-                         <div>
-                            <p className={`text-[11px] font-black uppercase mb-2 bg-clip-text text-transparent bg-gradient-to-r ${theme.gradient}`}>Retail Rate</p>
-                            <p className="text-4xl md:text-5xl font-black italic text-slate-900 tracking-tighter">৳{(p.mrp || 0).toLocaleString()}</p>
-                         </div>
-                         <div className="w-16 h-16 bg-blue-50 rounded-2xl flex items-center justify-center text-blue-600 text-3xl font-bold opacity-0 group-hover:opacity-100 group-hover:-translate-y-2 transition-all">🏷️</div>
-                      </div>
-                   </div>
-                 )
-              })}
-           </div>
+           )}
         </div>
       )}
     </div>
