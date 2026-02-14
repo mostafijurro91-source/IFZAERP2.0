@@ -40,6 +40,10 @@ const Bookings: React.FC<BookingsProps> = ({ company, role, user }) => {
   const [currentStep, setCurrentStep] = useState(1);
   const [form, setForm] = useState({ advance: 0 });
 
+  // Delivery & Payment States for selected booking
+  const [deliveryUpdates, setDeliveryUpdates] = useState<Record<string, number>>({});
+  const [newPaymentAmt, setNewPaymentAmt] = useState<string>("");
+
   const invoiceRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => { fetchData(); }, [company]);
@@ -71,6 +75,72 @@ const Bookings: React.FC<BookingsProps> = ({ company, role, user }) => {
       setCustomers(custData || []);
       setProducts(prodData.data || []);
     } catch (err) { console.error(err); } finally { setLoading(false); }
+  };
+
+  const handleUpdateBookingStats = async () => {
+    if (!selectedBooking || isSaving) return;
+    setIsSaving(true);
+    try {
+      const dbCo = mapToDbCompany(company);
+      
+      // 1. Process Delivery Updates
+      const updatedItems = selectedBooking.items.map(item => {
+        const updateVal = Number(deliveryUpdates[item.id] || 0);
+        return { 
+          ...item, 
+          delivered_qty: (item.delivered_qty || 0) + updateVal 
+        };
+      });
+
+      // 2. Process New Payment
+      const payAmt = Number(newPaymentAmt) || 0;
+      const newAdvance = (selectedBooking.advance_amount || 0) + payAmt;
+
+      // Calculate new status
+      let newStatus = selectedBooking.status;
+      const allDone = updatedItems.every(i => i.delivered_qty >= i.qty);
+      const someDone = updatedItems.some(i => i.delivered_qty > 0);
+      if (allDone) newStatus = 'COMPLETED';
+      else if (someDone) newStatus = 'PARTIAL';
+
+      const { error: bkError } = await supabase.from('bookings').update({
+        items: updatedItems,
+        advance_amount: newAdvance,
+        status: newStatus
+      }).eq('id', selectedBooking.id);
+
+      if (bkError) throw bkError;
+
+      // Record transaction if payment made
+      if (payAmt > 0) {
+        await supabase.from('transactions').insert([{
+          customer_id: selectedBooking.customer_id,
+          company: dbCo,
+          amount: payAmt,
+          payment_type: 'COLLECTION',
+          items: [{ note: `বুকিং পেমেন্ট আপডেট (ID: ${selectedBooking.id.slice(-6).toUpperCase()})` }],
+          submitted_by: user.name
+        }]);
+      }
+
+      // Update Inventory Stock for delivered items
+      for (const id in deliveryUpdates) {
+        const q = Number(deliveryUpdates[id]);
+        if (q > 0) {
+          await supabase.rpc('increment_stock', { row_id: id, amt: -q });
+        }
+      }
+
+      alert("বুকিং এবং ডেলিভারি তথ্য আপডেট হয়েছে!");
+      setDeliveryUpdates({});
+      setNewPaymentAmt("");
+      setShowDetailModal(false);
+      fetchData();
+    } catch (err: any) {
+      alert("ত্রুটি: " + err.message);
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const handleAddBooking = async () => {
@@ -127,7 +197,6 @@ const Bookings: React.FC<BookingsProps> = ({ company, role, user }) => {
   const updateCartItem = (idx: number, updates: any) => {
     const updated = [...bookingCart];
     const item = { ...updated[idx], ...updates };
-    // Ensure numeric calculations
     const price = Number(item.unitPrice) || 0;
     const qty = Number(item.qty) || 0;
     item.total = qty * price;
@@ -165,7 +234,6 @@ const Bookings: React.FC<BookingsProps> = ({ company, role, user }) => {
 
   return (
     <div className="space-y-6 pb-24 font-sans text-black animate-reveal">
-      {/* 📊 Summary Stats */}
       <div className="grid grid-cols-2 md:grid-cols-3 gap-3 no-print">
         <div className="bg-white p-5 md:p-8 rounded-[2.2rem] border shadow-sm">
            <p className="text-[10px] font-black text-slate-400 uppercase italic mb-1">বুকিং ভ্যালু</p>
@@ -187,7 +255,6 @@ const Bookings: React.FC<BookingsProps> = ({ company, role, user }) => {
         </div>
       </div>
 
-      {/* ⚙️ Toolbar */}
       <div className="bg-white p-4 md:p-6 rounded-[2.5rem] border shadow-sm flex flex-col md:flex-row justify-between items-center gap-4 no-print">
         <div className="flex items-center gap-4">
            <div className="w-12 h-12 bg-indigo-600 rounded-2xl flex items-center justify-center text-white text-2xl font-black italic shadow-lg">B</div>
@@ -212,12 +279,11 @@ const Bookings: React.FC<BookingsProps> = ({ company, role, user }) => {
         </div>
       </div>
 
-      {/* 📦 Booking List Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 no-print">
         {loading ? (
           <div className="col-span-full py-20 text-center animate-pulse font-black uppercase italic opacity-20">লোড হচ্ছে...</div>
         ) : filteredBookings.map(b => (
-            <div key={b.id} onClick={() => { setSelectedBooking(b); setShowDetailModal(true); }} className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm hover:shadow-xl transition-all cursor-pointer group relative flex flex-col justify-between">
+            <div key={b.id} onClick={() => { setSelectedBooking(b); setDeliveryUpdates({}); setNewPaymentAmt(""); setShowDetailModal(true); }} className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm hover:shadow-xl transition-all cursor-pointer group relative flex flex-col justify-between animate-reveal">
                <div className="mb-4">
                   <div className="flex justify-between items-start mb-4">
                      <span className={`px-3 py-1 rounded-lg text-[8px] font-black uppercase tracking-widest ${
@@ -304,7 +370,6 @@ const Bookings: React.FC<BookingsProps> = ({ company, role, user }) => {
                 </div>
               ) : (
                 <div className="flex-1 flex flex-col lg:flex-row overflow-hidden">
-                   {/* Left: Product Selection */}
                    <div className="w-full lg:w-1/2 p-8 border-r overflow-hidden flex flex-col gap-6 bg-slate-50">
                       <div className="flex justify-between items-center px-4">
                          <h4 className="text-[10px] font-black text-slate-400 uppercase italic tracking-widest">পণ্য যোগ করুন</h4>
@@ -321,13 +386,13 @@ const Bookings: React.FC<BookingsProps> = ({ company, role, user }) => {
                       </div>
                       <div className="flex-1 overflow-y-auto custom-scroll grid grid-cols-1 md:grid-cols-2 gap-3 pr-2 content-start">
                          {filteredProducts.map(p => {
-                           const isIn = bookingCart.find(i => i.product_id === p.id);
+                           const isInCart = bookingCart.find(i => i.product_id === p.id);
                            return (
-                             <div key={p.id} onClick={() => addToCart(p)} className={`p-5 rounded-[2rem] border-2 transition-all cursor-pointer flex flex-col justify-between h-32 ${isIn ? 'bg-blue-600 border-blue-600 text-white shadow-xl scale-[1.02]' : 'bg-white border-slate-100 hover:border-blue-300 hover:shadow-md'}`}>
+                             <div key={p.id} onClick={() => addToCart(p)} className={`p-5 rounded-[2rem] border-2 transition-all cursor-pointer flex flex-col justify-between h-32 ${isInCart ? 'bg-blue-600 border-blue-600 text-white shadow-xl scale-[1.02]' : 'bg-white border-slate-100 hover:border-blue-300 hover:shadow-md'}`}>
                                 <p className="text-[11px] font-black uppercase italic leading-tight mb-2 line-clamp-2">{p.name}</p>
                                 <div className="flex justify-between items-end">
-                                   <p className={`text-[8px] font-bold ${isIn ? 'text-blue-100' : 'text-slate-400'} uppercase tracking-widest`}>Stock: {p.stock}</p>
-                                   <p className={`text-[12px] font-black italic ${isIn ? 'text-white' : 'text-blue-600'}`}>৳{p.tp}</p>
+                                   <p className={`text-[8px] font-bold ${isInCart ? 'text-blue-100' : 'text-slate-400'} uppercase tracking-widest`}>Stock: {p.stock}</p>
+                                   <p className={`text-[12px] font-black italic ${isInCart ? 'text-white' : 'text-blue-600'}`}>৳{p.tp}</p>
                                 </div>
                              </div>
                            );
@@ -335,7 +400,6 @@ const Bookings: React.FC<BookingsProps> = ({ company, role, user }) => {
                       </div>
                    </div>
 
-                   {/* Right: Cart & Advance - Improved with Offer Rate Edit */}
                    <div className="w-full lg:w-1/2 flex flex-col bg-white">
                       <div className="p-8 flex justify-between items-center border-b bg-slate-900/5">
                          <div className="min-w-0">
@@ -354,77 +418,39 @@ const Bookings: React.FC<BookingsProps> = ({ company, role, user }) => {
                                  <p className="text-[12px] font-black uppercase italic text-slate-800 leading-tight flex-1 pr-4">{item.name}</p>
                                  <button onClick={() => updateCartItem(idx, { qty: 0 })} className="w-10 h-10 bg-rose-50 text-rose-500 rounded-2xl flex items-center justify-center font-black hover:bg-rose-500 hover:text-white transition-all shadow-sm">✕</button>
                               </div>
-                              
                               <div className="grid grid-cols-2 gap-4">
                                  <div className="space-y-1">
-                                    <label className="text-[8px] font-black text-blue-500 uppercase tracking-widest ml-3 italic">বুকিং রেট (Editable)</label>
-                                    <div className="relative">
-                                       <span className="absolute left-4 top-1/2 -translate-y-1/2 font-black text-blue-400 italic">৳</span>
-                                       <input 
-                                          type="number" 
-                                          className="w-full p-4 bg-blue-50/50 border-2 border-blue-100 rounded-2xl font-black text-lg italic text-blue-700 outline-none pl-8 focus:border-blue-500 transition-all shadow-inner"
-                                          value={item.unitPrice} 
-                                          onChange={e => updateCartItem(idx, { unitPrice: e.target.value })} 
-                                       />
-                                    </div>
+                                    <label className="text-[8px] font-black text-blue-500 uppercase tracking-widest ml-3 italic">বুকিং রেট</label>
+                                    <input type="number" className="w-full p-4 bg-blue-50 border-2 border-blue-100 rounded-2xl font-black text-lg italic text-blue-700 outline-none" value={item.unitPrice} onChange={e => updateCartItem(idx, { unitPrice: e.target.value })} />
                                  </div>
                                  <div className="space-y-1">
-                                    <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest ml-3 italic">পরিমাণ (Qty)</label>
-                                    <div className="flex items-center bg-slate-100 rounded-2xl p-1 shadow-inner border border-slate-200">
-                                       <button onClick={() => updateCartItem(idx, { qty: item.qty - 1 })} className="w-12 h-12 font-black text-2xl text-slate-300 hover:text-rose-500 active:scale-90 transition-all">−</button>
-                                       <input 
-                                          type="number" 
-                                          className="flex-1 text-center bg-transparent font-black text-xl italic outline-none text-slate-800" 
-                                          value={item.qty} 
-                                          onChange={e => updateCartItem(idx, { qty: Number(e.target.value) })} 
-                                       />
-                                       <button onClick={() => updateCartItem(idx, { qty: item.qty + 1 })} className="w-12 h-12 font-black text-2xl text-slate-300 hover:text-blue-600 active:scale-90 transition-all">+</button>
+                                    <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest ml-3 italic">পরিমাণ</label>
+                                    <div className="flex items-center bg-slate-100 rounded-2xl p-1 shadow-inner border">
+                                       <button onClick={() => updateCartItem(idx, { qty: item.qty - 1 })} className="w-10 h-10 font-black text-xl text-slate-300 hover:text-rose-500">-</button>
+                                       <input type="number" className="flex-1 text-center bg-transparent font-black text-xl italic outline-none" value={item.qty} onChange={e => updateCartItem(idx, { qty: Number(e.target.value) })} />
+                                       <button onClick={() => updateCartItem(idx, { qty: item.qty + 1 })} className="w-10 h-10 font-black text-xl text-slate-300 hover:text-blue-600">+</button>
                                     </div>
                                  </div>
-                              </div>
-                              <div className="mt-4 pt-4 border-t border-slate-50 text-right">
-                                 <p className="text-[10px] font-black italic text-slate-400">সাব-টোটাল: <span className="text-slate-900 text-sm">৳{item.total.toLocaleString()}</span></p>
                               </div>
                            </div>
                          ))}
-                         {bookingCart.length === 0 && (
-                           <div className="py-28 flex flex-col items-center justify-center opacity-10">
-                              <span className="text-8xl mb-4">🛒</span>
-                              <p className="font-black uppercase italic tracking-widest text-sm">কার্ট খালি</p>
-                           </div>
-                         )}
                       </div>
 
                       <div className="p-8 bg-slate-900 text-white rounded-t-[3.5rem] shadow-[0_-15px_40px_rgba(0,0,0,0.2)] space-y-6">
                          <div className="flex flex-col md:flex-row justify-between items-end gap-6">
                             <div className="flex-1 w-full">
-                               <p className="text-[9px] font-black text-emerald-500 uppercase italic mb-3 tracking-widest">আজকের জমা (বুকিং অগ্রিম)</p>
-                               <div className="relative">
-                                  <span className="absolute left-6 top-1/2 -translate-y-1/2 text-2xl font-black italic text-emerald-500 opacity-40">৳</span>
-                                  <input 
-                                    type="number" 
-                                    className="w-full p-6 bg-white/5 border-2 border-white/10 rounded-[2rem] text-center text-4xl font-black italic text-emerald-400 outline-none focus:border-emerald-500 transition-all shadow-inner pl-12"
-                                    placeholder="0"
-                                    value={form.advance || ""}
-                                    onChange={e => setForm({ ...form, advance: Number(e.target.value) })}
-                                  />
-                               </div>
+                               <p className="text-[9px] font-black text-emerald-500 uppercase italic mb-3 tracking-widest">বুকিং অগ্রিম জমা</p>
+                               <input type="number" className="w-full p-6 bg-white/5 border-2 border-white/10 rounded-[2rem] text-center text-4xl font-black italic text-emerald-400 outline-none" placeholder="0" value={form.advance || ""} onChange={e => setForm({ ...form, advance: Number(e.target.value) })} />
                             </div>
                             <div className="text-right shrink-0">
-                               <p className="text-[10px] font-black text-slate-500 uppercase italic mb-1 tracking-widest">Grand Total Bill</p>
-                               <p className="text-5xl font-black italic tracking-tighter text-blue-400 drop-shadow-[0_0_10px_rgba(59,130,246,0.3)]">
+                               <p className="text-[10px] font-black text-slate-500 uppercase italic mb-1">Grand Total</p>
+                               <p className="text-5xl font-black italic text-blue-400">
                                  {formatCurrency(bookingCart.reduce((s, i) => s + i.total, 0))}
                                </p>
                             </div>
                          </div>
-                         <button 
-                           disabled={isSaving || bookingCart.length === 0} 
-                           onClick={handleAddBooking}
-                           className="w-full bg-blue-600 text-white py-8 rounded-[2.5rem] font-black uppercase text-sm tracking-[0.4em] shadow-2xl active:scale-95 transition-all hover:bg-emerald-600 disabled:opacity-20 flex items-center justify-center gap-4 group"
-                         >
-                            {isSaving ? 'Processing...' : (
-                               <>বুকিং কনফার্ম করুন <span className="group-hover:translate-x-2 transition-transform">➔</span></>
-                            )}
+                         <button disabled={isSaving || bookingCart.length === 0} onClick={handleAddBooking} className="w-full bg-blue-600 text-white py-8 rounded-[2.5rem] font-black uppercase text-sm tracking-[0.4em] shadow-2xl active:scale-95 transition-all">
+                            {isSaving ? 'Processing...' : 'বুকিং কনফার্ম করুন ➔'}
                          </button>
                       </div>
                    </div>
@@ -434,61 +460,110 @@ const Bookings: React.FC<BookingsProps> = ({ company, role, user }) => {
         </div>
       )}
 
-      {/* 🔍 DETAIL MODAL - Optimized readability */}
+      {/* 🔍 DETAIL MODAL - Updated with Delivery & Payment Tracking */}
       {showDetailModal && selectedBooking && (
-        <div className="fixed inset-0 bg-slate-950/90 backdrop-blur-xl z-[3000] flex items-center justify-center p-0 md:p-10 no-print overflow-hidden">
-           <div className="bg-white rounded-none md:rounded-[4rem] w-full max-w-2xl h-full md:h-fit max-h-[95vh] flex flex-col shadow-2xl animate-reveal overflow-hidden">
+        <div className="fixed inset-0 bg-slate-950/90 backdrop-blur-xl z-[3000] flex items-center justify-center p-4 no-print">
+           <div className="bg-white rounded-[4rem] w-full max-w-4xl h-[90vh] flex flex-col shadow-2xl animate-reveal overflow-hidden">
               <div className="p-10 bg-slate-900 text-white flex justify-between items-center shrink-0">
                  <div>
-                    <h3 className="text-2xl font-black uppercase italic tracking-tighter leading-none">বুকিং হিসাব বিবরণী</h3>
-                    <p className="text-[10px] text-slate-500 uppercase font-black mt-3 tracking-widest">Transaction ID: #{String(selectedBooking.id).slice(-8).toUpperCase()}</p>
+                    <h3 className="text-2xl font-black uppercase italic tracking-tighter leading-none">বুকিং ও ডেলিভারি রিপোর্ট</h3>
+                    <p className="text-[10px] text-slate-500 uppercase font-black mt-3 tracking-widest">ID: #{String(selectedBooking.id).slice(-8).toUpperCase()}</p>
                  </div>
                  <button onClick={() => setShowDetailModal(false)} className="text-4xl text-slate-500 font-black hover:text-white transition-colors">✕</button>
               </div>
-              <div className="flex-1 overflow-y-auto custom-scroll p-10 space-y-12 text-slate-900 overscroll-contain">
-                 <div className="grid grid-cols-2 gap-10 pb-10 border-b-2 border-slate-50">
+
+              <div className="flex-1 overflow-y-auto custom-scroll p-10 space-y-12">
+                 <div className="grid grid-cols-1 md:grid-cols-2 gap-10 pb-10 border-b">
                     <div className="space-y-3">
-                       <p className="text-[9px] font-black text-slate-400 uppercase italic tracking-[0.2em] leading-none">দোকান তথ্য:</p>
-                       <p className="text-2xl font-black uppercase italic leading-tight text-slate-900">{selectedBooking.customer_name}</p>
-                       <p className="text-[11px] font-bold uppercase text-blue-600 tracking-widest italic">📍 {selectedBooking.customer_address}</p>
+                       <p className="text-[9px] font-black text-slate-400 uppercase italic tracking-widest">ক্রেতা তথ্য:</p>
+                       <p className="text-2xl font-black uppercase italic text-slate-900">{selectedBooking.customer_name}</p>
+                       <p className="text-[11px] font-bold text-blue-600 italic">📍 {selectedBooking.customer_address}</p>
                     </div>
-                    <div className="text-right space-y-3">
-                       <p className="text-[9px] font-black text-slate-400 uppercase italic tracking-[0.2em] leading-none">বিল পরিস্থিতি:</p>
-                       <p className="text-lg font-black italic text-emerald-600">জমা: {formatCurrency(selectedBooking.advance_amount)}</p>
-                       <p className="text-4xl font-black italic text-red-600 tracking-tighter">বাকি: {formatCurrency(selectedBooking.total_amount - selectedBooking.advance_amount)}</p>
+                    <div className="text-right space-y-6">
+                       <div className="bg-slate-50 p-6 rounded-[2rem] border">
+                          <p className="text-[9px] font-black text-slate-400 uppercase mb-2">হিসাব বিবরণী</p>
+                          <p className="text-lg font-black text-emerald-600">জমা: {formatCurrency(selectedBooking.advance_amount)}</p>
+                          <p className="text-4xl font-black text-red-600 tracking-tighter">বাকি: {formatCurrency(selectedBooking.total_amount - selectedBooking.advance_amount)}</p>
+                       </div>
+                       
+                       <div className="space-y-2">
+                          <p className="text-[9px] font-black text-emerald-500 uppercase italic tracking-widest text-left ml-4">নতুন টাকা জমা নিন</p>
+                          <div className="relative">
+                            <input 
+                              type="number" 
+                              className="w-full p-5 bg-emerald-50 border-2 border-emerald-100 rounded-2xl font-black text-xl text-emerald-600 outline-none text-center"
+                              placeholder="জমার পরিমাণ"
+                              value={newPaymentAmt}
+                              onChange={e => setNewPaymentAmt(e.target.value)}
+                            />
+                            <span className="absolute left-4 top-1/2 -translate-y-1/2 font-black text-emerald-300">৳</span>
+                          </div>
+                       </div>
                     </div>
                  </div>
+
                  <div className="space-y-6">
-                    <p className="text-[11px] font-black text-slate-400 uppercase italic tracking-widest">অর্ডারকৃত মালের ডেলিভারি অবস্থা:</p>
-                    <div className="divide-y border-2 border-slate-50 rounded-[3rem] overflow-hidden bg-slate-50 shadow-inner">
+                    <p className="text-[11px] font-black text-slate-400 uppercase italic tracking-widest">মালের ডেলিভারি আপডেট দিন:</p>
+                    <div className="space-y-4">
                        {selectedBooking.items.map((it, idx) => {
-                          const p = Math.round(((it.delivered_qty || 0) / it.qty) * 100);
+                          const delivered = (it.delivered_qty || 0);
+                          const remaining = it.qty - delivered;
+                          const progress = Math.round((delivered / it.qty) * 100);
+
                           return (
-                            <div key={idx} className="p-8 bg-white transition-all hover:bg-blue-50/20">
-                               <div className="flex justify-between items-center mb-6">
-                                  <div>
-                                     <p className="text-lg font-black uppercase italic leading-none text-slate-900 mb-3">{it.name}</p>
-                                     <div className="flex gap-4">
-                                        <p className="text-[10px] font-bold text-slate-400 uppercase italic tracking-widest">অর্ডার: <span className="text-slate-900">{it.qty}</span></p>
-                                        <p className="text-[10px] font-black text-blue-600 uppercase italic tracking-widest">ডেলিভারি: {it.delivered_qty || 0}</p>
+                            <div key={idx} className="bg-slate-50 p-8 rounded-[2.5rem] border border-slate-200 group">
+                               <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+                                  <div className="flex-1">
+                                     <h4 className="text-lg font-black uppercase italic text-slate-900 mb-2">{it.name}</h4>
+                                     <div className="flex gap-4 items-center">
+                                        <span className="bg-blue-600 text-white px-3 py-1 rounded-lg text-[9px] font-black">অর্ডার: {it.qty}</span>
+                                        <span className="bg-emerald-600 text-white px-3 py-1 rounded-lg text-[9px] font-black">ডেলিভারি হয়েছে: {delivered}</span>
+                                        <span className="bg-rose-100 text-rose-600 px-3 py-1 rounded-lg text-[9px] font-black">বাকি: {remaining}</span>
                                      </div>
                                   </div>
-                                  <div className={`w-14 h-14 rounded-full flex items-center justify-center text-sm font-black italic border-2 ${p === 100 ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-blue-50 text-blue-600 border-blue-100'}`}>
-                                     {p}%
+                                  
+                                  {remaining > 0 ? (
+                                    <div className="w-full md:w-48 space-y-2">
+                                       <p className="text-[8px] font-black text-slate-400 uppercase italic ml-2">আজ পাঠালাম (Qty)</p>
+                                       <input 
+                                         type="number" 
+                                         max={remaining}
+                                         className="w-full p-4 bg-white border-2 border-blue-100 rounded-xl font-black text-center text-blue-600 focus:border-blue-600 outline-none"
+                                         placeholder="0"
+                                         value={deliveryUpdates[it.id] || ""}
+                                         onChange={e => setDeliveryUpdates({ ...deliveryUpdates, [it.id]: Math.min(remaining, Number(e.target.value)) })}
+                                       />
+                                    </div>
+                                  ) : (
+                                    <div className="px-6 py-3 bg-emerald-100 text-emerald-600 rounded-full font-black text-[10px] uppercase italic">ডেলিভারি সম্পন্ন ✓</div>
+                                  )}
+                               </div>
+                               
+                               <div className="mt-8">
+                                  <div className="flex justify-between text-[8px] font-black text-slate-400 uppercase mb-2">
+                                     <span>ডেলিভারি অগ্রগতি</span>
+                                     <span>{progress}%</span>
+                                  </div>
+                                  <div className="h-3 bg-white rounded-full overflow-hidden border border-slate-100 shadow-inner">
+                                     <div className={`h-full transition-all duration-1000 ${progress === 100 ? 'bg-emerald-500' : 'bg-blue-500'}`} style={{ width: `${progress}%` }}></div>
                                   </div>
                                </div>
-                               <div className="h-4 bg-slate-100 rounded-full overflow-hidden shadow-inner">
-                                  <div className={`h-full transition-all duration-1000 ease-out rounded-full ${p === 100 ? 'bg-emerald-500' : 'bg-blue-600'}`} style={{ width: `${p}%` }}></div>
-                                </div>
                             </div>
                           );
                        })}
                     </div>
                  </div>
               </div>
-              <div className="p-10 bg-slate-50 border-t shrink-0 flex flex-col md:flex-row gap-4">
-                  <button onClick={() => handleDownloadPDF(invoiceRef, 'Booking_Invoice')} className="flex-1 bg-slate-900 text-white py-6 rounded-3xl font-black uppercase text-xs tracking-widest shadow-xl active:scale-95 transition-all hover:bg-blue-600">📄 বুকিং মেমো ডাউনলোড</button>
-                  <button onClick={() => setShowDetailModal(false)} className="px-10 py-6 bg-white text-slate-400 border border-slate-200 rounded-3xl font-black uppercase text-[10px] tracking-widest">বন্ধ করুন</button>
+
+              <div className="p-10 bg-slate-50 border-t flex flex-col md:flex-row gap-4 shrink-0">
+                  <button 
+                    disabled={isSaving}
+                    onClick={handleUpdateBookingStats} 
+                    className="flex-1 bg-blue-600 text-white py-6 rounded-3xl font-black uppercase text-xs tracking-[0.2em] shadow-xl active:scale-95 transition-all hover:bg-emerald-600"
+                  >
+                    {isSaving ? 'সেভ হচ্ছে...' : 'সব তথ্য আপডেট করুন ✅'}
+                  </button>
+                  <button onClick={() => handleDownloadPDF(invoiceRef, 'Booking_Update')} className="bg-slate-900 text-white px-10 py-6 rounded-3xl font-black uppercase text-xs shadow-xl active:scale-95 transition-all">📄 রিপোর্ট ডাউনলোড</button>
               </div>
            </div>
         </div>
@@ -500,7 +575,7 @@ const Bookings: React.FC<BookingsProps> = ({ company, role, user }) => {
            <div className="text-center border-b-4 border-black pb-4 mb-8">
               <h1 className="text-[34px] font-black uppercase italic mb-1 leading-none">IFZA ELECTRONICS</h1>
               <p className="text-xl font-black uppercase tracking-[0.3em] mb-1">{company}</p>
-              <p className="text-[10px] font-black uppercase bg-black text-white px-8 py-1.5 rounded-full italic inline-block mt-4">BOOKING INVOICE (বুকিং মেমো)</p>
+              <p className="text-[10px] font-black uppercase bg-black text-white px-8 py-1.5 rounded-full italic inline-block mt-4">BOOKING & DELIVERY STATUS</p>
            </div>
            {selectedBooking && (
              <>
@@ -508,30 +583,29 @@ const Bookings: React.FC<BookingsProps> = ({ company, role, user }) => {
                   <div className="space-y-1">
                      <p className="font-black border-b-2 border-black w-fit mb-3 uppercase tracking-widest opacity-60">ক্রেতা (Customer):</p>
                      <p className="text-2xl font-black uppercase italic leading-none">{selectedBooking.customer_name}</p>
-                     <p className="text-[13px] font-bold mt-2 italic tracking-tight">📍 {selectedBooking.customer_address}</p>
-                     <p className="text-[13px] font-bold">📱 {selectedBooking.customer_phone || '—'}</p>
+                     <p className="text-[13px] font-bold mt-2">📍 {selectedBooking.customer_address}</p>
                   </div>
                   <div className="text-right space-y-1">
                      <p className="font-black text-base">#BK-{String(selectedBooking.id).slice(-8).toUpperCase()}</p>
-                     <p className="font-black italic opacity-60">তারিখ: {new Date(selectedBooking.created_at).toLocaleDateString('bn-BD')}</p>
+                     <p className="font-black italic opacity-60">তারিখ: {new Date().toLocaleDateString('bn-BD')}</p>
                   </div>
                </div>
                <table className="w-full text-left border-collapse border-[2px] border-black mb-10">
                   <thead>
-                     <tr className="bg-black text-white text-[11px] font-black uppercase italic">
+                     <tr className="bg-black text-white text-[10px] font-black uppercase italic">
                         <th className="p-3 border border-black text-left">Description</th>
-                        <th className="p-3 border border-black text-center w-24">Offer Rate</th>
-                        <th className="p-3 border border-black text-center w-20">Qty</th>
-                        <th className="p-3 border border-black text-right w-28">Total</th>
+                        <th className="p-3 border border-black text-center w-16">অর্ডার</th>
+                        <th className="p-3 border border-black text-center w-16">ডেলিভারি</th>
+                        <th className="p-3 border border-black text-center w-16">বাকি</th>
                      </tr>
                   </thead>
                   <tbody>
                      {selectedBooking.items.map((it, idx) => (
                         <tr key={idx} className="font-bold text-[11px] border-b border-black italic">
                            <td className="p-3 border border-black uppercase leading-tight">{it.name}</td>
-                           <td className="p-3 border border-black text-center">৳{it.unitPrice}</td>
                            <td className="p-3 border border-black text-center">{it.qty}</td>
-                           <td className="p-3 border border-black text-right">৳{(it.unitPrice * it.qty).toLocaleString()}</td>
+                           <td className="p-3 border border-black text-center text-blue-600">{it.delivered_qty || 0}</td>
+                           <td className="p-3 border border-black text-center text-red-600">{it.qty - (it.delivered_qty || 0)}</td>
                         </tr>
                      ))}
                   </tbody>
@@ -539,15 +613,15 @@ const Bookings: React.FC<BookingsProps> = ({ company, role, user }) => {
                <div className="flex justify-end mb-20">
                   <div className="w-64 space-y-2 font-black italic text-[12px]">
                      <div className="flex justify-between border-b border-black/10 pb-1"><span>TOTAL BILL:</span><span>{formatCurrency(selectedBooking.total_amount)}</span></div>
-                     <div className="flex justify-between text-emerald-700 border-b border-black/10 pb-1"><span>ADVANCE PAID:</span><span>{formatCurrency(selectedBooking.advance_amount)}</span></div>
+                     <div className="flex justify-between text-emerald-700 border-b border-black/10 pb-1"><span>PAID AMOUNT:</span><span>{formatCurrency(selectedBooking.advance_amount)}</span></div>
                      <div className="flex justify-between text-2xl font-black border-4 border-black p-3 bg-black text-white mt-4 tracking-tighter">
-                        <span className="text-[10px] self-center uppercase font-sans font-black mr-4 tracking-widest">NET DUE:</span>
+                        <span className="text-[10px] self-center uppercase mr-4 tracking-widest">NET DUE:</span>
                         <span>{formatCurrency(selectedBooking.total_amount - selectedBooking.advance_amount)}</span>
                      </div>
                   </div>
                </div>
-               <div className="mt-auto pt-10 text-center border-t border-slate-100">
-                  <p className="text-[9px] font-black uppercase italic tracking-[0.5em] opacity-30">Infrastructure by IFZAERP.COM</p>
+               <div className="mt-auto pt-10 text-center">
+                  <p className="text-[9px] font-black uppercase italic tracking-[0.4em] opacity-30">Infrastructure by IFZAERP.COM</p>
                </div>
              </>
            )}

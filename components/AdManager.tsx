@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Company, Advertisement, UserRole } from '../types';
 import { supabase } from '../lib/supabase';
+import { GoogleGenAI } from "@google/genai";
 
 const AdManager: React.FC = () => {
   const [ads, setAds] = useState<Advertisement[]>([]);
@@ -9,10 +10,17 @@ const AdManager: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [showNotifyModal, setShowNotifyModal] = useState(false);
+  const [showVideoModal, setShowVideoModal] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [editingAd, setEditingAd] = useState<Advertisement | null>(null);
   
+  // AI Video States
+  const [videoPrompt, setVideoPrompt] = useState("");
+  const [isGeneratingVideo, setIsGeneratingVideo] = useState(false);
+  const [generatedVideoUrl, setGeneratedVideoUrl] = useState<string | null>(null);
+  const [videoStatus, setVideoStatus] = useState("");
+
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [formData, setFormData] = useState({
@@ -39,6 +47,59 @@ const AdManager: React.FC = () => {
   const fetchCustomers = async () => {
     const { data } = await supabase.from('customers').select('id, name, address').order('name');
     setCustomers(data || []);
+  };
+
+  const handleGenerateVideo = async () => {
+    if (!videoPrompt) return alert("ভিডিওর জন্য একটি প্রম্পট লিখুন!");
+    
+    // Check for API key in a standard location or assume injected
+    const apiKey = process.env.API_KEY;
+    if (!apiKey) {
+      alert("AI Video API Key missing. Please configure environment variables.");
+      return;
+    }
+
+    setIsGeneratingVideo(true);
+    setGeneratedVideoUrl(null);
+    setVideoStatus("Initializing AI Engine...");
+
+    try {
+      const ai = new GoogleGenAI({ apiKey });
+      
+      setVideoStatus("AI is imagining your video... (Approx 1-2 mins)");
+      let operation = await ai.models.generateVideos({
+        model: 'veo-3.1-fast-generate-preview',
+        prompt: videoPrompt + " for IFZA Electronics company branding, cinematic look, 4k",
+        config: {
+          numberOfVideos: 1,
+          resolution: '720p',
+          aspectRatio: '16:9'
+        }
+      });
+
+      while (!operation.done) {
+        setVideoStatus("Generating frames and motion... Please wait.");
+        await new Promise(resolve => setTimeout(resolve, 10000));
+        operation = await ai.operations.getVideosOperation({ operation: operation });
+      }
+
+      const downloadLink = operation.response?.generatedVideos?.[0]?.video?.uri;
+      if (downloadLink) {
+        setVideoStatus("Rendering complete! Fetching bytes...");
+        const response = await fetch(`${downloadLink}&key=${apiKey}`);
+        const blob = await response.blob();
+        const url = URL.createObjectURL(blob);
+        setGeneratedVideoUrl(url);
+        setVideoStatus("Done!");
+      } else {
+        throw new Error("Video generation failed to return a link.");
+      }
+    } catch (err: any) {
+      alert("ভিডিও তৈরিতে সমস্যা হয়েছে: " + err.message);
+      setVideoStatus("Failed.");
+    } finally {
+      setIsGeneratingVideo(false);
+    }
   };
 
   const compressImage = (file: File): Promise<string> => {
@@ -111,7 +172,8 @@ const AdManager: React.FC = () => {
           <h3 className="text-3xl font-black text-white uppercase italic tracking-tighter leading-none">কমিউনিকেশন হাব</h3>
           <p className="text-[10px] text-blue-400 font-black uppercase tracking-[0.4em] mt-3">Broadcast & Personal Alert Control</p>
         </div>
-        <div className="flex gap-3 relative z-10">
+        <div className="flex flex-wrap gap-3 relative z-10">
+          <button onClick={() => setShowVideoModal(true)} className="bg-emerald-600 text-white px-8 py-5 rounded-[2rem] font-black uppercase text-[10px] tracking-widest shadow-xl active:scale-95 transition-all">AI ভিডিও তৈরি 🎬</button>
           <button onClick={() => setShowNotifyModal(true)} className="bg-blue-600 text-white px-8 py-5 rounded-[2rem] font-black uppercase text-[10px] tracking-widest shadow-xl active:scale-95 transition-all">মেসেজ পাঠান 🔔</button>
           <button onClick={() => { setEditingAd(null); setFormData({title:'', content:'', company:'Transtec', type:'OFFICIAL_CATALOG', image_url:'', external_url:''}); setShowModal(true); }} className="bg-white text-slate-900 px-8 py-5 rounded-[2rem] font-black uppercase text-[10px] tracking-widest shadow-xl active:scale-95 transition-all">নতুন অফার +</button>
         </div>
@@ -119,7 +181,7 @@ const AdManager: React.FC = () => {
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
         {loading ? (
-          <div className="col-span-full py-40 text-center animate-pulse text-slate-300 font-black uppercase italic italic">Syncing Terminal...</div>
+          <div className="col-span-full py-40 text-center animate-pulse text-slate-300 font-black uppercase italic">Syncing Terminal...</div>
         ) : ads.map(ad => (
           <div key={ad.id} className="bg-white rounded-[4rem] overflow-hidden border shadow-sm group hover:shadow-2xl transition-all duration-700 animate-reveal">
              <div className="h-64 overflow-hidden bg-slate-50 relative">
@@ -140,6 +202,64 @@ const AdManager: React.FC = () => {
         ))}
       </div>
 
+      {/* 🎬 AI Video Generator Modal */}
+      {showVideoModal && (
+        <div className="fixed inset-0 bg-[#020617]/95 backdrop-blur-3xl z-[3000] flex items-center justify-center p-4">
+           <div className="bg-white rounded-[4rem] w-full max-w-3xl shadow-2xl animate-reveal overflow-hidden flex flex-col h-[85vh]">
+              <div className="p-10 bg-slate-900 text-white flex justify-between items-center shrink-0">
+                 <div>
+                    <h3 className="text-2xl font-black uppercase italic tracking-tighter">Gemini AI Video Generator</h3>
+                    <p className="text-[9px] text-blue-400 font-black uppercase mt-2 tracking-widest">Powered by Veo 3.1 Experimental</p>
+                 </div>
+                 <button onClick={() => setShowVideoModal(false)} className="text-4xl text-slate-500 hover:text-white font-black">✕</button>
+              </div>
+
+              <div className="flex-1 overflow-y-auto p-10 space-y-10 custom-scroll">
+                 <div className="space-y-6">
+                    <p className="text-[11px] font-black text-slate-400 uppercase italic tracking-widest">বর্ণনা দিন (ভিডিওতে কি দেখাতে চান):</p>
+                    <textarea 
+                      className="w-full p-8 bg-slate-50 border-2 border-slate-100 rounded-[2.5rem] font-bold text-lg italic h-40 outline-none focus:border-blue-600 transition-all shadow-inner"
+                      placeholder="যেমন: A cinematic slow motion shot of modern high quality electric switches on a luxury wall, soft lighting, 8k..."
+                      value={videoPrompt}
+                      onChange={e => setVideoPrompt(e.target.value)}
+                    />
+                    <div className="flex justify-between items-center">
+                       <p className="text-[9px] text-slate-400 font-bold uppercase italic">Recommended: English Prompt works best.</p>
+                       <button 
+                         disabled={isGeneratingVideo}
+                         onClick={handleGenerateVideo}
+                         className="bg-blue-600 text-white px-10 py-5 rounded-[2rem] font-black uppercase text-[11px] shadow-2xl active:scale-95 transition-all flex items-center gap-4"
+                       >
+                         {isGeneratingVideo ? "তৈরি হচ্ছে... ⏳" : "ভিডিও তৈরি করুন ✨"}
+                       </button>
+                    </div>
+                 </div>
+
+                 {isGeneratingVideo && (
+                    <div className="bg-slate-50 p-12 rounded-[3.5rem] flex flex-col items-center justify-center space-y-6 border-2 border-dashed border-blue-200">
+                       <div className="w-16 h-16 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+                       <p className="font-black text-blue-600 uppercase italic tracking-[0.2em]">{videoStatus}</p>
+                       <p className="text-[9px] text-slate-400 font-bold uppercase">AI is working on your request. Do not close this window.</p>
+                    </div>
+                 )}
+
+                 {generatedVideoUrl && (
+                    <div className="space-y-6 animate-reveal">
+                       <p className="text-[11px] font-black text-emerald-600 uppercase italic tracking-widest">ভিডিও তৈরি সফল! নিচে দেখুন ও ডাউনলোড করুন:</p>
+                       <div className="rounded-[3rem] overflow-hidden border-8 border-slate-900 shadow-2xl aspect-video bg-black">
+                          <video src={generatedVideoUrl} controls autoPlay loop className="w-full h-full object-cover" />
+                       </div>
+                       <div className="flex gap-4">
+                          <a href={generatedVideoUrl} download="IFZA_Promo_AI.mp4" className="flex-1 bg-emerald-600 text-white py-6 rounded-3xl font-black uppercase text-center text-xs tracking-widest shadow-xl active:scale-95 transition-all">ভিডিও ডাউনলোড করুন 📥</a>
+                          <button onClick={() => setGeneratedVideoUrl(null)} className="px-8 bg-slate-100 text-slate-400 font-black rounded-3xl uppercase text-[10px]">আবার চেষ্টা করুন</button>
+                       </div>
+                    </div>
+                 )}
+              </div>
+           </div>
+        </div>
+      )}
+
       {/* 🔔 Send Notification Modal */}
       {showNotifyModal && (
         <div className="fixed inset-0 bg-[#020617]/90 backdrop-blur-3xl z-[3000] flex items-center justify-center p-4">
@@ -151,7 +271,7 @@ const AdManager: React.FC = () => {
                  </div>
                  <form onSubmit={handleSendNotification} className="space-y-6">
                     <div className="space-y-1">
-                       <label className="text-[9px] font-black text-slate-400 uppercase ml-4 italic">টার্গেট কাস্টমার (দোকান)</label>
+                       <label className="text-[9px] font-black text-slate-400 uppercase ml-4 italic">ターゲティング (Target Shop)</label>
                        <select required className="w-full p-5 bg-slate-50 border-none rounded-2xl outline-none font-black text-[11px] uppercase italic" value={notifyData.customer_id} onChange={e => setNotifyData({...notifyData, customer_id: e.target.value})}>
                           <option value="">দোকান সিলেক্ট করুন...</option>
                           {customers.map(c => <option key={c.id} value={c.id}>{c.name} - {c.address}</option>)}
