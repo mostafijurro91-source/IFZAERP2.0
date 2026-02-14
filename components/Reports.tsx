@@ -275,32 +275,25 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName, user }) 
   const isDue = activeReport === 'CUSTOMER_DUES';
 
   if (activeReport === 'MAIN') {
+    // 🛡️ ROLE BASED REPORT FILTERING
+    const reportOptions = [
+      { id: 'MASTER_LOG_ALL', title: 'MASTER LOG (3-IN-1)', icon: '🚛', desc: 'তিন কোম্পানির রিপোর্ট এক সাথে দেখুন', color: 'bg-blue-600', anim: 'hover-float', roles: ['ADMIN'] },
+      { id: 'DELIVERY_LOG_A4', title: 'DIVISION LOG', icon: '🚚', desc: 'ডেলিভারি ও আদায় শিট', color: 'bg-slate-900', anim: 'hover-truck', roles: ['ADMIN'] },
+      { id: 'BOOKING_LOG', title: 'BOOKING LOG', icon: '📅', desc: 'বুকিং ডেলিভারি হিস্টোরি', color: 'bg-indigo-600', anim: 'hover-pulse', roles: ['ADMIN', 'STAFF'] },
+      { id: 'REPLACEMENT_SUMMARY', title: 'REPLACEMENT LOG', icon: '🔄', desc: 'রিপ্লেসমেন্ট স্টকের রিপোর্ট', color: 'bg-rose-500', anim: 'hover-pulse', roles: ['ADMIN', 'STAFF'] },
+      { id: 'MARKET_ORDERS', title: 'MARKET ORDERS', icon: '🛍️', desc: 'অপেক্ষমাণ মার্কেট অর্ডার', color: 'bg-orange-600', anim: 'hover-sway', roles: ['ADMIN', 'STAFF'] },
+      { id: 'STOCK_REPORT', title: 'STOCK LIST', icon: '📦', desc: 'ইনভেন্টরি রিপোর্ট', color: 'bg-slate-800', anim: 'hover-pulse', roles: ['ADMIN', 'STAFF'] },
+      { id: 'CUSTOMER_DUES', title: 'DUE REPORT', icon: '💸', desc: 'মার্কেট বকেয়া হিসাব', color: 'bg-red-600', anim: 'hover-float', roles: ['ADMIN', 'STAFF'] },
+      { id: 'PURCHASE_HISTORY', title: 'PURCHASE LOG', icon: '📥', desc: 'কোম্পানি কেনাকাটা', color: 'bg-emerald-600', anim: 'hover-bounce', roles: ['ADMIN'] },
+    ].filter(item => item.roles.includes(userRole || ''));
+
     return (
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 pb-32">
-        <div 
-          onClick={() => setActiveReport('MASTER_LOG_ALL')} 
-          className="col-span-full bg-blue-600 p-10 rounded-[3.5rem] shadow-xl hover:shadow-2xl cursor-pointer border-2 border-white/10 flex flex-col items-center group transition-all duration-500 hover:-translate-y-2 animate-reveal relative overflow-hidden">
-          <div className="absolute top-[-20%] left-[-10%] w-60 h-60 bg-white/5 rounded-full blur-3xl animate-pulse"></div>
-          <div className="relative z-10 flex flex-col items-center">
-             <div className="w-20 h-20 bg-white rounded-full flex items-center justify-center text-4xl mb-6 shadow-2xl">🚛</div>
-             <h3 className="text-2xl font-black uppercase italic tracking-tighter text-white leading-none">MASTER LOG (3-IN-1)</h3>
-             <p className="text-[10px] font-bold text-white/60 mt-4 uppercase tracking-[0.4em] italic">তিন কোম্পানির রিপোর্ট এক সাথে দেখুন</p>
-          </div>
-        </div>
-
-        {[
-          { id: 'DELIVERY_LOG_A4', title: 'DIVISION LOG', icon: '🚚', desc: 'ডেলিভারি ও আদায় শিট', color: 'bg-slate-900', anim: 'hover-truck' },
-          { id: 'BOOKING_LOG', title: 'BOOKING LOG', icon: '📅', desc: 'বুকিং ডেলিভারি হিস্টোরি', color: 'bg-indigo-600', anim: 'hover-pulse' },
-          { id: 'REPLACEMENT_SUMMARY', title: 'REPLACEMENT LOG', icon: '🔄', desc: 'রিপ্লেসমেন্ট স্টকের রিপোর্ট', color: 'bg-rose-500', anim: 'hover-pulse' },
-          { id: 'MARKET_ORDERS', title: 'MARKET ORDERS', icon: '🛍️', desc: 'অপেক্ষমাণ মার্কেট অর্ডার', color: 'bg-orange-600', anim: 'hover-sway' },
-          { id: 'STOCK_REPORT', title: 'STOCK LIST', icon: '📦', desc: 'ইনভেন্টরি রিপোর্ট', color: 'bg-slate-800', anim: 'hover-pulse' },
-          { id: 'CUSTOMER_DUES', title: 'DUE REPORT', icon: '💸', desc: 'মার্কেট বকেয়া হিসাব', color: 'bg-red-600', anim: 'hover-float' },
-          { id: 'PURCHASE_HISTORY', title: 'PURCHASE LOG', icon: '📥', desc: 'কোম্পানি কেনাকাটা', color: 'bg-emerald-600', anim: 'hover-bounce' },
-        ].map((item, idx) => (
+        {reportOptions.map((item, idx) => (
           <div key={item.id} 
                style={{ animationDelay: `${(idx + 1) * 0.1}s` }}
                onClick={() => setActiveReport(item.id as ReportType)} 
-               className={`bg-white p-10 rounded-[3.5rem] shadow-sm hover:shadow-2xl cursor-pointer border-2 border-slate-50 flex flex-col items-center group transition-all duration-500 hover:-translate-y-2 animate-reveal ${item.anim}`}>
+               className={`${item.id === 'MASTER_LOG_ALL' ? 'col-span-full' : ''} bg-white p-10 rounded-[3.5rem] shadow-sm hover:shadow-2xl cursor-pointer border-2 border-slate-50 flex flex-col items-center group transition-all duration-500 hover:-translate-y-2 animate-reveal ${item.anim}`}>
             <div className={`w-20 h-20 rounded-[2rem] ${item.color} flex items-center justify-center text-4xl mb-8 shadow-xl transition-all duration-500 group-hover:scale-110 group-hover:shadow-blue-500/20 text-white relative overflow-hidden`}>
               <div className="icon-inner relative z-10">{item.icon}</div>
               <div className="absolute inset-0 bg-white/10 opacity-0 group-hover:opacity-100 animate-shimmer"></div>
