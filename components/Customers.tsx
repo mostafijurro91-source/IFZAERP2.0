@@ -116,6 +116,7 @@ const Customers: React.FC<CustomerProps> = ({ company, role, userName }) => {
       }
 
       setShowModal(false); 
+      setFormData({ name: '', phone: '', address: '', money_amount: '', portal_username: '', portal_password: '' });
       await fetchCustomers();
       alert("সফলভাবে সংরক্ষিত হয়েছে!");
     } catch (err: any) { 
@@ -265,7 +266,7 @@ const Customers: React.FC<CustomerProps> = ({ company, role, userName }) => {
       {/* ➕ Add/Edit Shop Modal */}
       {showModal && (
         <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-xl z-[2000] flex items-center justify-center p-4">
-           <div className="bg-white p-8 md:p-12 rounded-[3.5rem] w-full max-w-lg shadow-2xl animate-reveal max-h-[90vh] overflow-y-auto custom-scroll">
+           <div className="bg-white p-8 md:p-12 rounded-[3.5rem] w-full max-w-lg shadow-2xl animate-reveal max-h-[90vh] overflow-y-auto custom-scroll text-black">
               <div className="flex justify-between items-center mb-8 border-b pb-6">
                  <h3 className="text-xl font-black uppercase italic tracking-tighter">{editingCustomer ? 'দোকান তথ্য এডিট' : 'নতুন দোকান রেজিস্টার'}</h3>
                  <button onClick={() => setShowModal(false)} className="text-slate-400 text-3xl font-black hover:text-red-500">×</button>
@@ -286,8 +287,8 @@ const Customers: React.FC<CustomerProps> = ({ company, role, userName }) => {
                  <div className="p-6 bg-blue-50/50 rounded-3xl border-2 border-blue-100 space-y-4">
                     <p className="text-[10px] font-black text-blue-600 uppercase text-center italic">কাস্টমার পোর্টাল এক্সেস (Login Info)</p>
                     <div className="grid grid-cols-2 gap-3">
-                       <input placeholder="User ID" className="p-4 bg-white rounded-xl font-bold text-[11px] uppercase outline-none focus:ring-2 ring-blue-300" value={formData.portal_username} onChange={e => setFormData({...formData, portal_username: e.target.value})} />
-                       <input placeholder="Password" title="ডিফল্ট পাসওয়ার্ড: 123" className="p-4 bg-white rounded-xl font-bold text-[11px] outline-none focus:ring-2 ring-blue-300" value={formData.portal_password} onChange={e => setFormData({...formData, portal_password: e.target.value})} />
+                       <input placeholder="User ID" className="p-4 bg-white rounded-xl font-bold text-[11px] uppercase outline-none focus:ring-2 ring-blue-300 text-black" value={formData.portal_username} onChange={e => setFormData({...formData, portal_username: e.target.value})} />
+                       <input placeholder="Password" title="ডিফল্ট পাসওয়ার্ড: 123" className="p-4 bg-white rounded-xl font-bold text-[11px] outline-none focus:ring-2 ring-blue-300 text-black" value={formData.portal_password} onChange={e => setFormData({...formData, portal_password: e.target.value})} />
                     </div>
                  </div>
                  <div className="space-y-1">
@@ -302,7 +303,6 @@ const Customers: React.FC<CustomerProps> = ({ company, role, userName }) => {
         </div>
       )}
 
-      {/* Admin Ledger Modal */}
       {showLedger && selectedLedgerCust && (
         <div className="fixed inset-0 bg-slate-950/95 backdrop-blur-xl z-[2000] flex items-center justify-center p-4">
            <div className="bg-white rounded-[3rem] w-full max-w-4xl h-[85vh] flex flex-col shadow-2xl animate-reveal overflow-hidden">

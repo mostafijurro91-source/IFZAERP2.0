@@ -171,7 +171,7 @@ const CustomerPortal: React.FC<PortalProps> = ({ type, user }) => {
   const addToCart = (p: Product) => {
     const existing = orderCart.find(item => item.id === p.id);
     if (existing) {
-      setOrderCart(orderCart.map(item => item.id === p.id ? { ...item, qty: item.qty + 1 } : item));
+      setOrderCart(orderCart.map(item => item.id === p.id ? { ...item, qty: (Number(item.qty) || 0) + 1 } : item));
     } else {
       setOrderCart([...orderCart, { ...p, qty: 1, action: 'SALE' }]);
     }
@@ -189,7 +189,7 @@ const CustomerPortal: React.FC<PortalProps> = ({ type, user }) => {
 
   const submitOrder = async () => {
     if (orderCart.length === 0 || isSavingOrder) return;
-    if (orderCart.some(i => (i.qty || 0) <= 0)) {
+    if (orderCart.some(i => (Number(i.qty) || 0) <= 0)) {
        alert("দয়া করে সকল পণ্যের পরিমাণ (Quantity) ১ বা তার বেশি দিন।");
        return;
     }
@@ -214,7 +214,7 @@ const CustomerPortal: React.FC<PortalProps> = ({ type, user }) => {
           id: i.id, 
           name: i.name, 
           price: i.tp, 
-          qty: i.qty, 
+          qty: Number(i.qty) || 0, 
           mrp: i.mrp, 
           action: i.action || 'SALE' 
         })),
@@ -243,12 +243,12 @@ const CustomerPortal: React.FC<PortalProps> = ({ type, user }) => {
 
   const filteredProducts = products.filter(p => 
     (p.name || "").toLowerCase().includes((productSearch || "").toLowerCase()) &&
-    (p.stock || 0) > 0
+    (Number(p.stock) || 0) > 0
   );
 
   const currentStat = multiStats[activeCompany] || { balance: 0 };
   const totalCartValue = orderCart.reduce((sum, item) => {
-    const amt = item.mrp * (item.qty || 0);
+    const amt = item.mrp * (Number(item.qty) || 0);
     if (item.action === 'RETURN') return sum - amt;
     if (item.action === 'REPLACE') return sum;
     return sum + amt;
@@ -368,7 +368,7 @@ const CustomerPortal: React.FC<PortalProps> = ({ type, user }) => {
         </div>
       )}
 
-      {/* 🛒 VIEW 3: ORDER (Market Order Feature) */}
+      {/* 🛒 VIEW 3: ORDER */}
       {type === 'ORDER' && (
         <div className="space-y-10 animate-reveal">
            <div className="bg-slate-900 p-10 md:p-12 rounded-[4rem] text-white shadow-2xl flex flex-col md:flex-row justify-between items-center gap-8">
@@ -384,11 +384,10 @@ const CustomerPortal: React.FC<PortalProps> = ({ type, user }) => {
            </div>
 
            <div className="flex flex-col lg:flex-row gap-10">
-              {/* Product List */}
               <div className="flex-1 space-y-6">
                  <div className="relative">
                     <input 
-                      className="w-full p-8 md:p-10 bg-white border-2 rounded-[3.5rem] text-xl md:text-2xl font-black uppercase italic shadow-sm outline-none focus:border-blue-600 transition-all pl-16 md:pl-20" 
+                      className="w-full p-8 md:p-10 bg-white border-2 rounded-[3.5rem] text-xl md:text-2xl font-black uppercase italic shadow-sm outline-none focus:border-blue-600 transition-all pl-16 md:pl-20 text-black" 
                       placeholder="মডেল সার্চ করুন..." 
                       value={productSearch} 
                       onChange={e => setProductSearch(e.target.value)} 
@@ -414,7 +413,6 @@ const CustomerPortal: React.FC<PortalProps> = ({ type, user }) => {
                  </div>
               </div>
 
-              {/* Shopping Cart */}
               <div className="w-full lg:w-[450px] space-y-6">
                  <div className="bg-white p-10 rounded-[4rem] shadow-xl border border-slate-100 flex flex-col h-[700px]">
                     <div className="border-b pb-8 mb-8 flex justify-between items-center">
@@ -442,45 +440,29 @@ const CustomerPortal: React.FC<PortalProps> = ({ type, user }) => {
                             <div className="flex flex-col gap-4">
                                <div className="flex justify-between items-center">
                                   <div className="flex items-center gap-2 bg-white p-1.5 rounded-2xl border shadow-inner">
-                                     <button onClick={() => updateCartItem(item.id, { qty: Math.max(0, (item.qty || 0) - 1) })} className="w-10 h-10 font-black text-xl hover:text-red-500 transition-colors">−</button>
+                                     <button onClick={() => updateCartItem(item.id, { qty: Math.max(0, (Number(item.qty) || 0) - 1) })} className="w-10 h-10 font-black text-xl hover:text-red-500 transition-colors text-black">−</button>
                                      <input 
                                        type="number" 
-                                       className="w-16 h-10 text-center font-black text-lg bg-slate-50 rounded-lg outline-none focus:ring-2 ring-blue-200 transition-all"
+                                       className="w-16 h-10 text-center font-black text-lg bg-slate-50 rounded-lg outline-none focus:ring-2 ring-blue-200 transition-all text-black"
                                        value={item.qty === 0 ? "" : item.qty}
                                        onChange={(e) => {
-                                          const valString = e.target.value;
-                                          const val = valString === "" ? 0 : parseInt(valString);
+                                          const val = e.target.value === "" ? 0 : parseInt(e.target.value);
                                           updateCartItem(item.id, { qty: isNaN(val) ? 0 : val });
                                        }}
                                        min="0"
                                      />
-                                     <button onClick={() => updateCartItem(item.id, { qty: (item.qty || 0) + 1 })} className="w-10 h-10 font-black text-xl hover:text-blue-600 transition-colors">+</button>
+                                     <button onClick={() => updateCartItem(item.id, { qty: (Number(item.qty) || 0) + 1 })} className="w-10 h-10 font-black text-xl hover:text-blue-600 transition-colors text-black">+</button>
                                   </div>
                                   <div className="text-right">
                                      <p className="text-[10px] font-black text-slate-400 leading-none">Total MRP</p>
-                                     <p className="text-lg font-black italic text-slate-900 mt-1">৳{((item.mrp || 0) * (item.qty || 0)).toLocaleString()}</p>
+                                     <p className="text-lg font-black italic text-slate-900 mt-1">৳{((item.mrp || 0) * (Number(item.qty) || 0)).toLocaleString()}</p>
                                   </div>
                                </div>
 
                                <div className="flex gap-2 p-1 bg-white/50 rounded-2xl border border-slate-100">
-                                  <button 
-                                    onClick={() => updateCartItem(item.id, { action: 'SALE' })}
-                                    className={`flex-1 py-2 rounded-xl font-black text-[9px] uppercase tracking-tighter transition-all ${item.action === 'SALE' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-400 hover:text-slate-600'}`}
-                                  >
-                                    Order (S)
-                                  </button>
-                                  <button 
-                                    onClick={() => updateCartItem(item.id, { action: 'RETURN' })}
-                                    className={`flex-1 py-2 rounded-xl font-black text-[9px] uppercase tracking-tighter transition-all ${item.action === 'RETURN' ? 'bg-rose-600 text-white shadow-md' : 'text-slate-400 hover:text-slate-600'}`}
-                                  >
-                                    Return (R)
-                                  </button>
-                                  <button 
-                                    onClick={() => updateCartItem(item.id, { action: 'REPLACE' })}
-                                    className={`flex-1 py-2 rounded-xl font-black text-[9px] uppercase tracking-tighter transition-all ${item.action === 'REPLACE' ? 'bg-cyan-600 text-white shadow-md' : 'text-slate-400 hover:text-slate-600'}`}
-                                  >
-                                    Replace (Rp)
-                                  </button>
+                                  <button onClick={() => updateCartItem(item.id, { action: 'SALE' })} className={`flex-1 py-2 rounded-xl font-black text-[9px] uppercase tracking-tighter transition-all ${item.action === 'SALE' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-400 hover:text-slate-600'}`}>Order (S)</button>
+                                  <button onClick={() => updateCartItem(item.id, { action: 'RETURN' })} className={`flex-1 py-2 rounded-xl font-black text-[9px] uppercase tracking-tighter transition-all ${item.action === 'RETURN' ? 'bg-rose-600 text-white shadow-md' : 'text-slate-400 hover:text-slate-600'}`}>Return (R)</button>
+                                  <button onClick={() => updateCartItem(item.id, { action: 'REPLACE' })} className={`flex-1 py-2 rounded-xl font-black text-[9px] uppercase tracking-tighter transition-all ${item.action === 'REPLACE' ? 'bg-cyan-600 text-white shadow-md' : 'text-slate-400 hover:text-slate-600'}`}>Replace (Rp)</button>
                                </div>
                             </div>
                          </div>
@@ -491,17 +473,11 @@ const CustomerPortal: React.FC<PortalProps> = ({ type, user }) => {
                        <div className="flex justify-between items-end">
                           <div>
                              <p className="text-[10px] font-black text-slate-400 uppercase italic mb-1">নিট বিল (MRP অনুযায়ী)</p>
-                             <p className={`text-4xl font-black italic tracking-tighter ${totalCartValue < 0 ? 'text-rose-600' : 'text-slate-900'}`}>
-                                ৳{Math.abs(totalCartValue).toLocaleString()}{totalCartValue < 0 ? ' [Return]' : ''}
-                             </p>
+                             <p className={`text-4xl font-black italic tracking-tighter ${totalCartValue < 0 ? 'text-rose-600' : 'text-slate-900'}`}>৳{Math.abs(totalCartValue).toLocaleString()}{totalCartValue < 0 ? ' [Return]' : ''}</p>
                           </div>
                        </div>
-                       <button 
-                         disabled={orderCart.length === 0 || isSavingOrder} 
-                         onClick={submitOrder}
-                         className="w-full bg-blue-600 text-white py-8 rounded-[3rem] font-black uppercase text-xs tracking-[0.3em] shadow-2xl active:scale-95 transition-all disabled:opacity-30 flex items-center justify-center gap-4 group"
-                       >
-                          {isSavingOrder ? "অর্ডার পাঠানো হচ্ছে..." : <>অর্ডার কনফার্ম করুন <span className="group-hover:translate-x-2 transition-transform">➔</span></>}
+                       <button disabled={orderCart.length === 0 || isSavingOrder} onClick={submitOrder} className="w-full bg-blue-600 text-white py-8 rounded-[3rem] font-black uppercase text-xs tracking-[0.3em] shadow-2xl active:scale-95 transition-all disabled:opacity-30">
+                          {isSavingOrder ? "অর্ডার পাঠানো হচ্ছে..." : "অর্ডার কনফার্ম করুন ➔"}
                        </button>
                     </div>
                  </div>
@@ -527,7 +503,7 @@ const CustomerPortal: React.FC<PortalProps> = ({ type, user }) => {
 
            <div className="relative">
               <input 
-                className="w-full p-8 md:p-10 bg-white border-2 rounded-[3.5rem] text-xl md:text-2xl font-black uppercase italic shadow-sm outline-none focus:border-blue-600 transition-all pl-16 md:pl-20" 
+                className="w-full p-8 md:p-10 bg-white border-2 rounded-[3.5rem] text-xl md:text-2xl font-black uppercase italic shadow-sm outline-none focus:border-blue-600 transition-all pl-16 md:pl-20 text-black" 
                 placeholder="মডেল সার্চ করুন..." 
                 value={productSearch} 
                 onChange={e => setProductSearch(e.target.value)} 
