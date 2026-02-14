@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { User, Company } from '../types';
-import { supabase } from '../lib/supabase';
+import { supabase, mapToDbCompany } from '../lib/supabase';
 
 interface SidebarProps {
   activeTab: string;
@@ -25,7 +25,7 @@ const Sidebar: React.FC<SidebarProps> = ({
   onClose
 }) => {
   const [pendingCount, setPendingCount] = useState(0);
-  const [unreadAlerts, setUnreadAlerts] = useState(0);
+  const [hasCustomerDue, setHasCustomerDue] = useState(false);
   
   const isCustomer = user.role === 'CUSTOMER';
   const isAdmin = user.role === 'ADMIN';
@@ -38,9 +38,9 @@ const Sidebar: React.FC<SidebarProps> = ({
       const interval = setInterval(fetchPendingCollections, 30000);
       return () => clearInterval(interval);
     } else {
-      fetchUnreadAlerts();
+      checkCustomerDue();
     }
-  }, [isCustomer]);
+  }, [isCustomer, user.customer_id]);
 
   const fetchPendingCollections = async () => {
     try {
@@ -52,24 +52,29 @@ const Sidebar: React.FC<SidebarProps> = ({
     } catch (e) {}
   };
 
-  const fetchUnreadAlerts = async () => {
+  const checkCustomerDue = async () => {
     if (!user.customer_id) return;
     try {
-      const { count } = await supabase
-        .from('notifications')
-        .select('*', { count: 'exact', head: true })
-        .eq('customer_id', user.customer_id)
-        .eq('is_read', false);
-      setUnreadAlerts(count || 0);
+      const { data } = await supabase
+        .from('transactions')
+        .select('amount, payment_type')
+        .eq('customer_id', user.customer_id);
+      
+      let balance = 0;
+      data?.forEach(tx => {
+        const amt = Number(tx.amount) || 0;
+        balance += (tx.payment_type === 'COLLECTION' ? -amt : amt);
+      });
+      setHasCustomerDue(balance > 1);
     } catch (e) {}
   };
 
   const menu = [
     { id: 'dashboard', label: '📊 ড্যাশবোর্ড', roles: ['ADMIN', 'STAFF', 'DELIVERY'] },
     { id: 'portal_dashboard', label: '🏠 কাস্টমার হোম', roles: ['CUSTOMER'] },
-    { id: 'portal_alerts', label: '🔔 আমার নোটিফিকেশন', roles: ['CUSTOMER'], badge: 'alerts' },
+    { id: 'portal_order', label: '🛒 অর্ডার করুন', roles: ['CUSTOMER'] },
     { id: 'showroom', label: '💎 ডিজিটাল শোরুম', roles: ['ADMIN', 'STAFF', 'CUSTOMER'] },
-    { id: 'portal_ledger', label: '📒 আমার লেজার', roles: ['CUSTOMER'] },
+    { id: 'portal_ledger', label: '📒 আমার লেজার', roles: ['CUSTOMER'], badge: 'due' },
     { id: 'portal_catalog', label: '📢 অফার ও রেট', roles: ['CUSTOMER'] },
     { id: 'ad_manager', label: '📢 ক্যাটালগ ম্যানেজার', roles: ['ADMIN'] },
     { id: 'sales', label: '📝 সেলস মেমো (POS)', roles: ['ADMIN', 'STAFF'] },
@@ -138,9 +143,8 @@ const Sidebar: React.FC<SidebarProps> = ({
 
         <nav className="flex-1 px-4 space-y-1.5 overflow-y-auto custom-scroll pb-10 mt-4">
           {menu.map((item, idx) => {
-            const showBadge = (item.badge === 'pending' && pendingCount > 0) || (item.badge === 'alerts' && unreadAlerts > 0);
-            const badgeValue = item.badge === 'pending' ? pendingCount : unreadAlerts;
-
+            const showBadge = (item.badge === 'pending' && pendingCount > 0) || (item.badge === 'due' && hasCustomerDue);
+            
             return (
               <button 
                 key={item.id} 
@@ -156,8 +160,8 @@ const Sidebar: React.FC<SidebarProps> = ({
                 </span>
                 <span className="flex-1 text-left tracking-tight">{item.label.split(' ').slice(1).join(' ')}</span>
                 {showBadge && (
-                  <div className="absolute right-4 w-5 h-5 bg-red-600 text-white text-[9px] rounded-full flex items-center justify-center border-2 border-white shadow-lg animate-bounce">
-                    {badgeValue}
+                  <div className={`absolute right-4 w-2.5 h-2.5 ${item.badge === 'due' ? 'bg-rose-500' : 'bg-red-600'} rounded-full border-2 border-white shadow-lg animate-pulse`}>
+                    {item.badge === 'pending' && <span className="absolute -top-3 left-0 text-[8px]">{pendingCount}</span>}
                   </div>
                 )}
                 {activeTab === item.id && <div className="absolute left-1 w-1 h-6 bg-white/40 rounded-full"></div>}

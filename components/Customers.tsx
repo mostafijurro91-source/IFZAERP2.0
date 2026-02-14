@@ -66,85 +66,6 @@ const Customers: React.FC<CustomerProps> = ({ company, role, userName }) => {
     } finally { setLoading(false); }
   };
 
-  const fetchCustomerLedger = async (cust: any) => {
-    setSelectedLedgerCust(cust);
-    setShowLedger(true);
-    setLedgerHistory([]);
-    try {
-      const { data } = await supabase
-        .from('transactions')
-        .select('*')
-        .eq('customer_id', cust.id)
-        .eq('company', mapToDbCompany(company))
-        .order('created_at', { ascending: true });
-      setLedgerHistory(data || []);
-    } catch (err) { console.error(err); }
-  };
-
-  const handleDeleteTransaction = async (txId: string) => {
-    if (!isAdmin) return;
-    if (!confirm("আপনি কি নিশ্চিত এই লেনদেনটি চিরতরে মুছে ফেলতে চান?")) return;
-    
-    setIsSaving(true);
-    try {
-      const { error, status } = await supabase.from('transactions').delete().eq('id', txId);
-      
-      if (error) throw error;
-      
-      alert("লেনদেনটি সফলভাবে মুছে ফেলা হয়েছে।");
-      
-      // Refresh local UI
-      if (selectedLedgerCust) fetchCustomerLedger(selectedLedgerCust);
-      fetchCustomers();
-    } catch (err: any) {
-      alert("মুছে ফেলা যায়নি! কারণ: " + err.message + "\nসুপাবেসে Transactions টেবিলের DELETE Policy চেক করুন।");
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  const handleDownloadLedgerPDF = async () => {
-    if (!ledgerRef.current || isDownloading) return;
-    setIsDownloading(true);
-    try {
-      const element = ledgerRef.current;
-      const canvas = await html2canvas(element, { scale: 3, useCORS: true, backgroundColor: '#ffffff' });
-      const imgData = canvas.toDataURL('image/jpeg', 1.0);
-      const pdf = new jsPDF('p', 'mm', 'a5');
-      const pdfWidth = pdf.internal.pageSize.getWidth();
-      const imgHeight = (canvas.height * pdfWidth) / canvas.width;
-      pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, imgHeight);
-      pdf.save(`Ledger_${selectedLedgerCust?.name}_${new Date().getTime()}.pdf`);
-    } catch (err) {
-      alert("পিডিএফ ডাউনলোড ব্যর্থ হয়েছে।");
-    } finally {
-      setIsDownloading(false);
-    }
-  };
-
-  const handleDeleteCustomer = async (id: string) => {
-    if (!isAdmin) return;
-    const confirmDelete = confirm("আপনি কি নিশ্চিত এই কাস্টমার প্রোফাইলটি ডিলিট করতে চান?\n\nসতর্কতা: যদি এই কাস্টমারের নামে কোনো সেলস মেমো বা লেনদেন থাকে, তবে আগে লেজার থেকে সব লেনদেন ডিলিট করতে হবে।");
-    if (!confirmDelete) return;
-
-    try {
-      setLoading(true);
-      const { error } = await supabase.from('customers').delete().eq('id', id);
-      if (error) {
-          if (error.message.includes("foreign key constraint")) {
-              throw new Error("এই কাস্টমারের নামে লেনদেন জমা আছে, তাই ডিলিট করা যাচ্ছে না।");
-          }
-          throw error;
-      }
-      alert("কাস্টমার সফলভাবে ডিলিট হয়েছে!");
-      await fetchCustomers();
-    } catch (err: any) { 
-        alert("ডিলিট করা যায়নি: " + err.message); 
-    } finally {
-        setLoading(false);
-    }
-  };
-
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (isSaving) return;
@@ -204,6 +125,58 @@ const Customers: React.FC<CustomerProps> = ({ company, role, userName }) => {
     }
   };
 
+  const fetchCustomerLedger = async (cust: any) => {
+    setSelectedLedgerCust(cust);
+    setShowLedger(true);
+    setLedgerHistory([]);
+    try {
+      const { data } = await supabase
+        .from('transactions')
+        .select('*')
+        .eq('customer_id', cust.id)
+        .eq('company', mapToDbCompany(company))
+        .order('created_at', { ascending: true });
+      setLedgerHistory(data || []);
+    } catch (err) { console.error(err); }
+  };
+
+  const handleDeleteTransaction = async (txId: string) => {
+    if (!isAdmin) return;
+    if (!confirm("আপনি কি নিশ্চিত এই লেনদেনটি চিরতরে মুছে ফেলতে চান?")) return;
+    setIsSaving(true);
+    try {
+      const { error } = await supabase.from('transactions').delete().eq('id', txId);
+      if (error) throw error;
+      if (selectedLedgerCust) fetchCustomerLedger(selectedLedgerCust);
+      fetchCustomers();
+    } finally { setIsSaving(false); }
+  };
+
+  const handleDownloadLedgerPDF = async () => {
+    if (!ledgerRef.current || isDownloading) return;
+    setIsDownloading(true);
+    try {
+      const element = ledgerRef.current;
+      const canvas = await html2canvas(element, { scale: 3, useCORS: true, backgroundColor: '#ffffff' });
+      const imgData = canvas.toDataURL('image/jpeg', 1.0);
+      const pdf = new jsPDF('p', 'mm', 'a5');
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const imgHeight = (canvas.height * pdfWidth) / canvas.width;
+      pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, imgHeight);
+      pdf.save(`Ledger_${selectedLedgerCust?.name}.pdf`);
+    } finally { setIsDownloading(false); }
+  };
+
+  const handleDeleteCustomer = async (id: string) => {
+    if (!isAdmin) return;
+    if (!confirm("আপনি কি নিশ্চিত এই কাস্টমার প্রোফাইলটি ডিলিট করতে চান?")) return;
+    try {
+      const { error } = await supabase.from('customers').delete().eq('id', id);
+      if (error) throw error;
+      fetchCustomers();
+    } catch (err: any) { alert("ডিলিট করা যায়নি! আগে লেনদেনগুলো মুছুন।"); }
+  };
+
   const filtered = customers.filter(c => 
     (!search || c.name.toLowerCase().includes(search.toLowerCase()) || c.phone.includes(search) || (c.portal_username && c.portal_username.includes(search.toLowerCase()))) && 
     (!selectedArea || c.address === selectedArea)
@@ -236,26 +209,18 @@ const Customers: React.FC<CustomerProps> = ({ company, role, userName }) => {
       <div className="sticky top-0 z-[110] -mx-6 px-6 py-3 bg-white/70 backdrop-blur-xl border-b border-slate-200">
         <div className="max-w-7xl mx-auto space-y-4">
            <div className="flex flex-col md:flex-row gap-3 items-center animate-reveal">
-              <div className="flex-[2] flex gap-2 items-center bg-slate-100 p-1.5 rounded-[1.8rem] shadow-inner border border-slate-200 w-full focus-within:ring-2 ring-blue-500/20 transition-all">
+              <div className="flex-[2] flex gap-2 items-center bg-slate-100 p-1.5 rounded-[1.8rem] shadow-inner border border-slate-200 w-full">
                  <div className="pl-4 text-slate-400">🔍</div>
                  <input autoFocus type="text" placeholder="দোকান বা ইউজার আইডি সার্চ..." className="flex-1 p-3 bg-transparent border-none text-[13px] font-bold uppercase outline-none text-black" value={search} onChange={e => setSearch(e.target.value)} />
               </div>
               <div className="flex-1 w-full md:w-auto">
-                 <select 
-                   className="w-full p-4 bg-white border-2 border-slate-200 rounded-[1.8rem] text-[11px] font-black uppercase italic outline-none shadow-sm focus:border-blue-600 transition-all"
-                   value={selectedArea}
-                   onChange={e => setSelectedArea(e.target.value)}
-                 >
-                   <option value="">সকল এরিয়া (All Areas)</option>
-                   {uniqueAreas.map(area => (
-                     <option key={area} value={area}>{area}</option>
-                   ))}
+                 <select className="w-full p-4 bg-white border-2 border-slate-200 rounded-[1.8rem] text-[11px] font-black uppercase italic outline-none shadow-sm focus:border-blue-600 transition-all" value={selectedArea} onChange={e => setSelectedArea(e.target.value)}>
+                   <option value="">সকল এরিয়া</option>
+                   {uniqueAreas.map(area => <option key={area} value={area}>{area}</option>)}
                  </select>
               </div>
               <div className="flex gap-2 shrink-0">
-                 <button onClick={() => setIsCompact(!isCompact)} className="bg-white p-4 rounded-2xl shadow-sm text-lg active:scale-90 transition-transform border border-slate-200">
-                   {isCompact ? "🔳" : "☰"}
-                 </button>
+                 <button onClick={() => setIsCompact(!isCompact)} className="bg-white p-4 rounded-2xl shadow-sm border border-slate-200">{isCompact ? "🔳" : "☰"}</button>
                  <button onClick={() => { setEditingCustomer(null); setFormData({name:'', phone:'', address:'', money_amount:'', portal_username:'', portal_password:''}); setShowModal(true); }} className="bg-blue-600 text-white px-8 py-4 rounded-2xl font-black uppercase text-[10px] shadow-lg active:scale-95 transition-all">+ নতুন দোকান যোগ</button>
               </div>
            </div>
@@ -282,11 +247,9 @@ const Customers: React.FC<CustomerProps> = ({ company, role, userName }) => {
                      <p className="font-bold text-[12px] uppercase italic text-slate-800 truncate leading-none mb-1">{c.name}</p>
                      <p className="text-[8px] font-bold text-slate-400 tracking-tighter">📍 {c.address || "Area Missing"} • 📱 {c.phone}</p>
                   </div>
-                  {isCompact && (
-                    <div className="hidden md:block col-span-3 text-blue-600 font-black uppercase text-[10px] italic">{c.portal_username || "No ID"}</div>
-                  )}
+                  {isCompact && <div className="hidden md:block col-span-3 text-blue-600 font-black uppercase text-[10px] italic">{c.portal_username || "No ID"}</div>}
                   <div className={isCompact ? `col-span-4 md:col-span-2 text-right font-black italic text-base ${balance > 1 ? 'text-red-600' : 'text-emerald-600'}` : "mt-4 pt-4 border-t font-black"}>
-                     {balance.toLocaleString()}৳
+                     {(balance || 0).toLocaleString()}৳
                   </div>
                   <div className={isCompact ? "col-span-3 md:col-span-3 flex justify-end gap-1.5" : "mt-4 flex gap-2"}>
                      <button onClick={() => fetchCustomerLedger(c)} className="w-9 h-9 bg-slate-900 text-white rounded-xl flex items-center justify-center text-xs shadow-lg active:scale-90 transition-transform">📑</button>
@@ -299,36 +262,70 @@ const Customers: React.FC<CustomerProps> = ({ company, role, userName }) => {
         </div>
       )}
 
-      {/* Ledger Modal */}
+      {/* ➕ Add/Edit Shop Modal */}
+      {showModal && (
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-xl z-[2000] flex items-center justify-center p-4">
+           <div className="bg-white p-8 md:p-12 rounded-[3.5rem] w-full max-w-lg shadow-2xl animate-reveal max-h-[90vh] overflow-y-auto custom-scroll">
+              <div className="flex justify-between items-center mb-8 border-b pb-6">
+                 <h3 className="text-xl font-black uppercase italic tracking-tighter">{editingCustomer ? 'দোকান তথ্য এডিট' : 'নতুন দোকান রেজিস্টার'}</h3>
+                 <button onClick={() => setShowModal(false)} className="text-slate-400 text-3xl font-black hover:text-red-500">×</button>
+              </div>
+              <form onSubmit={handleSave} className="space-y-5">
+                 <div className="space-y-1">
+                    <label className="ml-4 italic text-slate-400 uppercase text-[9px]">দোকানের নাম (Shop Name)</label>
+                    <input required className="w-full p-4 bg-slate-50 border-2 border-slate-100 rounded-2xl outline-none font-bold uppercase italic text-[13px] text-black" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} />
+                 </div>
+                 <div className="space-y-1">
+                    <label className="ml-4 italic text-slate-400 uppercase text-[9px]">মোবাইল নম্বর</label>
+                    <input required className="w-full p-4 bg-slate-50 border-2 border-slate-100 rounded-2xl font-bold text-black" value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})} />
+                 </div>
+                 <div className="space-y-1">
+                    <label className="ml-4 italic text-slate-400 uppercase text-[9px]">এরিয়া বা ঠিকানা</label>
+                    <input className="w-full p-4 bg-slate-50 border-2 border-slate-100 rounded-2xl font-bold text-black" value={formData.address} onChange={e => setFormData({...formData, address: e.target.value})} />
+                 </div>
+                 <div className="p-6 bg-blue-50/50 rounded-3xl border-2 border-blue-100 space-y-4">
+                    <p className="text-[10px] font-black text-blue-600 uppercase text-center italic">কাস্টমার পোর্টাল এক্সেস (Login Info)</p>
+                    <div className="grid grid-cols-2 gap-3">
+                       <input placeholder="User ID" className="p-4 bg-white rounded-xl font-bold text-[11px] uppercase outline-none focus:ring-2 ring-blue-300" value={formData.portal_username} onChange={e => setFormData({...formData, portal_username: e.target.value})} />
+                       <input placeholder="Password" title="ডিফল্ট পাসওয়ার্ড: 123" className="p-4 bg-white rounded-xl font-bold text-[11px] outline-none focus:ring-2 ring-blue-300" value={formData.portal_password} onChange={e => setFormData({...formData, portal_password: e.target.value})} />
+                    </div>
+                 </div>
+                 <div className="space-y-1">
+                    <label className="ml-4 italic text-red-400 uppercase text-[9px]">পূর্বের বকেয়া (Opening Balance)</label>
+                    <input type="number" placeholder="0.00" className="w-full p-4 bg-rose-50 border-2 border-rose-100 rounded-2xl font-black text-rose-600 italic" value={formData.money_amount} onChange={e => setFormData({...formData, money_amount: e.target.value})} />
+                 </div>
+                 <button disabled={isSaving} type="submit" className="w-full bg-blue-600 text-white py-6 rounded-3xl font-black uppercase text-xs tracking-widest shadow-2xl active:scale-95 transition-all">
+                    {isSaving ? "সংরক্ষণ হচ্ছে..." : "কনফার্ম সেভ ➔"}
+                 </button>
+              </form>
+           </div>
+        </div>
+      )}
+
+      {/* Admin Ledger Modal */}
       {showLedger && selectedLedgerCust && (
         <div className="fixed inset-0 bg-slate-950/95 backdrop-blur-xl z-[2000] flex items-center justify-center p-4">
            <div className="bg-white rounded-[3rem] w-full max-w-4xl h-[85vh] flex flex-col shadow-2xl animate-reveal overflow-hidden">
               <div className="p-8 bg-slate-900 text-white flex justify-between items-center shrink-0">
-                 <div>
-                    <h3 className="text-xl font-black uppercase italic">{selectedLedgerCust.name}</h3>
-                    <p className="text-[9px] text-slate-500 uppercase tracking-widest mt-1">Official Statement • {company}</p>
-                 </div>
+                 <div><h3 className="text-xl font-black uppercase italic">{selectedLedgerCust.name}</h3><p className="text-[9px] text-slate-500 uppercase tracking-widest mt-1">Official Statement • {company}</p></div>
                  <div className="flex gap-3">
                    <button onClick={handleDownloadLedgerPDF} className="bg-emerald-600 text-white px-6 py-2 rounded-xl text-[10px] font-black uppercase">Download PDF ⬇</button>
                    <button onClick={() => setShowLedger(false)} className="text-slate-400 text-3xl font-black">×</button>
                  </div>
               </div>
-              
               <div className="flex-1 overflow-y-auto p-8 space-y-6 custom-scroll bg-slate-50">
-                <div ref={ledgerRef} className="bg-white p-6 md:p-10 border shadow-sm rounded-3xl min-h-full text-black">
+                <div ref={ledgerRef} className="bg-white p-10 border shadow-sm rounded-3xl min-h-full text-black">
                   <div className="text-center border-b-2 border-black pb-4 mb-8">
                      <h2 className="text-3xl font-black uppercase italic">IFZA ELECTRONICS</h2>
                      <p className="text-xs font-bold opacity-60 uppercase">{company} DIVISION</p>
                   </div>
-                  
                   <table className="w-full text-left border-collapse">
                     <thead>
                        <tr className="bg-slate-900 text-white text-[9px] font-black uppercase italic">
                           <th className="p-3 border border-slate-700">তারিখ</th>
                           <th className="p-3 border border-slate-700">বিবরণ</th>
-                          <th className="p-3 border border-slate-700 text-right">ডেবিট (বাকি)</th>
-                          <th className="p-3 border border-slate-700 text-right">ক্রেডিট (জমা)</th>
-                          {isAdmin && <th className="p-3 border border-slate-700 text-center no-print">×</th>}
+                          <th className="p-3 border border-slate-700 text-right">ডেবিট</th>
+                          <th className="p-3 border border-slate-700 text-right">ক্রেডিট</th>
                        </tr>
                     </thead>
                     <tbody className="text-[11px] font-bold">
@@ -339,86 +336,14 @@ const Customers: React.FC<CustomerProps> = ({ company, role, userName }) => {
                                <p className="font-bold">{tx.payment_type === 'COLLECTION' ? '💰 নগদ জমা' : '📄 মালের ইনভয়েস'}</p>
                                <p className="text-[7px] text-slate-400">ID: #{tx.id.slice(-6).toUpperCase()}</p>
                             </td>
-                            <td className="p-3 text-right text-red-600">
-                               {tx.payment_type !== 'COLLECTION' ? `৳${Number(tx.amount).toLocaleString()}` : '—'}
-                            </td>
-                            <td className="p-3 text-right text-emerald-600">
-                               {tx.payment_type === 'COLLECTION' ? `৳${Number(tx.amount).toLocaleString()}` : '—'}
-                            </td>
-                            {isAdmin && (
-                              <td className="p-2 text-center no-print">
-                                 <button disabled={isSaving} onClick={() => handleDeleteTransaction(tx.id)} className="w-8 h-8 bg-red-50 text-red-500 rounded-lg flex items-center justify-center hover:bg-red-600 hover:text-white transition-all active:scale-90">🗑️</button>
-                              </td>
-                            )}
+                            <td className="p-3 text-right text-red-600 font-black italic">{tx.payment_type !== 'COLLECTION' ? `৳${(Number(tx.amount) || 0).toLocaleString()}` : '—'}</td>
+                            <td className="p-3 text-right text-emerald-600 font-black italic">{tx.payment_type === 'COLLECTION' ? `৳${(Number(tx.amount) || 0).toLocaleString()}` : '—'}</td>
                          </tr>
                        ))}
                     </tbody>
                   </table>
                 </div>
               </div>
-           </div>
-        </div>
-      )}
-
-      {/* Add/Edit Modal with Area Suggestion */}
-      {showModal && (
-        <div className="fixed inset-0 bg-slate-950/90 backdrop-blur-xl z-[2000] flex items-center justify-center p-4">
-           <div className="bg-white p-10 md:p-14 rounded-[4rem] w-full max-w-lg shadow-2xl animate-reveal text-slate-900 overflow-y-auto max-h-[95vh] custom-scroll">
-              <div className="flex justify-between items-center mb-8 border-b pb-4">
-                 <h3 className="text-2xl font-bold uppercase italic">{editingCustomer ? 'তথ্য আপডেট' : 'নতুন কাস্টমার যোগ'}</h3>
-                 <button onClick={() => setShowModal(false)} className="text-3xl text-slate-300 font-bold hover:text-red-500">✕</button>
-              </div>
-              <form onSubmit={handleSave} className="space-y-4">
-                 <div className="space-y-1">
-                    <label className="text-[9px] font-bold text-slate-400 uppercase ml-4 italic">দোকানের নাম</label>
-                    <input required className="w-full p-4 bg-slate-50 border-2 border-slate-100 rounded-2xl outline-none font-bold uppercase text-sm focus:border-blue-500 transition-all text-black" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} />
-                 </div>
-                 <div className="space-y-1">
-                    <label className="text-[9px] font-bold text-slate-400 uppercase ml-4 italic">মোবাইল নম্বর</label>
-                    <input required className="w-full p-4 bg-slate-50 border-2 border-slate-100 rounded-2xl outline-none font-bold text-sm focus:border-blue-500 transition-all text-black" value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})} />
-                 </div>
-                 <div className="space-y-1">
-                    <label className="text-[9px] font-bold text-slate-400 uppercase ml-4 italic">এরিয়া/ঠিকানা (Select or Type Area)</label>
-                    <input 
-                      required
-                      list="area-list"
-                      className="w-full p-4 bg-slate-50 border-2 border-slate-100 rounded-2xl outline-none font-bold uppercase text-sm focus:border-blue-500 transition-all text-black" 
-                      value={formData.address} 
-                      onChange={e => setFormData({...formData, address: e.target.value})} 
-                      placeholder="এরিয়া বাছাই বা টাইপ করুন..."
-                    />
-                    <datalist id="area-list">
-                      {uniqueAreas.map(area => (
-                        <option key={area} value={area} />
-                      ))}
-                    </datalist>
-                 </div>
-                 
-                 <div className="pt-6 border-t mt-6 space-y-4">
-                    <h4 className="text-[10px] font-black text-blue-600 uppercase tracking-widest italic ml-2">পোর্টালে লগইন করার জন্য</h4>
-                    <div className="grid grid-cols-2 gap-3">
-                       <div className="space-y-1">
-                          <label className="text-[8px] font-bold text-slate-400 uppercase ml-4 italic">User ID (ইউজার আইডি)</label>
-                          <input required className="w-full p-4 bg-blue-50/50 border-2 border-blue-100 rounded-2xl outline-none font-bold text-xs focus:border-blue-500 transition-all text-black" placeholder="যেমন: shop123" value={formData.portal_username} onChange={e => setFormData({...formData, portal_username: e.target.value})} />
-                       </div>
-                       <div className="space-y-1">
-                          <label className="text-[8px] font-bold text-slate-400 uppercase ml-4 italic">Password (পাসওয়ার্ড)</label>
-                          <input required className="w-full p-4 bg-blue-50/50 border-2 border-blue-100 rounded-2xl outline-none font-bold text-xs focus:border-blue-500 transition-all text-black" placeholder="পাসওয়ার্ড দিন" value={formData.portal_password} onChange={e => setFormData({...formData, portal_password: e.target.value})} />
-                       </div>
-                    </div>
-                 </div>
-
-                 <div className="pt-4 border-t space-y-4">
-                    <div className="space-y-1">
-                       <label className="text-[9px] font-bold text-red-400 uppercase ml-4 italic">পূর্বের বকেয়া (Opening Balance)</label>
-                       <input type="number" className="w-full p-4 bg-red-50 border-2 border-red-100 rounded-2xl outline-none font-bold text-red-600 text-sm focus:border-red-500 transition-all" value={formData.money_amount} onChange={e => setFormData({...formData, money_amount: e.target.value})} />
-                    </div>
-                 </div>
-
-                 <button disabled={isSaving} type="submit" className="w-full bg-blue-600 text-white py-6 rounded-3xl font-bold uppercase text-xs tracking-widest shadow-xl active:scale-95 transition-all mt-6">
-                    {isSaving ? "সংরক্ষণ হচ্ছে..." : "সংরক্ষণ করুন ➔"}
-                 </button>
-              </form>
            </div>
         </div>
       )}
