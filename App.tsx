@@ -76,7 +76,8 @@ const App: React.FC = () => {
       } catch (e) {
         setDbError(true);
       } finally {
-        setTimeout(() => setInitialized(true), 2500);
+        // Extended time to appreciate the premium loading style requested
+        setTimeout(() => setInitialized(true), 3500);
       }
     };
     boot();
@@ -105,17 +106,39 @@ const App: React.FC = () => {
   };
 
   if (!initialized) return (
-    <div className="h-screen flex flex-col items-center justify-between bg-[#05070a] text-white py-20 overflow-hidden">
-      <div className="flex-1 flex flex-col items-center justify-center">
-        <div className="relative mb-12">
-            <div className="w-24 h-24 border-[6px] border-blue-500/10 border-t-blue-600 rounded-full animate-spin"></div>
-            <div className="absolute inset-0 flex items-center justify-center font-black text-2xl italic text-blue-500">if</div>
+    <div className="h-screen flex items-center justify-center bg-[#05070a] font-sans overflow-hidden">
+      <div className="w-full max-w-sm flex flex-col items-center">
+        {/* Cinematic Avatar with Circular Progress Arc */}
+        <div className="relative w-40 h-40 mb-20 flex items-center justify-center">
+           {/* Base dark circle */}
+           <div className="absolute inset-0 bg-[#161b22] rounded-full shadow-[0_0_50px_rgba(0,0,0,0.5)] border border-white/5"></div>
+           
+           {/* Animated glowing arc */}
+           <div className="absolute inset-[-10px] border-[6px] border-transparent border-t-blue-500 rounded-full animate-spin"></div>
+           <div className="absolute inset-[-10px] border-[6px] border-transparent border-t-blue-600/30 rounded-full"></div>
+           
+           {/* Logo Letter */}
+           <div className="relative z-10 text-6xl font-black italic text-blue-500 drop-shadow-[0_0_15px_rgba(59,130,246,0.5)]">ই</div>
         </div>
-        <p className="font-black uppercase text-[10px] tracking-[1em] text-blue-500 animate-pulse ml-4">IFZA ELECTRONICS</p>
-      </div>
-      <div className="animate-reveal flex flex-col items-center">
-         <p className="text-6xl font-black italic tracking-tighter text-white/20 uppercase">IFZA</p>
-         <div className="w-12 h-1 bg-blue-600/30 rounded-full mt-4"></div>
+        
+        {/* Brand Typography based on the screenshot */}
+        <div className="text-center space-y-5 animate-reveal opacity-0" style={{ animationDelay: '0.5s' }}>
+           <h2 className="text-xl md:text-2xl font-black text-blue-300 tracking-[1em] md:tracking-[1.4em] ml-[1.4em] leading-none italic uppercase">
+             ইফজা ইলেকট্রনিক্স
+           </h2>
+           
+           <div className="flex items-center gap-6 justify-center pt-2">
+              <div className="h-px w-8 bg-white/10"></div>
+              <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.4em] italic">
+                TRANSTEC • SQ LIGHT • SQ CABLES
+              </p>
+              <div className="h-px w-8 bg-white/10"></div>
+           </div>
+           
+           <p className="text-[8px] font-bold text-slate-700 uppercase italic tracking-[0.3em] pt-4 animate-pulse">
+             ENTERPRISE CLOUD TERMINAL V4.6.8
+           </p>
+        </div>
       </div>
     </div>
   );
@@ -128,8 +151,6 @@ const App: React.FC = () => {
   );
 
   if (!user) return showLogin ? <Login onLogin={handleLogin} onBack={() => setShowLogin(false)} /> : <MarketingPage onEnterERP={() => setShowLogin(true)} />;
-
-  const isCustomer = user.role === 'CUSTOMER';
 
   return (
     <div className="flex h-screen bg-[#f1f5f9] overflow-hidden">
@@ -162,31 +183,6 @@ const App: React.FC = () => {
           </div>
         </header>
 
-        {isCustomer && (
-          <div className="bg-white border-b px-4 md:px-10 py-4 flex gap-2 md:gap-3 overflow-x-auto no-scrollbar shrink-0 z-30 shadow-sm">
-             {[
-               { id: 'portal_dashboard', label: '🏠 হোম', color: 'blue' },
-               { id: 'portal_order', label: '🛒 অর্ডার', color: 'indigo' },
-               { id: 'portal_ledger', label: '📒 লেজার', color: 'emerald' },
-               { id: 'portal_catalog', label: '📢 অফার', color: 'amber' },
-               { id: 'showroom', label: '💎 শোরুম', color: 'cyan' }
-             ].map(nav => (
-               <button 
-                 key={nav.id} 
-                 onClick={() => setActiveTab(nav.id)}
-                 className={`px-4 py-3 rounded-2xl md:px-8 md:py-4 md:rounded-[2rem] text-[12px] md:text-[14px] font-black uppercase tracking-wider transition-all whitespace-nowrap flex flex-col items-center justify-center gap-1 border-2 flex-1 min-w-[80px] md:min-w-[110px] ${
-                   activeTab === nav.id 
-                   ? 'bg-blue-600 text-white border-blue-600 shadow-xl scale-105' 
-                   : 'bg-white text-slate-400 border-slate-100 hover:border-blue-200'
-                 }`}
-               >
-                 <span className="text-xl md:text-2xl mb-1">{nav.label.split(' ')[0]}</span>
-                 <span className="text-[10px] md:text-[11px] font-black">{nav.label.split(' ')[1]}</span>
-               </button>
-             ))}
-          </div>
-        )}
-
         <div className="flex-1 overflow-y-auto p-4 md:p-8 custom-scroll bg-[#f8fafc]">
           <div className="max-w-7xl mx-auto">
             {activeTab === 'dashboard' && <Dashboard company={selectedCompany} role={user.role} />}
@@ -200,7 +196,7 @@ const App: React.FC = () => {
             {activeTab === 'collections' && <Collections company={selectedCompany} user={user} />}
             {activeTab === 'order_management' && <OrderManagement company={selectedCompany} user={user} />}
             {activeTab === 'bookings' && <Bookings company={selectedCompany} role={user.role} user={user} />}
-            {activeTab === 'replacements' && <Replacements company={selectedCompany} role={user.role} />}
+            {activeTab === 'replacements' && <Replacements company={selectedCompany} role={user.role} user={user} />}
             {activeTab === 'delivery_hub' && <DeliveryHub company={selectedCompany} user={user} />}
             {activeTab === 'inventory' && <Inventory company={selectedCompany} role={user.role} />}
             {activeTab === 'customers' && <Customers company={selectedCompany} role={user.role} userName={user.name} />}
