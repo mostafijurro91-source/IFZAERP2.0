@@ -232,15 +232,14 @@ const CustomerPortal: React.FC<PortalProps> = ({ type, user }) => {
         action: item.action
       }));
 
-      // Restored 'area' from customerProfile and improved insert
+      // FIX: Removed 'area' column because it doesn't exist in market_orders table
       const { error } = await supabase.from('market_orders').insert([{
         customer_id: user.customer_id, 
         company: dbCo, 
         total_amount: Math.round(totalAmount),
         status: 'PENDING', 
         items: mappedItems, 
-        created_by: user.name,
-        area: customerProfile?.address || ''
+        created_by: user.name
       }]);
 
       if (error) throw error;
