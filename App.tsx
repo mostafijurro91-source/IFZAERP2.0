@@ -30,18 +30,18 @@ const App: React.FC = () => {
   const [initialized, setInitialized] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [dbError, setDbError] = useState(false);
-  const [toast, setToast] = useState<{title: string, message: string, type?: string} | null>(null);
+  const [toast, setToast] = useState<{title: string, message: string} | null>(null);
 
-  // 🔔 Background & Real-time Notification Engine (v4.0)
   useEffect(() => {
     if (user && user.customer_id) {
-      if ("Notification" in window && Notification.permission === "default") {
-        Notification.requestPermission();
+      if ("Notification" in window) {
+        if (Notification.permission === "default") {
+          Notification.requestPermission();
+        }
       }
 
-      // Main Alerts Channel
       const channel = supabase
-        .channel(`global_alerts_active_${user.customer_id}`)
+        .channel(`cust_alerts_v2_${user.customer_id}`)
         .on(
           'postgres_changes',
           { 
@@ -51,36 +51,13 @@ const App: React.FC = () => {
             filter: `customer_id=eq.${user.customer_id}` 
           },
           (payload: any) => {
-            const { title, message, type } = payload.new;
-            
-            // Audio Alert
-            try { 
-              const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2358/2358-preview.mp3');
-              audio.play(); 
-            } catch(e){}
-
-            // Show Custom App Toast
-            setToast({ title, message, type });
-            setTimeout(() => setToast(null), 12000);
-
-            // Browser Native Push
-            if (Notification.permission === "granted") {
-               if ('serviceWorker' in navigator) {
-                  navigator.serviceWorker.ready.then(registration => {
-                    (registration as any).showNotification(title, {
-                      body: message,
-                      icon: 'https://r.jina.ai/i/0f7939be338446b5a32b904586927500',
-                      vibrate: [200, 100, 200],
-                      badge: 'https://r.jina.ai/i/0f7939be338446b5a32b904586927500',
-                    });
-                  });
-               }
-            }
+            const { title, message } = payload.new;
+            try { new Audio('https://assets.mixkit.co/active_storage/sfx/2358/2358-preview.mp3').play(); } catch(e){}
+            setToast({ title, message });
+            setTimeout(() => setToast(null), 8000);
           }
         )
-        .subscribe((status) => {
-          if (status !== 'SUBSCRIBED') console.warn("Realtime Status:", status);
-        });
+        .subscribe();
 
       return () => { supabase.removeChannel(channel); };
     }
@@ -91,7 +68,6 @@ const App: React.FC = () => {
       try {
         const isConnected = await checkSupabaseConnection();
         if (!isConnected) setDbError(true);
-
         const saved = localStorage.getItem('ifza_user');
         if (saved) {
           const parsed = JSON.parse(saved);
@@ -100,7 +76,7 @@ const App: React.FC = () => {
       } catch (e) {
         setDbError(true);
       } finally {
-        setTimeout(() => setInitialized(true), 1500);
+        setTimeout(() => setInitialized(true), 2500);
       }
     };
     boot();
@@ -129,12 +105,17 @@ const App: React.FC = () => {
   };
 
   if (!initialized) return (
-    <div className="h-screen flex flex-col items-center justify-center bg-[#05070a] text-white">
-      <div className="relative mb-8">
-          <div className="w-24 h-24 border-[6px] border-blue-500/10 border-t-blue-600 rounded-full animate-spin"></div>
-          <div className="absolute inset-0 flex items-center justify-center font-black text-2xl italic text-blue-500">if</div>
+    <div className="h-screen flex flex-col items-center justify-between bg-[#05070a] text-white py-20">
+      <div className="flex-1 flex flex-col items-center justify-center">
+        <div className="relative mb-8">
+            <div className="w-24 h-24 border-[6px] border-blue-500/10 border-t-blue-600 rounded-full animate-spin"></div>
+            <div className="absolute inset-0 flex items-center justify-center font-black text-2xl italic text-blue-500">if</div>
+        </div>
+        <p className="font-black uppercase text-[12px] tracking-[0.8em] text-blue-500 animate-pulse">IFZA ELECTRONICS</p>
       </div>
-      <p className="font-black uppercase text-[12px] tracking-[0.8em] text-blue-500 animate-pulse">IFZA ELECTRONICS</p>
+      <div className="animate-reveal">
+         <p className="text-4xl font-black italic tracking-tighter text-white/20 uppercase">IFZA</p>
+      </div>
     </div>
   );
 
@@ -147,56 +128,71 @@ const App: React.FC = () => {
 
   if (!user) return showLogin ? <Login onLogin={handleLogin} onBack={() => setShowLogin(false)} /> : <MarketingPage onEnterERP={() => setShowLogin(true)} />;
 
+  const isCustomer = user.role === 'CUSTOMER';
+
   return (
     <div className="flex h-screen bg-[#f1f5f9] overflow-hidden">
-      
-      {/* 🔔 Premium Pop-up Toast */}
       {toast && (
-        <div className="fixed top-6 right-6 left-6 md:left-auto md:w-[480px] z-[9999] bg-white p-10 rounded-[3.5rem] shadow-[0_50px_150px_rgba(0,0,0,0.3)] animate-reveal flex items-start gap-8 ring-[20px] ring-blue-50 border-2 border-blue-600 overflow-hidden group">
-           <div className={`w-20 h-20 rounded-[2rem] flex items-center justify-center text-4xl shrink-0 shadow-2xl animate-bounce ${toast.type === 'PAYMENT' ? 'bg-emerald-500 text-white' : 'bg-blue-600 text-white'}`}>
-             {toast.type === 'PAYMENT' ? '💰' : '📄'}
+        <div className="fixed top-6 right-6 left-6 md:left-auto md:w-[420px] z-[9000] bg-white border-2 border-blue-600 p-8 rounded-[3rem] shadow-2xl animate-reveal flex items-start gap-5">
+           <div className="w-14 h-14 bg-blue-600 rounded-2xl flex items-center justify-center text-white text-2xl shrink-0">🔔</div>
+           <div className="flex-1">
+              <h4 className="font-black text-slate-900 uppercase italic text-sm">{toast.title}</h4>
+              <p className="text-[11px] font-bold text-slate-500 mt-2">{toast.message}</p>
            </div>
-           <div className="flex-1 min-w-0">
-              <h4 className="font-black text-slate-900 uppercase italic text-lg tracking-tighter leading-none mb-3 truncate">{toast.title}</h4>
-              <p className="text-[13px] font-bold text-slate-500 leading-relaxed mb-8 line-clamp-2">{toast.message}</p>
-              <div className="flex gap-3">
-                 <button onClick={() => { setActiveTab(user.role === 'CUSTOMER' ? 'portal_alerts' : 'dashboard'); setToast(null); }} className="bg-slate-900 text-white px-8 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-xl hover:bg-blue-600 transition-all active:scale-95">বিস্তারিত দেখুন ➔</button>
-                 <button onClick={() => setToast(null)} className="text-slate-400 font-black text-[10px] uppercase px-4 py-2 hover:text-slate-600">বন্ধ করুন</button>
-              </div>
-           </div>
-           <button onClick={() => setToast(null)} className="text-slate-300 hover:text-red-500 text-5xl font-light leading-none self-start transition-colors">×</button>
+           <button onClick={() => setToast(null)} className="text-slate-300 hover:text-red-500 text-2xl font-black">×</button>
         </div>
       )}
 
       <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} onLogout={handleLogout} user={user} selectedCompany={selectedCompany} onCompanyChange={setSelectedCompany} isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
       
       <main className="flex-1 flex flex-col md:ml-[300px] overflow-hidden relative">
-        <header className="h-20 bg-white border-b border-slate-200 flex justify-between items-center px-6 md:px-10 shrink-0 z-40 shadow-sm">
+        <header className="h-20 bg-white border-b flex justify-between items-center px-6 md:px-10 shrink-0 z-40">
           <div className="flex items-center gap-4">
-            <button onClick={() => setIsSidebarOpen(true)} className="md:hidden p-2.5 bg-slate-900 text-white rounded-xl shadow-lg">☰</button>
+            <button onClick={() => setIsSidebarOpen(true)} className="md:hidden p-2.5 bg-slate-900 text-white rounded-xl">☰</button>
             <div>
               <h1 className="text-sm font-black text-slate-900 uppercase italic tracking-widest">{activeTab.replace(/_/g, ' ')}</h1>
-              <p className="text-[8px] font-black text-blue-600 uppercase tracking-[0.2em] mt-1.5 italic">• Node: {selectedCompany}</p>
             </div>
           </div>
           <div className="flex items-center gap-4">
             <div className="text-right hidden sm:block">
-              <p className="text-[10px] font-black text-slate-900 uppercase italic leading-none">{user.name}</p>
-              <p className="text-[7px] font-bold text-slate-400 mt-1 uppercase tracking-widest">{user.role} ACCESS</p>
+              <p className="text-[10px] font-black uppercase italic">{user.name}</p>
             </div>
-            <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center text-white font-black italic shadow-lg">
-              {user.name.charAt(0)}
-            </div>
+            <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center text-white font-black italic shadow-lg">{user.name.charAt(0)}</div>
           </div>
         </header>
+
+        {isCustomer && (
+          <div className="bg-white border-b px-4 md:px-10 py-6 flex gap-4 overflow-x-auto no-scrollbar shrink-0 z-30 shadow-md">
+             {[
+               { id: 'portal_dashboard', label: '🏠 হোম', color: 'blue' },
+               { id: 'portal_order', label: '🛒 অর্ডার', color: 'indigo' },
+               { id: 'portal_ledger', label: '📒 লেজার', color: 'emerald' },
+               { id: 'portal_catalog', label: '📢 অফার', color: 'amber' },
+               { id: 'showroom', label: '💎 শোরুম', color: 'cyan' }
+             ].map(nav => (
+               <button 
+                 key={nav.id} 
+                 onClick={() => setActiveTab(nav.id)}
+                 className={`px-10 py-8 rounded-[2.5rem] text-[18px] font-black uppercase tracking-wider transition-all whitespace-nowrap flex flex-col items-center justify-center gap-2 border-[3px] min-w-[150px] flex-1 ${
+                   activeTab === nav.id 
+                   ? 'bg-blue-600 text-white border-blue-600 shadow-2xl scale-105' 
+                   : 'bg-white text-slate-400 border-slate-100 hover:border-blue-200'
+                 }`}
+               >
+                 <span className="text-5xl mb-2">{nav.label.split(' ')[0]}</span>
+                 <span className="text-[14px]">{nav.label.split(' ')[1]}</span>
+               </button>
+             ))}
+          </div>
+        )}
 
         <div className="flex-1 overflow-y-auto p-4 md:p-8 custom-scroll bg-[#f8fafc]">
           <div className="max-w-7xl mx-auto">
             {activeTab === 'dashboard' && <Dashboard company={selectedCompany} role={user.role} />}
             {activeTab === 'portal_dashboard' && <CustomerPortal type="DASHBOARD" user={user} />}
-            {activeTab === 'portal_alerts' && <CustomerPortal type="ALERTS" user={user} />}
             {activeTab === 'portal_ledger' && <CustomerPortal type="LEDGER" user={user} />}
             {activeTab === 'portal_catalog' && <CustomerPortal type="CATALOG" user={user} />}
+            {activeTab === 'portal_order' && <CustomerPortal type="ORDER" user={user} />}
             {activeTab === 'showroom' && <Showroom />}
             {activeTab === 'ad_manager' && <AdManager />}
             {activeTab === 'sales' && <Sales company={selectedCompany} role={user.role} user={user} />}
