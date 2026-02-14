@@ -114,7 +114,7 @@ const App: React.FC = () => {
         <p className="font-black uppercase text-[12px] tracking-[0.8em] text-blue-500 animate-pulse">IFZA ELECTRONICS</p>
       </div>
       <div className="animate-reveal">
-         <p className="text-4xl font-black italic tracking-tighter text-white/20 uppercase">IFZA</p>
+         <p className="text-5xl font-black italic tracking-tighter text-white/20 uppercase">IFZA</p>
       </div>
     </div>
   );
@@ -162,7 +162,7 @@ const App: React.FC = () => {
         </header>
 
         {isCustomer && (
-          <div className="bg-white border-b px-4 md:px-10 py-6 flex gap-4 overflow-x-auto no-scrollbar shrink-0 z-30 shadow-md">
+          <div className="bg-white border-b px-4 md:px-10 py-4 flex gap-3 overflow-x-auto no-scrollbar shrink-0 z-30 shadow-md">
              {[
                { id: 'portal_dashboard', label: '🏠 হোম', color: 'blue' },
                { id: 'portal_order', label: '🛒 অর্ডার', color: 'indigo' },
@@ -173,14 +173,14 @@ const App: React.FC = () => {
                <button 
                  key={nav.id} 
                  onClick={() => setActiveTab(nav.id)}
-                 className={`px-10 py-8 rounded-[2.5rem] text-[18px] font-black uppercase tracking-wider transition-all whitespace-nowrap flex flex-col items-center justify-center gap-2 border-[3px] min-w-[150px] flex-1 ${
+                 className={`px-6 py-4 rounded-[2rem] text-[14px] font-black uppercase tracking-wider transition-all whitespace-nowrap flex flex-col items-center justify-center gap-1 border-2 min-w-[110px] flex-1 ${
                    activeTab === nav.id 
-                   ? 'bg-blue-600 text-white border-blue-600 shadow-2xl scale-105' 
+                   ? 'bg-blue-600 text-white border-blue-600 shadow-xl scale-105' 
                    : 'bg-white text-slate-400 border-slate-100 hover:border-blue-200'
                  }`}
                >
-                 <span className="text-5xl mb-2">{nav.label.split(' ')[0]}</span>
-                 <span className="text-[14px]">{nav.label.split(' ')[1]}</span>
+                 <span className="text-2xl mb-1">{nav.label.split(' ')[0]}</span>
+                 <span className="text-[11px] font-black">{nav.label.split(' ')[1]}</span>
                </button>
              ))}
           </div>
