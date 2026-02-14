@@ -44,6 +44,7 @@ const Bookings: React.FC<BookingsProps> = ({ company, role, user }) => {
   const [newPaymentAmt, setNewPaymentAmt] = useState<string>("");
 
   const invoiceRef = useRef<HTMLDivElement>(null);
+  const isAdmin = role === 'ADMIN';
 
   useEffect(() => { fetchData(); }, [company]);
 
@@ -74,6 +75,25 @@ const Bookings: React.FC<BookingsProps> = ({ company, role, user }) => {
       setCustomers(custData || []);
       setProducts(prodData.data || []);
     } catch (err) { console.error(err); } finally { setLoading(false); }
+  };
+
+  const handleDeleteBooking = async (id: string, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    if (!isAdmin) return alert("আপনার এই বুকিং ডিলিট করার অনুমতি নেই।");
+    if (!confirm("আপনি কি নিশ্চিতভাবে এই বুকিংটি ডিলিট করতে চান? এটি চিরতরে মুছে যাবে।")) return;
+    
+    setLoading(true);
+    try {
+      const { error } = await supabase.from('bookings').delete().eq('id', id);
+      if (error) throw error;
+      alert("বুকিং সফলভাবে ডিলিট করা হয়েছে! 🗑️");
+      setShowDetailModal(false);
+      fetchData();
+    } catch (err: any) {
+      alert("ডিলিট করতে সমস্যা হয়েছে: " + err.message);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleUpdateBookingStats = async () => {
@@ -285,7 +305,18 @@ const Bookings: React.FC<BookingsProps> = ({ company, role, user }) => {
                      <span className={`px-4 py-1.5 rounded-xl text-[8px] font-black uppercase tracking-widest shadow-sm ${
                        b.status === 'COMPLETED' ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : b.status === 'PARTIAL' ? 'bg-orange-50 text-orange-600 border border-orange-100' : 'bg-indigo-50 text-indigo-600 border border-indigo-100'
                      }`}>{b.status === 'PARTIAL' ? 'অংশিক' : b.status}</span>
-                     <span className="text-[9px] font-black text-slate-300">#{b.id.slice(-4).toUpperCase()}</span>
+                     <div className="flex items-center gap-2">
+                        <span className="text-[9px] font-black text-slate-300">#{b.id.slice(-4).toUpperCase()}</span>
+                        {isAdmin && (
+                          <button 
+                            onClick={(e) => handleDeleteBooking(b.id, e)} 
+                            className="w-8 h-8 bg-rose-50 text-rose-500 rounded-lg flex items-center justify-center border shadow-sm hover:bg-rose-500 hover:text-white transition-all active:scale-90"
+                            title="Delete Booking"
+                          >
+                            🗑️
+                          </button>
+                        )}
+                     </div>
                   </div>
                   <h4 className="font-black text-slate-800 text-lg uppercase italic leading-tight truncate mb-2 group-hover:text-indigo-600 transition-colors">{b.customer_name}</h4>
                   <p className="text-[9px] text-slate-400 font-bold uppercase truncate italic tracking-widest leading-none">📍 {b.customer_address}</p>
@@ -347,7 +378,7 @@ const Bookings: React.FC<BookingsProps> = ({ company, role, user }) => {
                    <div className="w-full lg:w-1/2 p-10 border-r overflow-hidden flex flex-col gap-6 bg-slate-50/50">
                       <div className="flex justify-between items-center px-4">
                          <h4 className="text-[10px] font-black text-slate-400 uppercase italic tracking-widest">পণ্য নির্বাচন</h4>
-                         <button onClick={() => setCurrentStep(1)} className="text-indigo-600 font-black text-[9px] uppercase hover:underline">↩ Change Shop</button>
+                         <button onClick={() => setCurrentStep(1)} className="text-indigo-600 font-black text-[9px] uppercase underline">↩ Change Shop</button>
                       </div>
                       <input className="w-full p-6 bg-white border-2 border-slate-100 rounded-[2.5rem] font-black text-xs uppercase outline-none shadow-sm focus:border-indigo-600 transition-all" placeholder="মডেল সার্চ করুন..." value={prodSearch} onChange={e => setProdSearch(e.target.value)} />
                       <div className="flex-1 overflow-y-auto custom-scroll grid grid-cols-1 md:grid-cols-2 gap-3 pr-2 pb-10">
@@ -501,9 +532,12 @@ const Bookings: React.FC<BookingsProps> = ({ company, role, user }) => {
               </div>
 
               <div className="p-10 bg-slate-50 border-t flex flex-col md:flex-row gap-4 shrink-0">
-                  <button disabled={isSaving} onClick={handleUpdateBookingStats} className="flex-1 bg-indigo-600 text-white py-6 rounded-[2.5rem] font-black uppercase text-xs tracking-[0.3em] shadow-xl active:scale-95 transition-all">
+                  <button disabled={isSaving} onClick={handleUpdateBookingStats} className="flex-1 bg-indigo-600 text-white py-6 rounded-[2.5rem] font-black uppercase text-xs tracking-widest shadow-xl active:scale-95 transition-all">
                     {isSaving ? 'সংরক্ষণ হচ্ছে...' : 'সব তথ্য আপডেট করুন ✅'}
                   </button>
+                  {isAdmin && (
+                    <button onClick={() => handleDeleteBooking(selectedBooking.id)} className="bg-rose-50 text-rose-600 px-10 py-6 rounded-[2.5rem] font-black uppercase text-xs shadow-sm hover:bg-rose-600 hover:text-white transition-all">🗑️ ডিলিট বুকিং</button>
+                  )}
                   <button onClick={handleDownloadPDF} className="bg-slate-900 text-white px-12 py-6 rounded-[2.5rem] font-black uppercase text-xs shadow-xl active:scale-95 transition-all">📄 রিপোর্ট ডাউনলোড</button>
               </div>
            </div>

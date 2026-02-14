@@ -156,12 +156,8 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName, user }) 
     } finally { setLoading(false); }
   };
 
-  /**
-   * Delete Logic (Maintained but removed from log UI as requested)
-   */
   const handleDeleteTransaction = async (tx: any) => {
-    if (!isAdmin) return;
-    const typeLabel = tx.payment_type === 'COLLECTION' ? 'আদায়' : 'মেমো';
+    if (!isAdmin) return alert("আপনার ট্রানজেকশন ডিলিট করার অনুমতি নেই।");
     const confirmMsg = tx.payment_type === 'DUE' 
       ? `আপনি কি নিশ্চিত এই মেমোটি (#${String(tx.id).slice(-6).toUpperCase()}) ডিলিট করতে চান? এটি ডিলিট করলে মালের স্টক স্বয়ংক্রিয়ভাবে আবার ইনভেন্টরিতে যোগ হয়ে যাবে।` 
       : `আপনি কি নিশ্চিত এই আদায়ের এন্ট্রিটি চিরতরে মুছে ফেলতে চান?`;

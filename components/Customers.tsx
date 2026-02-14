@@ -67,7 +67,7 @@ const Customers: React.FC<CustomerProps> = ({ company, role, userName }) => {
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (isSaving) return;
+    if (isSaving || !isAdmin) return;
     setIsSaving(true);
     try {
       const dbCompany = mapToDbCompany(company);
@@ -161,6 +161,7 @@ const Customers: React.FC<CustomerProps> = ({ company, role, userName }) => {
   );
 
   const openEditModal = async (cust: any) => {
+    if (!isAdmin) return;
     setEditingCustomer(cust);
     const dbCompany = mapToDbCompany(company);
     const { data: tx } = await supabase
@@ -198,7 +199,9 @@ const Customers: React.FC<CustomerProps> = ({ company, role, userName }) => {
                 {uniqueAreas.map(area => <option key={area} value={area}>{area}</option>)}
               </select>
               <button onClick={() => setIsCompact(!isCompact)} className="bg-white p-4 rounded-2xl shadow-sm border border-slate-200 text-xl active:scale-90 transition-transform">{isCompact ? "🔳" : "☰"}</button>
-              <button onClick={() => { setEditingCustomer(null); setFormData({name:'', phone:'', address:'', money_amount:'', portal_username:'', portal_password:''}); setShowModal(true); }} className="bg-blue-600 text-white px-8 py-4 rounded-3xl font-black uppercase text-[10px] tracking-widest shadow-xl active:scale-95 transition-all">+ নতুন দোকান যোগ</button>
+              {isAdmin && (
+                <button onClick={() => { setEditingCustomer(null); setFormData({name:'', phone:'', address:'', money_amount:'', portal_username:'', portal_password:''}); setShowModal(true); }} className="bg-blue-600 text-white px-8 py-4 rounded-3xl font-black uppercase text-[10px] tracking-widest shadow-xl active:scale-95 transition-all">+ নতুন দোকান যোগ</button>
+              )}
            </div>
         </div>
       </div>
@@ -230,9 +233,13 @@ const Customers: React.FC<CustomerProps> = ({ company, role, userName }) => {
                      <span className={!isCompact ? `text-4xl tracking-tighter ${balance > 1 ? 'text-rose-600' : 'text-emerald-600'}` : ""}>{(balance || 0).toLocaleString()}৳</span>
                   </div>
                   <div className={isCompact ? "col-span-3 md:col-span-3 flex justify-end gap-2" : "mt-8 flex gap-3 relative z-10"}>
-                     <button onClick={() => fetchCustomerLedger(c)} className="w-11 h-11 bg-slate-900 text-white rounded-2xl flex items-center justify-center text-xs shadow-xl active:scale-90 transition-all hover:bg-indigo-600">📑</button>
-                     <button onClick={() => openEditModal(c)} className="w-11 h-11 bg-blue-600 text-white rounded-2xl flex items-center justify-center text-xs shadow-xl active:scale-90 transition-all hover:bg-blue-700">📝</button>
-                     {isAdmin && <button onClick={async () => { if(confirm("ডিলিট?")) { await supabase.from('customers').delete().eq('id', c.id); fetchCustomers(); } }} className="w-11 h-11 bg-rose-50 text-rose-500 rounded-2xl flex items-center justify-center text-xs hover:bg-rose-500 hover:text-white transition-all shadow-sm active:scale-90">🗑️</button>}
+                     <button onClick={() => fetchCustomerLedger(c)} title="View Ledger" className="w-11 h-11 bg-slate-900 text-white rounded-2xl flex items-center justify-center text-xs shadow-xl active:scale-90 transition-all hover:bg-indigo-600">📑</button>
+                     {isAdmin && (
+                       <>
+                         <button onClick={() => openEditModal(c)} title="Edit Shop" className="w-11 h-11 bg-blue-600 text-white rounded-2xl flex items-center justify-center text-xs shadow-xl active:scale-90 transition-all hover:bg-blue-700">📝</button>
+                         <button onClick={async () => { if(confirm("ডিলিট?")) { await supabase.from('customers').delete().eq('id', c.id); fetchCustomers(); } }} title="Delete Shop" className="w-11 h-11 bg-rose-50 text-rose-500 rounded-2xl flex items-center justify-center text-xs hover:bg-rose-500 hover:text-white transition-all shadow-sm active:scale-90">🗑️</button>
+                       </>
+                     )}
                   </div>
                </div>
              );
@@ -329,7 +336,7 @@ const Customers: React.FC<CustomerProps> = ({ company, role, userName }) => {
       )}
 
       {/* ➕ Premium Add/Edit Shop Modal */}
-      {showModal && (
+      {showModal && isAdmin && (
         <div className="fixed inset-0 bg-slate-950/90 backdrop-blur-3xl z-[2000] flex items-center justify-center p-4">
            <div className="bg-white p-10 md:p-14 rounded-[4.5rem] w-full max-w-xl shadow-2xl animate-reveal max-h-[90vh] overflow-y-auto custom-scroll text-slate-900 border border-white/20">
               <div className="flex justify-between items-center mb-10 border-b pb-8">

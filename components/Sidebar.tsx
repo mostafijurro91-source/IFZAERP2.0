@@ -29,6 +29,7 @@ const Sidebar: React.FC<SidebarProps> = ({
   
   const isCustomer = user.role === 'CUSTOMER';
   const isAdmin = user.role === 'ADMIN';
+  const isStaff = user.role === 'STAFF';
   
   const canSwitch = isAdmin || user.role === 'DELIVERY';
 
@@ -73,17 +74,17 @@ const Sidebar: React.FC<SidebarProps> = ({
     { id: 'dashboard', label: '📊 ড্যাশবোর্ড', roles: ['ADMIN', 'STAFF', 'DELIVERY'] },
     { id: 'portal_dashboard', label: '🏠 কাস্টমার হোম', roles: ['CUSTOMER'] },
     { id: 'portal_order', label: '🛒 অর্ডার করুন', roles: ['CUSTOMER'] },
-    { id: 'showroom', label: '💎 ডিজিটাল শোরুম', roles: ['ADMIN', 'STAFF', 'CUSTOMER'] },
+    { id: 'showroom', label: '💎 ডিজিটাল শোরুম', roles: ['ADMIN', 'CUSTOMER'] },
     { id: 'portal_ledger', label: '📒 আমার লেজার', roles: ['CUSTOMER'], badge: 'due' },
     { id: 'portal_catalog', label: '📢 অফার ও রেট', roles: ['CUSTOMER'] },
     { id: 'ad_manager', label: '📢 ক্যাটালগ ম্যানেজার', roles: ['ADMIN'] },
-    { id: 'sales', label: '📝 সেলস মেমো (POS)', roles: ['ADMIN', 'STAFF'] },
+    { id: 'sales', label: '📝 সেলস মেমো (POS)', roles: ['ADMIN'] },
     { id: 'collections', label: '💰 টাকা কালেকশন', roles: ['ADMIN', 'STAFF', 'DELIVERY'], badge: 'pending' },
     { id: 'order_management', label: '🛒 মার্কেট অর্ডার', roles: ['ADMIN', 'STAFF'] },
     { id: 'bookings', label: '📅 বুকিং অর্ডার', roles: ['ADMIN', 'STAFF'] },
-    { id: 'replacements', label: '🔄 রিপ্লেসমেন্ট (Claim)', roles: ['ADMIN', 'STAFF'] },
+    { id: 'replacements', label: '🔄 রিপ্লেসমেন্ট (Claim)', roles: ['ADMIN'] },
     { id: 'delivery_hub', label: '🚚 ডেলিভারি হাব', roles: ['ADMIN', 'DELIVERY', 'STAFF'] },
-    { id: 'inventory', label: '📦 স্টক ইনভেন্টরি', roles: ['ADMIN', 'STAFF'] },
+    { id: 'inventory', label: '📦 স্টক ইনভেন্টরি', roles: ['ADMIN'] },
     { id: 'customers', label: '👥 কাস্টমার ডাটা', roles: ['ADMIN', 'STAFF', 'DELIVERY'] },
     { id: 'ledger', label: '📒 কোম্পানি লেজার', roles: ['ADMIN'] },
     { id: 'reports', label: '📁 অল রিপোর্টস', roles: ['ADMIN', 'STAFF'] },
