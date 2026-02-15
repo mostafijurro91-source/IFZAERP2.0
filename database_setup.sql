@@ -2,9 +2,21 @@
 -- Enable UUID extension
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
+-- 1. COLLECTION REQUESTS (Fixes the 'meta' column missing error)
+CREATE TABLE IF NOT EXISTS collection_requests (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    customer_id UUID REFERENCES customers(id) ON DELETE CASCADE,
+    company TEXT NOT NULL,
+    amount NUMERIC DEFAULT 0,
+    submitted_by TEXT,
+    status TEXT DEFAULT 'PENDING',
+    meta JSONB DEFAULT '{}'::jsonb
+);
+
 -- ... existing tables ...
 
--- 6. MARKET ORDERS (Ensure all columns exist)
+-- 6. MARKET ORDERS
 CREATE TABLE IF NOT EXISTS market_orders (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     created_at TIMESTAMPTZ DEFAULT NOW(),
