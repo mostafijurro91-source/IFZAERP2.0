@@ -139,8 +139,7 @@ const Collections: React.FC<CollectionsProps> = ({ company, user }) => {
         company: mapToDbCompany(targetCompany),
         amount: Number(amount),
         submitted_by: user.name,
-        status: 'PENDING',
-        meta: { delivery_expense: Number(deliveryExpense) || 0 }
+        status: 'PENDING'
       }]);
       if (error) throw error;
       setAmount("");
@@ -173,22 +172,38 @@ const Collections: React.FC<CollectionsProps> = ({ company, user }) => {
         type: 'PAYMENT'
       }]);
 
-      const expAmt = Number(req.meta?.delivery_expense || 0);
-      if (expAmt > 0) {
-        await supabase.from('transactions').insert([{
-          customer_id: req.customer_id,
-          company: req.company,
-          amount: expAmt,
-          payment_type: 'EXPENSE',
-          items: [{ note: `ডেলিভারি খরচ` }],
-          submitted_by: req.submitted_by,
-          meta: { type: 'DELIVERY' }
-        }]);
-      }
-
       await supabase.from('collection_requests').delete().eq('id', req.id);
       fetchData();
     } catch (err: any) { alert(err.message); } finally { setIsSaving(false); }
+  };
+
+  const handleDeleteConfirmed = async (tx: any) => {
+    if (!isAdmin || isSaving) return;
+    const confirmMsg = `আপনি কি নিশ্চিত এই আদায়টি (#${String(tx.id).slice(-6).toUpperCase()}) মুছে ফেলতে চান? এটি মুছে ফেললে কাস্টমার লেজার থেকেও মাইনাস হয়ে যাবে।`;
+    if (!confirm(confirmMsg)) return;
+
+    setIsSaving(true);
+    try {
+      const txIdShort = String(tx.id).slice(-6).toUpperCase();
+      
+      // 1. Delete associated notification
+      await supabase
+        .from('notifications')
+        .delete()
+        .eq('customer_id', tx.customer_id)
+        .ilike('message', `%#${txIdShort}%`);
+
+      // 2. Delete the transaction
+      const { error } = await supabase.from('transactions').delete().eq('id', tx.id);
+      if (error) throw error;
+
+      alert("আদায়টি সফলভাবে মুছে ফেলা হয়েছে!");
+      fetchData();
+    } catch (err: any) {
+      alert("ডিলিট করা যায়নি: " + err.message);
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const safeFormat = (val: any) => Number(val || 0).toLocaleString();
@@ -215,7 +230,7 @@ const Collections: React.FC<CollectionsProps> = ({ company, user }) => {
     <div className="space-y-6 pb-40 animate-reveal text-slate-900 font-sans">
       
       {/* 📊 Top Stats Hub */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 px-1">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 px-1">
          <div className="bg-slate-900 p-6 rounded-[2rem] text-white shadow-xl relative overflow-hidden group">
             <div className="absolute top-0 right-0 w-16 h-16 bg-blue-600 opacity-20 rounded-bl-full"></div>
             <p className="text-[9px] font-black uppercase text-slate-400 tracking-widest mb-1 italic relative z-10">
@@ -225,24 +240,27 @@ const Collections: React.FC<CollectionsProps> = ({ company, user }) => {
          </div>
          {!isStaff && (
            <>
-              <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm">
+              <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm group">
                  <p className="text-[9px] font-black uppercase text-amber-500 tracking-widest mb-1 italic">Transtec</p>
                  <p className="text-xl font-black italic text-slate-800">৳{safeFormat(globalStats.transtec)}</p>
               </div>
-              <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm">
+              <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm group">
                  <p className="text-[9px] font-black uppercase text-cyan-500 tracking-widest mb-1 italic">SQ Light</p>
                  <p className="text-xl font-black italic text-slate-800">৳{safeFormat(globalStats.sqLight)}</p>
               </div>
+              <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm group">
+                 <p className="text-[9px] font-black uppercase text-rose-500 tracking-widest mb-1 italic">SQ Cables</p>
+                 <p className="text-xl font-black italic text-slate-800">৳{safeFormat(globalStats.sqCables)}</p>
+              </div>
            </>
          )}
-         <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm">
+         <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm col-span-1">
             <p className="text-[9px] font-black uppercase text-orange-600 tracking-widest mb-1 italic">পেন্ডিং এন্ট্রি</p>
             <p className="text-xl font-black italic text-orange-600">৳{safeFormat(globalStats.pendingTotal)}</p>
          </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 px-1">
-         {/* 📝 Collection Entry Form */}
          <div className="bg-white p-8 md:p-12 rounded-[3.5rem] border border-slate-100 shadow-2xl space-y-10">
             <div className="flex items-center gap-5">
                <div className="w-12 h-12 bg-blue-600 rounded-2xl flex items-center justify-center text-white text-xl font-black italic shadow-xl">C</div>
@@ -284,14 +302,10 @@ const Collections: React.FC<CollectionsProps> = ({ company, user }) => {
                   ))}
                </div>
 
-               <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-4">
-                  <div className="md:col-span-2">
+               <div className="grid grid-cols-1 md:grid-cols-1 gap-4 pt-4">
+                  <div className="md:col-span-1">
                     <label className="text-[9px] font-black uppercase text-slate-400 ml-4 mb-2 block italic">কালেকশন অ্যামাউন্ট (টাকা)</label>
                     <input type="number" className="w-full p-8 bg-slate-900 border-none rounded-[2.5rem] text-center text-5xl font-black italic text-blue-400 shadow-2xl" placeholder="0.00" value={amount} onChange={e => setAmount(e.target.value)} />
-                  </div>
-                  <div>
-                    <label className="text-[9px] font-black uppercase text-slate-400 ml-4 mb-2 block italic">খরচ (যাতায়াত)</label>
-                    <input type="number" className="w-full p-8 bg-orange-50 border border-orange-100 rounded-[2.5rem] text-center text-2xl font-black italic text-orange-600 shadow-inner" placeholder="Exp" value={deliveryExpense} onChange={e => setDeliveryExpense(e.target.value)} />
                   </div>
                </div>
 
@@ -301,9 +315,7 @@ const Collections: React.FC<CollectionsProps> = ({ company, user }) => {
             </div>
          </div>
 
-         {/* ⏳ History & Pending Section */}
          <div className="space-y-8 flex flex-col h-full">
-            {/* Pending Requests */}
             <div className="space-y-4">
                <h4 className="text-[11px] font-black text-slate-400 uppercase italic tracking-[0.2em] ml-4">১. অপেক্ষমাণ অনুমোদন ({pendingRequests.length})</h4>
                <div className="space-y-3 max-h-[400px] overflow-y-auto custom-scroll pr-2">
@@ -328,7 +340,6 @@ const Collections: React.FC<CollectionsProps> = ({ company, user }) => {
                </div>
             </div>
 
-            {/* Today's Confirmed */}
             <div className="space-y-4 flex-1">
                <h4 className="text-[11px] font-black text-emerald-600 uppercase italic tracking-[0.2em] ml-4">২. আজকের কনফার্মড আদায়</h4>
                <div className="space-y-3 max-h-[400px] overflow-y-auto custom-scroll pr-2">
@@ -338,7 +349,18 @@ const Collections: React.FC<CollectionsProps> = ({ company, user }) => {
                           <h4 className="font-black text-slate-700 uppercase italic text-sm truncate">{tx.customers?.name}</h4>
                           <p className="text-[9px] font-bold text-slate-400 uppercase mt-1">{tx.company} • {new Date(tx.created_at).toLocaleTimeString('bn-BD', {hour:'2-digit', minute:'2-digit'})}</p>
                        </div>
-                       <p className="text-2xl font-black italic text-emerald-700 tracking-tighter shrink-0">৳{safeFormat(tx.amount)}</p>
+                       <div className="flex items-center gap-4 shrink-0">
+                          <p className="text-2xl font-black italic text-emerald-700 tracking-tighter">৳{safeFormat(tx.amount)}</p>
+                          {isAdmin && (
+                            <button 
+                              onClick={() => handleDeleteConfirmed(tx)} 
+                              className="w-10 h-10 bg-rose-50 text-rose-500 rounded-xl flex items-center justify-center shadow-sm hover:bg-rose-500 hover:text-white transition-all active:scale-90"
+                              title="Delete Mistake Collection"
+                            >
+                              🗑️
+                            </button>
+                          )}
+                       </div>
                     </div>
                   ))}
                   {confirmedToday.length === 0 && <div className="py-20 text-center opacity-10 font-black uppercase text-xs italic">আজকে কোনো এন্ট্রি নেই</div>}
