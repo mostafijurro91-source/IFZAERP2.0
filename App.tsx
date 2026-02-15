@@ -111,7 +111,7 @@ const App: React.FC = () => {
   return (
     <div className="flex h-screen bg-[#f8fafc] overflow-hidden">
       {toast && (
-        <div className="fixed top-24 right-4 left-4 md:left-auto md:w-[320px] z-[9000] bg-white border-2 border-blue-600 p-4 rounded-2xl shadow-2xl animate-reveal flex items-start gap-3">
+        <div className="fixed top-20 right-4 left-4 md:left-auto md:w-[320px] z-[9000] bg-white border-2 border-blue-600 p-4 rounded-2xl shadow-2xl animate-reveal flex items-start gap-3">
            <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white text-sm shrink-0">🔔</div>
            <div className="flex-1 min-w-0">
               <h4 className="font-black text-slate-900 uppercase text-[10px] truncate">{toast.title}</h4>
@@ -133,32 +133,27 @@ const App: React.FC = () => {
       />
       
       <main className="flex-1 flex flex-col md:ml-[320px] overflow-hidden relative">
-        <header className="pt-[env(safe-area-inset-top)] bg-white border-b shrink-0 z-40 shadow-md">
-          <div className="h-20 flex justify-between items-center px-6 md:px-10">
-            <div className="flex items-center gap-5">
-              <button onClick={() => setIsSidebarOpen(true)} className="md:hidden w-12 h-12 bg-slate-900 text-white rounded-2xl flex items-center justify-center shadow-xl active:scale-90 transition-transform">
-                <span className="text-xl">☰</span>
-              </button>
+        <header className="pt-[env(safe-area-inset-top)] bg-white border-b shrink-0 z-40 shadow-sm">
+          <div className="h-14 flex justify-between items-center px-4 md:px-8">
+            <div className="flex items-center gap-4">
+              <button onClick={() => setIsSidebarOpen(true)} className="md:hidden w-10 h-10 bg-slate-900 text-white rounded-xl flex items-center justify-center shadow-lg">☰</button>
               <div className="hidden sm:block">
-                <h1 className="text-[14px] font-black text-slate-900 uppercase italic tracking-[0.2em] leading-none">IFZA ELECTRONICS</h1>
-                <p className="text-[10px] font-black text-blue-600 uppercase mt-2 tracking-widest italic">{activeTab.replace(/_/g, ' ')} Terminal</p>
+                <h1 className="text-[11px] font-black text-slate-900 uppercase italic tracking-widest leading-none">IFZA ELECTRONICS</h1>
+                <p className="text-[8px] font-black text-blue-600 uppercase mt-1 tracking-tighter italic">{activeTab.replace(/_/g, ' ')} Terminal</p>
               </div>
-              <div className="sm:hidden">
-                <h1 className="text-[16px] font-black text-slate-900 uppercase italic tracking-widest leading-none">{activeTab.replace(/_/g, ' ')}</h1>
-                <p className="text-[8px] font-bold text-slate-400 uppercase mt-1 tracking-tighter italic">IFZA Cloud Node</p>
-              </div>
+              <h1 className="sm:hidden text-[12px] font-black text-slate-900 uppercase italic tracking-widest">{activeTab.replace(/_/g, ' ')}</h1>
             </div>
-            <div className="flex items-center gap-5">
+            <div className="flex items-center gap-3">
               <div className="text-right hidden xs:block">
-                <p className="text-[11px] font-black uppercase italic leading-none text-slate-800">{user.name}</p>
-                <p className="text-[8px] font-bold text-slate-400 mt-1.5 uppercase tracking-widest">{selectedCompany} Active</p>
+                <p className="text-[9px] font-black uppercase italic leading-none">{user.name}</p>
+                <p className="text-[7px] font-bold text-slate-400 mt-0.5 uppercase tracking-tighter">{selectedCompany}</p>
               </div>
-              <div className="w-11 h-11 bg-blue-600 rounded-2xl flex items-center justify-center text-white text-[14px] font-black italic shadow-blue-500/20 shadow-lg border-2 border-white">{user.name.charAt(0)}</div>
+              <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white text-[11px] font-black italic shadow-md">{user.name.charAt(0)}</div>
             </div>
           </div>
         </header>
 
-        <div className="flex-1 overflow-y-auto p-6 md:p-10 custom-scroll bg-[#f8fafc]">
+        <div className="flex-1 overflow-y-auto p-4 md:p-8 custom-scroll bg-[#f8fafc]">
           <div className="max-w-7xl mx-auto pt-2">
             {activeTab === 'dashboard' && <Dashboard company={selectedCompany} role={user.role} />}
             {activeTab === 'portal_dashboard' && <CustomerPortal type="DASHBOARD" user={user} />}
