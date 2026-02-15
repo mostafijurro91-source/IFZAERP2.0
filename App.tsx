@@ -108,21 +108,6 @@ const App: React.FC = () => {
 
   if (!user) return showLogin ? <Login onLogin={handleLogin} onBack={() => setShowLogin(false)} /> : <MarketingPage onEnterERP={() => setShowLogin(true)} />;
 
-  const horizontalMenu = [
-    { id: 'dashboard', label: '📊 ড্যাশবোর্ড', roles: ['ADMIN', 'STAFF', 'DELIVERY'] },
-    { id: 'portal_dashboard', label: '🏠 হোম', roles: ['CUSTOMER'] },
-    { id: 'portal_order', label: '🛒 অর্ডার', roles: ['CUSTOMER'] },
-    { id: 'portal_ledger', label: '📒 লেজার', roles: ['CUSTOMER'] },
-    { id: 'portal_catalog', label: '📢 অফার', roles: ['CUSTOMER'] },
-    { id: 'sales', label: '📝 সেলস', roles: ['ADMIN'] },
-    { id: 'collections', label: '💰 আদায়', roles: ['ADMIN', 'STAFF', 'DELIVERY'] },
-    { id: 'order_management', label: '🛒 মার্কেট অর্ডার', roles: ['ADMIN', 'STAFF'] },
-    { id: 'inventory', label: '📦 ইনভেন্টরি', roles: ['ADMIN'] },
-    { id: 'customers', label: '👥 কাস্টমার', roles: ['ADMIN', 'STAFF', 'DELIVERY'] },
-    { id: 'ledger', label: '📒 লেজার', roles: ['ADMIN'] },
-    { id: 'reports', label: '📁 রিপোর্টস', roles: ['ADMIN', 'STAFF'] },
-  ].filter(m => m.roles.includes(user.role));
-
   return (
     <div className="flex h-screen bg-[#f8fafc] overflow-hidden">
       {toast && (
@@ -136,7 +121,16 @@ const App: React.FC = () => {
         </div>
       )}
 
-      <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} onLogout={handleLogout} user={user} selectedCompany={selectedCompany} onCompanyChange={setSelectedCompany} isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
+      <Sidebar 
+        activeTab={activeTab} 
+        setActiveTab={setActiveTab} 
+        onLogout={handleLogout} 
+        user={user} 
+        selectedCompany={selectedCompany} 
+        onCompanyChange={setSelectedCompany} 
+        isOpen={isSidebarOpen} 
+        onClose={() => setIsSidebarOpen(false)} 
+      />
       
       <main className="flex-1 flex flex-col md:ml-[320px] overflow-hidden relative">
         <header className="h-12 bg-white border-b flex justify-between items-center px-4 md:px-8 shrink-0 z-40">
@@ -149,14 +143,6 @@ const App: React.FC = () => {
             <div className="w-7 h-7 bg-blue-600 rounded-lg flex items-center justify-center text-white text-[10px] font-black italic">{user.name.charAt(0)}</div>
           </div>
         </header>
-
-        <div className="bg-white border-b px-2 py-1.5 flex gap-1.5 overflow-x-auto no-scrollbar shrink-0 z-30 shadow-sm">
-           {horizontalMenu.map((nav) => (
-             <button key={nav.id} onClick={() => setActiveTab(nav.id)} className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase transition-all whitespace-nowrap border-2 ${activeTab === nav.id ? 'bg-blue-600 text-white border-blue-600 shadow-sm' : 'bg-white text-slate-400 border-slate-50'}`}>
-               {nav.label}
-             </button>
-           ))}
-        </div>
 
         <div className="flex-1 overflow-y-auto p-2 md:p-6 custom-scroll bg-[#f8fafc]">
           <div className="max-w-7xl mx-auto">
@@ -171,6 +157,15 @@ const App: React.FC = () => {
             {activeTab === 'inventory' && <Inventory company={selectedCompany} role={user.role} />}
             {activeTab === 'customers' && <Customers company={selectedCompany} role={user.role} userName={user.name} />}
             {activeTab === 'reports' && <Reports company={selectedCompany} userRole={user.role} userName={user.name} />}
+            
+            {/* Added missing component mappings below */}
+            {activeTab === 'bookings' && <Bookings company={selectedCompany} role={user.role} user={user} />}
+            {activeTab === 'replacements' && <Replacements company={selectedCompany} role={user.role} user={user} />}
+            {activeTab === 'delivery_hub' && <DeliveryHub company={selectedCompany} user={user} />}
+            {activeTab === 'ledger' && <CompanyLedger company={selectedCompany} role={user.role} />}
+            {activeTab === 'team' && <Team />}
+            {activeTab === 'showroom' && <Showroom />}
+            {activeTab === 'ad_manager' && <AdManager />}
           </div>
         </div>
       </main>
