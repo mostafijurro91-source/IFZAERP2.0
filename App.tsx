@@ -95,7 +95,7 @@ const App: React.FC = () => {
   if (!initialized) return (
     <div className="h-screen flex flex-col items-center justify-center bg-[#05070a] text-white">
       <div className="w-12 h-12 border-4 border-blue-600/10 border-t-blue-600 rounded-full animate-spin"></div>
-      <p className="mt-4 font-black uppercase text-[8px] tracking-[0.4em] text-blue-500">IFZA ERP</p>
+      <p className="mt-4 font-black uppercase text-[10px] tracking-[0.4em] text-blue-500">IFZA ELECTRONICS</p>
     </div>
   );
 
@@ -111,7 +111,7 @@ const App: React.FC = () => {
   return (
     <div className="flex h-screen bg-[#f8fafc] overflow-hidden">
       {toast && (
-        <div className="fixed top-4 right-4 left-4 md:left-auto md:w-[320px] z-[9000] bg-white border-2 border-blue-600 p-4 rounded-xl shadow-2xl animate-reveal flex items-start gap-3">
+        <div className="fixed top-24 right-4 left-4 md:left-auto md:w-[320px] z-[9000] bg-white border-2 border-blue-600 p-4 rounded-2xl shadow-2xl animate-reveal flex items-start gap-3">
            <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white text-sm shrink-0">🔔</div>
            <div className="flex-1 min-w-0">
               <h4 className="font-black text-slate-900 uppercase text-[10px] truncate">{toast.title}</h4>
@@ -133,19 +133,33 @@ const App: React.FC = () => {
       />
       
       <main className="flex-1 flex flex-col md:ml-[320px] overflow-hidden relative">
-        <header className="h-12 bg-white border-b flex justify-between items-center px-4 md:px-8 shrink-0 z-40">
-          <div className="flex items-center gap-3">
-            <button onClick={() => setIsSidebarOpen(true)} className="md:hidden p-1.5 bg-slate-900 text-white rounded-lg text-xs">☰</button>
-            <h1 className="text-[10px] font-black text-slate-900 uppercase italic tracking-widest">{activeTab.replace(/_/g, ' ')}</h1>
-          </div>
-          <div className="flex items-center gap-2">
-            <p className="text-[9px] font-black uppercase italic hidden sm:block">{user.name}</p>
-            <div className="w-7 h-7 bg-blue-600 rounded-lg flex items-center justify-center text-white text-[10px] font-black italic">{user.name.charAt(0)}</div>
+        <header className="pt-[env(safe-area-inset-top)] bg-white border-b shrink-0 z-40 shadow-md">
+          <div className="h-20 flex justify-between items-center px-6 md:px-10">
+            <div className="flex items-center gap-5">
+              <button onClick={() => setIsSidebarOpen(true)} className="md:hidden w-12 h-12 bg-slate-900 text-white rounded-2xl flex items-center justify-center shadow-xl active:scale-90 transition-transform">
+                <span className="text-xl">☰</span>
+              </button>
+              <div className="hidden sm:block">
+                <h1 className="text-[14px] font-black text-slate-900 uppercase italic tracking-[0.2em] leading-none">IFZA ELECTRONICS</h1>
+                <p className="text-[10px] font-black text-blue-600 uppercase mt-2 tracking-widest italic">{activeTab.replace(/_/g, ' ')} Terminal</p>
+              </div>
+              <div className="sm:hidden">
+                <h1 className="text-[16px] font-black text-slate-900 uppercase italic tracking-widest leading-none">{activeTab.replace(/_/g, ' ')}</h1>
+                <p className="text-[8px] font-bold text-slate-400 uppercase mt-1 tracking-tighter italic">IFZA Cloud Node</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-5">
+              <div className="text-right hidden xs:block">
+                <p className="text-[11px] font-black uppercase italic leading-none text-slate-800">{user.name}</p>
+                <p className="text-[8px] font-bold text-slate-400 mt-1.5 uppercase tracking-widest">{selectedCompany} Active</p>
+              </div>
+              <div className="w-11 h-11 bg-blue-600 rounded-2xl flex items-center justify-center text-white text-[14px] font-black italic shadow-blue-500/20 shadow-lg border-2 border-white">{user.name.charAt(0)}</div>
+            </div>
           </div>
         </header>
 
-        <div className="flex-1 overflow-y-auto p-2 md:p-6 custom-scroll bg-[#f8fafc]">
-          <div className="max-w-7xl mx-auto">
+        <div className="flex-1 overflow-y-auto p-6 md:p-10 custom-scroll bg-[#f8fafc]">
+          <div className="max-w-7xl mx-auto pt-2">
             {activeTab === 'dashboard' && <Dashboard company={selectedCompany} role={user.role} />}
             {activeTab === 'portal_dashboard' && <CustomerPortal type="DASHBOARD" user={user} />}
             {activeTab === 'portal_ledger' && <CustomerPortal type="LEDGER" user={user} />}
@@ -157,8 +171,6 @@ const App: React.FC = () => {
             {activeTab === 'inventory' && <Inventory company={selectedCompany} role={user.role} />}
             {activeTab === 'customers' && <Customers company={selectedCompany} role={user.role} userName={user.name} />}
             {activeTab === 'reports' && <Reports company={selectedCompany} userRole={user.role} userName={user.name} />}
-            
-            {/* Added missing component mappings below */}
             {activeTab === 'bookings' && <Bookings company={selectedCompany} role={user.role} user={user} />}
             {activeTab === 'replacements' && <Replacements company={selectedCompany} role={user.role} user={user} />}
             {activeTab === 'delivery_hub' && <DeliveryHub company={selectedCompany} user={user} />}
