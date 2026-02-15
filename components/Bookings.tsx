@@ -30,6 +30,8 @@ const Bookings: React.FC<BookingsProps> = ({ company, role, user }) => {
   const [customers, setCustomers] = useState<any[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [selectedCust, setSelectedCust] = useState<any>(null);
+  const [activeBookingsForCust, setActiveBookingsForCust] = useState<any[]>([]);
+  const [targetBookingId, setTargetBookingId] = useState<string | null>(null);
   const [bookingCart, setBookingCart] = useState<any[]>([]);
   
   const [custSearch, setCustSearch] = useState("");
@@ -39,9 +41,12 @@ const Bookings: React.FC<BookingsProps> = ({ company, role, user }) => {
   const [currentStep, setCurrentStep] = useState(1);
   const [form, setForm] = useState({ advance: 0 });
 
-  // Delivery & Payment States for updates
+  // Detail View Specific States
   const [deliveryUpdates, setDeliveryUpdates] = useState<Record<string, number>>({});
   const [newPaymentAmt, setNewPaymentAmt] = useState<string>("");
+  const [showDetailProdAdd, setShowDetailProdAdd] = useState(false);
+  const [detailProdSearch, setDetailProdSearch] = useState("");
+  const [detailNewItems, setDetailNewItems] = useState<any[]>([]);
 
   const invoiceRef = useRef<HTMLDivElement>(null);
   const isAdmin = role === 'ADMIN';
@@ -77,22 +82,48 @@ const Bookings: React.FC<BookingsProps> = ({ company, role, user }) => {
     } catch (err) { console.error(err); } finally { setLoading(false); }
   };
 
-  const handleDeleteBooking = async (id: string, e?: React.MouseEvent) => {
-    if (e) e.stopPropagation();
-    if (!isAdmin) return alert("আপনার এই বুকিং ডিলিট করার অনুমতি নেই।");
-    if (!confirm("আপনি কি নিশ্চিতভাবে এই বুকিংটি ডিলিট করতে চান? এটি চিরতরে মুছে যাবে।")) return;
-    
-    setLoading(true);
+  const fetchActiveBookingsForCustomer = async (cid: string) => {
+     const { data } = await supabase
+       .from('bookings')
+       .select('*')
+       .eq('customer_id', cid)
+       .eq('company', mapToDbCompany(company))
+       .in('status', ['PENDING', 'PARTIAL']);
+     setActiveBookingsForCust(data || []);
+  };
+
+  const downloadPDF = async () => {
+    if (!invoiceRef.current || isDownloading) return;
+    setIsDownloading(true);
     try {
-      const { error } = await supabase.from('bookings').delete().eq('id', id);
-      if (error) throw error;
-      alert("বুকিং সফলভাবে ডিলিট করা হয়েছে! 🗑️");
-      setShowDetailModal(false);
-      fetchData();
-    } catch (err: any) {
-      alert("ডিলিট করতে সমস্যা হয়েছে: " + err.message);
+      const element = invoiceRef.current;
+      
+      // We set specific scale and scroll settings to prevent cutting off
+      const canvas = await html2canvas(element, { 
+        scale: 3, // High resolution
+        useCORS: true, 
+        backgroundColor: '#ffffff',
+        logging: false,
+        height: element.scrollHeight, // Force capture full content height
+        windowHeight: element.scrollHeight,
+        scrollY: -window.scrollY // Reset scroll offset for capture
+      });
+      
+      const imgData = canvas.toDataURL('image/jpeg', 1.0);
+      const pdf = new jsPDF('p', 'mm', 'a4');
+      const pageWidth = pdf.internal.pageSize.getWidth();
+      const pageHeight = pdf.internal.pageSize.getHeight();
+      
+      const imgWidth = pageWidth;
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+      
+      pdf.addImage(imgData, 'JPEG', 0, 0, imgWidth, imgHeight);
+      pdf.save(`Booking_Memo_${selectedBooking?.customer_name?.replace(/\s+/g, '_')}_${selectedBooking?.id.slice(-4).toUpperCase()}.pdf`);
+    } catch (err) {
+      console.error(err);
+      alert("PDF ডাউনলোড ব্যর্থ হয়েছে।");
     } finally {
-      setLoading(false);
+      setIsDownloading(false);
     }
   };
 
@@ -102,8 +133,7 @@ const Bookings: React.FC<BookingsProps> = ({ company, role, user }) => {
     try {
       const dbCo = mapToDbCompany(company);
       
-      // 1. Process Delivery Updates
-      const updatedItems = selectedBooking.items.map(item => {
+      const updatedExistingItems = selectedBooking.items.map(item => {
         const updateVal = Number(deliveryUpdates[item.id] || 0);
         return { 
           ...item, 
@@ -111,55 +141,69 @@ const Bookings: React.FC<BookingsProps> = ({ company, role, user }) => {
         };
       });
 
-      // 2. Process New Payment
-      const payAmt = Number(newPaymentAmt) || 0;
-      const newAdvance = (selectedBooking.advance_amount || 0) + payAmt;
+      const formattedNewItems = detailNewItems.map(it => ({
+        id: it.id,
+        product_id: it.id,
+        name: it.name,
+        qty: it.qty,
+        unitPrice: Number(it.tp), 
+        delivered_qty: 0
+      }));
 
-      // Calculate status
+      const finalItems = [...updatedExistingItems, ...formattedNewItems];
+      
+      const payAmt = Number(newPaymentAmt) || 0;
+      const newAdvanceTotal = (selectedBooking.advance_amount || 0) + payAmt;
+      const addedValue = detailNewItems.reduce((acc, it) => acc + (it.qty * Number(it.tp)), 0);
+      const finalTotalAmount = selectedBooking.total_amount + addedValue;
+
+      const isAllDelivered = finalItems.every(i => i.delivered_qty >= i.qty);
+      const isAllPaid = newAdvanceTotal >= finalTotalAmount;
+      
       let newStatus = selectedBooking.status;
-      const allDone = updatedItems.every(i => i.delivered_qty >= i.qty);
-      const someDone = updatedItems.some(i => i.delivered_qty > 0);
-      if (allDone) newStatus = 'COMPLETED';
-      else if (someDone) newStatus = 'PARTIAL';
+      if (isAllDelivered && isAllPaid) {
+        newStatus = 'COMPLETED';
+      } else if (isAllDelivered || isAllPaid || finalItems.some(i => i.delivered_qty > 0)) {
+        newStatus = 'PARTIAL';
+      }
 
       const { error: bkError } = await supabase.from('bookings').update({
-        items: updatedItems,
-        advance_amount: newAdvance,
-        status: newStatus
+        items: finalItems,
+        advance_amount: newAdvanceTotal,
+        total_amount: finalTotalAmount,
+        status: newStatus,
+        qty: finalItems.reduce((s, i) => s + i.qty, 0)
       }).eq('id', selectedBooking.id);
 
       if (bkError) throw bkError;
 
-      // Log transaction for payment
       if (payAmt > 0) {
         await supabase.from('transactions').insert([{
           customer_id: selectedBooking.customer_id,
           company: dbCo,
           amount: payAmt,
           payment_type: 'COLLECTION',
-          items: [{ note: `বুকিং পেমেন্ট আপডেট (#${selectedBooking.id.slice(-4).toUpperCase()})` }],
-          submitted_by: user.name
+          items: [{ note: `বুকিং পেমেন্ট (#${selectedBooking.id.slice(-4).toUpperCase()})` }],
+          submitted_by: user.name,
+          meta: { is_booking: true }
         }]);
       }
 
-      // Update Inventory Stock for delivered units
       for (const id in deliveryUpdates) {
         const q = Number(deliveryUpdates[id]);
-        if (q > 0) {
-          await supabase.rpc('increment_stock', { row_id: id, amt: -q });
-        }
+        if (q > 0) await supabase.rpc('increment_stock', { row_id: id, amt: -q });
       }
 
-      alert("বুকিং ও ডেলিভারি তথ্য সফলভাবে আপডেট হয়েছে!");
+      alert("বুকিং ফাইল আপডেট করা হয়েছে! ✅");
+      setShowDetailModal(false);
       setDeliveryUpdates({});
       setNewPaymentAmt("");
-      setShowDetailModal(false);
+      setDetailNewItems([]);
+      setShowDetailProdAdd(false);
       fetchData();
     } catch (err: any) {
       alert("ত্রুটি: " + err.message);
-    } finally {
-      setIsSaving(false);
-    }
+    } finally { setIsSaving(false); }
   };
 
   const handleAddBooking = async () => {
@@ -167,8 +211,8 @@ const Bookings: React.FC<BookingsProps> = ({ company, role, user }) => {
     setIsSaving(true);
     try {
       const dbCo = mapToDbCompany(company);
-      const totalAmount = bookingCart.reduce((acc, it) => acc + (it.qty * it.unitPrice), 0);
-      const itemsToSave = bookingCart.map(it => ({ 
+      const newItemsValue = bookingCart.reduce((acc, it) => acc + (it.qty * it.unitPrice), 0);
+      const newItemsFormatted = bookingCart.map(it => ({ 
         id: it.product_id, 
         product_id: it.product_id,
         name: it.name, 
@@ -176,47 +220,55 @@ const Bookings: React.FC<BookingsProps> = ({ company, role, user }) => {
         unitPrice: it.unitPrice,
         delivered_qty: 0 
       }));
-      
-      const { data, error } = await supabase.from('bookings').insert([{ 
-        customer_id: selectedCust.id, 
-        company: dbCo, 
-        product_name: itemsToSave[0].name, 
-        qty: itemsToSave.reduce((sum, item) => sum + item.qty, 0), 
-        items: itemsToSave, 
-        advance_amount: Number(form.advance), 
-        total_amount: totalAmount, 
-        status: 'PENDING' 
-      }]).select().single();
 
-      if (error) throw error;
+      if (targetBookingId) {
+         const existing = activeBookingsForCust.find(b => b.id === targetBookingId);
+         const combinedItems = [...(existing.items || []), ...newItemsFormatted];
+         const combinedTotalAmount = Number(existing.total_amount) + newItemsValue;
+         const combinedAdvance = Number(existing.advance_amount) + Number(form.advance);
+
+         const { error } = await supabase.from('bookings').update({
+           items: combinedItems,
+           total_amount: combinedTotalAmount,
+           advance_amount: combinedAdvance,
+           qty: combinedItems.reduce((s, i) => s + i.qty, 0),
+           status: 'PARTIAL'
+         }).eq('id', targetBookingId);
+         if (error) throw error;
+      } else {
+         const { error } = await supabase.from('bookings').insert([{ 
+           customer_id: selectedCust.id, 
+           company: dbCo, 
+           product_name: newItemsFormatted[0].name, 
+           qty: newItemsFormatted.reduce((sum, item) => sum + item.qty, 0), 
+           items: newItemsFormatted, 
+           advance_amount: Number(form.advance), 
+           total_amount: newItemsValue, 
+           status: 'PENDING' 
+         }]);
+         if (error) throw error;
+      }
 
       if (Number(form.advance) > 0) {
         await supabase.from('transactions').insert([{ 
-          customer_id: selectedCust.id, 
-          company: dbCo, 
-          amount: Number(form.advance), 
-          payment_type: 'COLLECTION', 
-          items: [{ note: `বুকিং অগ্রিম (ID: #${String(data.id).slice(-4).toUpperCase()})` }], 
-          submitted_by: user.name 
+          customer_id: selectedCust.id, company: dbCo, amount: Number(form.advance), 
+          payment_type: 'COLLECTION', items: [{ note: `বুকিং অগ্রিম` }], submitted_by: user.name, meta: { is_booking: true }
         }]);
       }
 
-      alert("বুকিং সফলভাবে সম্পন্ন হয়েছে!");
+      alert("বুকিং সফল হয়েছে!");
       setShowAddModal(false);
       setBookingCart([]);
       setSelectedCust(null);
+      setTargetBookingId(null);
       setCurrentStep(1);
       fetchData();
-    } catch (err: any) { 
-      alert("ত্রুটি: " + err.message); 
-    } finally { 
-      setIsSaving(false); 
-    }
+    } catch (err: any) { alert("ত্রুটি: " + err.message); } finally { setIsSaving(false); }
   };
 
   const addToCart = (p: Product) => {
     if (bookingCart.find(i => i.product_id === p.id)) return;
-    setBookingCart([...bookingCart, { product_id: p.id, name: p.name, qty: 1, unitPrice: p.tp, mrp: p.mrp }]);
+    setBookingCart([...bookingCart, { product_id: p.id, name: p.name, qty: 1, unitPrice: p.tp }]);
     setProdSearch(""); 
   };
 
@@ -226,19 +278,12 @@ const Bookings: React.FC<BookingsProps> = ({ company, role, user }) => {
     setBookingCart(updated.filter(i => i.qty > 0 || updates.qty === undefined));
   };
 
-  const handleDownloadPDF = async () => {
-    if (!invoiceRef.current || isDownloading) return;
-    setIsDownloading(true);
-    try {
-      const element = invoiceRef.current;
-      const canvas = await html2canvas(element, { scale: 3, useCORS: true, backgroundColor: '#ffffff' });
-      const imgData = canvas.toDataURL('image/jpeg', 1.0);
-      const pdf = new jsPDF('p', 'mm', 'a5');
-      const pdfWidth = pdf.internal.pageSize.getWidth();
-      const imgHeight = (canvas.height * pdfWidth) / canvas.width;
-      pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, imgHeight);
-      pdf.save(`Booking_Report_${selectedBooking?.id.slice(-4)}.pdf`);
-    } catch (err) { alert("পিডিএফ তৈরি করা যায়নি।"); } finally { setIsDownloading(false); }
+  const addDetailNewItem = (p: Product) => {
+    if (detailNewItems.find(i => i.id === p.id) || selectedBooking?.items.find(i => i.product_id === p.id)) {
+        return alert("এই প্রোডাক্টটি অলরেডি লিস্টে আছে!");
+    }
+    setDetailNewItems([...detailNewItems, { ...p, qty: 1, tp: p.tp }]);
+    setDetailProdSearch("");
   };
 
   const filteredModalCustomers = useMemo(() => {
@@ -251,13 +296,24 @@ const Bookings: React.FC<BookingsProps> = ({ company, role, user }) => {
   }, [customers, custSearch, modalAreaSelection]);
 
   const filteredProducts = useMemo(() => products.filter(p => p.name.toLowerCase().includes(prodSearch.toLowerCase())), [products, prodSearch]);
+  const filteredDetailProducts = useMemo(() => products.filter(p => p.name.toLowerCase().includes(detailProdSearch.toLowerCase())), [products, detailProdSearch]);
   const uniqueAreas = useMemo(() => Array.from(new Set(customers.map(c => c.address?.trim()).filter(Boolean))).sort() as string[], [customers]);
   const filteredBookings = useMemo(() => bookings.filter(b => statusFilter === "ALL" || b.status === statusFilter), [bookings, statusFilter]);
+
+  const currentTotal = useMemo(() => {
+    if (!selectedBooking) return 0;
+    return selectedBooking.total_amount + detailNewItems.reduce((s,i)=>s+(i.qty*Number(i.tp)), 0);
+  }, [selectedBooking, detailNewItems]);
+
+  const currentCollected = useMemo(() => {
+    if (!selectedBooking) return 0;
+    return selectedBooking.advance_amount + (Number(newPaymentAmt) || 0);
+  }, [selectedBooking, newPaymentAmt]);
 
   return (
     <div className="space-y-6 md:space-y-10 pb-40 animate-reveal text-slate-900 font-sans mt-2">
       
-      {/* 🏛️ Stat Grid */}
+      {/* Stat Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 md:gap-6 no-print px-1">
         <div className="bg-white p-6 md:p-10 rounded-[2.5rem] border border-slate-100 shadow-xl flex flex-col justify-between group overflow-hidden relative">
            <div className="absolute top-0 right-0 w-24 h-24 bg-blue-50 rounded-bl-[4rem] -z-0 opacity-40 group-hover:scale-110 transition-transform"></div>
@@ -291,7 +347,7 @@ const Bookings: React.FC<BookingsProps> = ({ company, role, user }) => {
              <option value="PARTIAL">অংশিক</option>
              <option value="COMPLETED">সম্পন্ন</option>
           </select>
-          <button onClick={() => { setShowAddModal(true); setCurrentStep(1); setBookingCart([]); setSelectedCust(null); }} className="flex-[1.5] md:flex-none bg-indigo-600 text-white px-6 md:px-10 py-4 md:p-5 rounded-2xl md:rounded-3xl font-black uppercase text-[9px] tracking-widest shadow-xl active:scale-95 transition-all">+ নিউ বুকিং</button>
+          <button onClick={() => { setShowAddModal(true); setCurrentStep(1); setBookingCart([]); setSelectedCust(null); setTargetBookingId(null); }} className="flex-[1.5] md:flex-none bg-indigo-600 text-white px-6 md:px-10 py-4 md:p-5 rounded-2xl md:rounded-3xl font-black uppercase text-[9px] tracking-widest shadow-xl active:scale-95 transition-all">+ নিউ বুকিং</button>
         </div>
       </div>
 
@@ -299,7 +355,7 @@ const Bookings: React.FC<BookingsProps> = ({ company, role, user }) => {
         {loading ? (
           <div className="col-span-full py-40 text-center animate-pulse text-slate-300 font-black uppercase italic text-xs">Loading Terminal...</div>
         ) : filteredBookings.map((b, idx) => (
-            <div key={b.id} onClick={() => { setSelectedBooking(b); setDeliveryUpdates({}); setNewPaymentAmt(""); setShowDetailModal(true); }} className="bg-white p-8 md:p-10 rounded-[2.5rem] md:rounded-[3.5rem] border border-slate-100 shadow-lg hover:shadow-2xl transition-all duration-700 cursor-pointer group relative flex flex-col justify-between animate-reveal" style={{ animationDelay: `${idx * 0.05}s` }}>
+            <div key={b.id} onClick={() => { setSelectedBooking(b); setDeliveryUpdates({}); setNewPaymentAmt(""); setDetailNewItems([]); setShowDetailProdAdd(false); setShowDetailModal(true); }} className="bg-white p-8 md:p-10 rounded-[2.5rem] md:rounded-[3.5rem] border border-slate-100 shadow-lg hover:shadow-2xl transition-all duration-700 cursor-pointer group relative flex flex-col justify-between animate-reveal" style={{ animationDelay: `${idx * 0.05}s` }}>
                <div className="mb-6 md:mb-8">
                   <div className="flex justify-between items-start mb-4 md:mb-6">
                      <span className={`px-3 py-1 md:px-4 md:py-1.5 rounded-lg md:rounded-xl text-[8px] font-black uppercase tracking-widest shadow-sm ${
@@ -307,15 +363,6 @@ const Bookings: React.FC<BookingsProps> = ({ company, role, user }) => {
                      }`}>{b.status === 'PARTIAL' ? 'অংশিক' : b.status}</span>
                      <div className="flex items-center gap-2">
                         <span className="text-[9px] font-black text-slate-300">#{b.id.slice(-4).toUpperCase()}</span>
-                        {isAdmin && (
-                          <button 
-                            onClick={(e) => handleDeleteBooking(b.id, e)} 
-                            className="w-8 h-8 bg-rose-50 text-rose-500 rounded-lg flex items-center justify-center border shadow-sm hover:bg-rose-500 hover:text-white transition-all active:scale-90"
-                            title="Delete Booking"
-                          >
-                            🗑️
-                          </button>
-                        )}
                      </div>
                   </div>
                   <h4 className="font-black text-slate-800 text-base md:text-lg uppercase italic leading-tight truncate mb-2 group-hover:text-indigo-600 transition-colors">{b.customer_name}</h4>
@@ -343,8 +390,8 @@ const Bookings: React.FC<BookingsProps> = ({ company, role, user }) => {
                  <div className="flex items-center gap-6">
                     <div className="w-12 h-12 bg-white/10 rounded-2xl flex items-center justify-center text-xl font-black italic shadow-inner">+</div>
                     <div>
-                       <h3 className="text-2xl font-black uppercase italic tracking-tighter">নতুন বুকিং এন্ট্রি</h3>
-                       <p className="text-[10px] text-indigo-200 font-bold uppercase tracking-widest mt-1">Register Advance Booking Order</p>
+                       <h3 className="text-2xl font-black uppercase italic tracking-tighter">বুকিং এন্ট্রি টার্মিনাল</h3>
+                       <p className="text-[10px] text-indigo-200 font-bold uppercase tracking-widest mt-1">Register or Update Booking Order</p>
                     </div>
                  </div>
                  <button onClick={() => setShowAddModal(false)} className="text-4xl text-white/50 hover:text-white font-black transition-colors">✕</button>
@@ -370,7 +417,7 @@ const Bookings: React.FC<BookingsProps> = ({ company, role, user }) => {
                      </div>
                      <div className="flex-1 overflow-y-auto custom-scroll px-10 pb-10 space-y-3">
                         {filteredModalCustomers.map(c => (
-                          <div key={c.id} onClick={() => { setSelectedCust(c); setCurrentStep(2); }} className="p-6 bg-white rounded-3xl border-2 border-transparent shadow-sm hover:border-indigo-500 hover:shadow-xl transition-all cursor-pointer flex justify-between items-center group">
+                          <div key={c.id} onClick={async () => { setSelectedCust(c); await fetchActiveBookingsForCustomer(c.id); setCurrentStep(2); }} className="p-6 bg-white rounded-3xl border-2 border-transparent shadow-sm hover:border-indigo-500 hover:shadow-xl transition-all cursor-pointer flex justify-between items-center group">
                              <div>
                                 <h4 className="font-black text-slate-800 uppercase italic text-sm group-hover:text-indigo-600 leading-none">{c.name}</h4>
                                 <p className="text-[10px] font-bold text-slate-400 mt-2 uppercase tracking-widest leading-none">📍 {c.address} | 📱 {c.phone}</p>
@@ -383,9 +430,27 @@ const Bookings: React.FC<BookingsProps> = ({ company, role, user }) => {
                  ) : (
                    <div className="flex-1 flex flex-col lg:flex-row overflow-hidden">
                       <div className="w-full lg:w-1/2 p-10 border-r flex flex-col gap-6 bg-slate-50">
+                         {activeBookingsForCust.length > 0 && (
+                            <div className="bg-indigo-50 p-6 rounded-3xl border border-indigo-100 mb-2 animate-reveal">
+                               <p className="text-[9px] font-black text-indigo-600 uppercase italic tracking-widest mb-3 text-center">কাস্টমারের আগের বুকিং পাওয়া গেছে:</p>
+                               <div className="space-y-2">
+                                  {activeBookingsForCust.map(bk => (
+                                     <button 
+                                       key={bk.id} 
+                                       onClick={() => setTargetBookingId(targetBookingId === bk.id ? null : bk.id)}
+                                       className={`w-full p-4 rounded-2xl border-2 font-black text-[10px] uppercase italic transition-all flex justify-between items-center ${targetBookingId === bk.id ? 'bg-indigo-600 text-white border-indigo-600 shadow-lg' : 'bg-white border-indigo-100 text-indigo-600'}`}
+                                     >
+                                        <span>#{bk.id.slice(-4).toUpperCase()} | ৳{Number(bk.total_amount).toLocaleString()}</span>
+                                        <span>{targetBookingId === bk.id ? 'সিলেক্টেড ✓' : 'এখানে যোগ করুন +'}</span>
+                                     </button>
+                                  ))}
+                               </div>
+                            </div>
+                         )}
+
                          <div className="flex justify-between items-center px-2">
                             <p className="text-[11px] font-black text-slate-400 uppercase italic tracking-[0.2em]">ধাপ ২: প্রোডাক্ট ও পরিমাণ</p>
-                            <button onClick={() => setCurrentStep(1)} className="text-[9px] font-black text-indigo-600 uppercase underline">↩ Change Customer</button>
+                            <button onClick={() => { setCurrentStep(1); setTargetBookingId(null); }} className="text-[9px] font-black text-indigo-600 uppercase underline">↩ Change Customer</button>
                          </div>
                          <div className="relative">
                             <input className="w-full p-5 bg-white border-2 border-slate-100 rounded-[2rem] font-black text-xs uppercase italic shadow-sm outline-none focus:border-indigo-500 transition-all pl-14" placeholder="মডেল সার্চ..." value={prodSearch} onChange={e => setProdSearch(e.target.value)} />
@@ -421,15 +486,17 @@ const Bookings: React.FC<BookingsProps> = ({ company, role, user }) => {
                          <div className="space-y-4 pt-4 border-t">
                             <div className="grid grid-cols-2 gap-4">
                                <div className="space-y-1">
-                                  <p className="text-[9px] font-black text-slate-400 uppercase italic ml-2">Total Bill</p>
+                                  <p className="text-[9px] font-black text-slate-400 uppercase italic ml-2">অতিরিক্ত বিল</p>
                                   <div className="p-5 bg-slate-100 rounded-3xl font-black text-xl italic text-slate-900">৳{bookingCart.reduce((s,i)=>s+(i.qty*i.unitPrice),0).toLocaleString()}</div>
                                </div>
                                <div className="space-y-1">
-                                  <p className="text-[9px] font-black text-emerald-500 uppercase italic ml-2">Advance Amount</p>
+                                  <p className="text-[9px] font-black text-emerald-500 uppercase italic ml-2">আজকের জমা</p>
                                   <input type="number" className="w-full p-5 bg-emerald-50 border-none rounded-3xl font-black text-xl italic text-emerald-600 outline-none" value={form.advance} onChange={e => setForm({...form, advance: Number(e.target.value)})} />
                                </div>
                             </div>
-                            <button disabled={isSaving || bookingCart.length === 0} onClick={handleAddBooking} className="w-full bg-indigo-600 text-white py-6 rounded-[2.5rem] font-black uppercase text-xs tracking-[0.3em] shadow-xl active:scale-95 transition-all">কনফার্ম বুকিং সেভ ➔</button>
+                            <button disabled={isSaving || bookingCart.length === 0} onClick={handleAddBooking} className="w-full bg-indigo-600 text-white py-6 rounded-[2.5rem] font-black uppercase text-xs tracking-[0.3em] shadow-xl active:scale-95 transition-all">
+                               {targetBookingId ? `বুকিং #${targetBookingId.slice(-4).toUpperCase()} আপডেট করুন` : "কনফার্ম নিউ বুকিং ➔"}
+                            </button>
                          </div>
                       </div>
                    </div>
@@ -445,13 +512,13 @@ const Bookings: React.FC<BookingsProps> = ({ company, role, user }) => {
            <div className="w-full max-w-4xl flex justify-between items-center mb-6 sticky top-0 z-[5001] bg-slate-900/90 p-6 rounded-[2.5rem] border border-white/10 shadow-2xl">
               <button onClick={() => setShowDetailModal(false)} className="text-white font-black uppercase text-[10px] px-6 transition-colors hover:text-indigo-400">← ফিরে যান</button>
               <div className="flex gap-3">
-                 <button onClick={handleDownloadPDF} className="bg-white text-slate-900 px-6 py-4 rounded-xl font-black text-[10px] uppercase shadow-xl active:scale-95">PDF ⎙</button>
-                 <button onClick={handleUpdateBookingStats} disabled={isSaving} className="bg-emerald-600 text-white px-10 py-4 rounded-xl font-black text-[10px] uppercase shadow-xl hover:bg-emerald-700 transition-all">সংরক্ষণ করুন ✓</button>
+                 <button disabled={isDownloading} onClick={downloadPDF} className="bg-white text-slate-900 px-8 py-4 rounded-xl font-black text-[10px] uppercase shadow-xl active:scale-95 transition-all hover:bg-blue-50">PDF ডাউনলোড ⎙</button>
+                 <button disabled={isSaving} onClick={handleUpdateBookingStats} className="bg-emerald-600 text-white px-10 py-4 rounded-xl font-black text-[10px] uppercase shadow-xl hover:bg-emerald-700 transition-all">সব আপডেট সেভ করুন ✓</button>
               </div>
            </div>
 
            <div className="bg-white rounded-[3rem] w-full max-w-4xl shadow-2xl overflow-hidden flex flex-col mb-20 border-[6px] border-slate-100">
-              <div ref={invoiceRef} className="p-10 md:p-14 bg-white text-black">
+              <div ref={invoiceRef} className="p-10 md:p-14 bg-white text-black min-h-fit">
                  <div className="text-center border-b-4 border-black pb-8 mb-10">
                     <h1 className="text-4xl font-black uppercase italic tracking-tighter leading-none mb-1 text-indigo-600">IFZA ELECTRONICS</h1>
                     <p className="text-lg font-black uppercase tracking-[0.4em] mb-4 text-black">{company} DIVISION</p>
@@ -472,9 +539,12 @@ const Bookings: React.FC<BookingsProps> = ({ company, role, user }) => {
                        <div className="space-y-1">
                           <p className="flex justify-between font-bold text-[14px]"><span>বুকিং আইডি:</span> <span className="font-black">#{selectedBooking.id.slice(-6).toUpperCase()}</span></p>
                           <p className="flex justify-between font-bold text-[14px]"><span>তারিখ:</span> <span className="font-black">{new Date(selectedBooking.created_at).toLocaleDateString('bn-BD')}</span></p>
-                          <p className="flex justify-between font-black text-[18px] text-indigo-600 border-t-2 border-slate-100 pt-3 mt-3"><span>মোট বিল:</span> <span>৳{Number(selectedBooking.total_amount).toLocaleString()}</span></p>
-                          <p className="flex justify-between font-black text-[18px] text-emerald-600"><span>মোট জমা:</span> <span>৳{Number(selectedBooking.advance_amount).toLocaleString()}</span></p>
-                          <p className="flex justify-between font-black text-[22px] text-rose-600 border-t-4 border-black pt-3 mt-3 italic tracking-tighter"><span>নিট বাকি:</span> <span>৳{(Number(selectedBooking.total_amount) - Number(selectedBooking.advance_amount)).toLocaleString()}</span></p>
+                          <p className="flex justify-between font-black text-[18px] text-indigo-600 border-t-2 border-slate-100 pt-3 mt-3"><span>মোট বিল:</span> <span>৳{currentTotal.toLocaleString()}</span></p>
+                          <p className="flex justify-between font-black text-[18px] text-emerald-600"><span>মোট জমা:</span> <span>৳{currentCollected.toLocaleString()}</span></p>
+                          <p className="flex justify-between font-black text-[22px] text-rose-600 border-t-4 border-black pt-3 mt-3 italic tracking-tighter">
+                             <span>নিট বাকি:</span> 
+                             <span>৳{(currentTotal - currentCollected).toLocaleString()}</span>
+                          </p>
                        </div>
                     </div>
                  </div>
@@ -490,7 +560,7 @@ const Bookings: React.FC<BookingsProps> = ({ company, role, user }) => {
                        </tr>
                     </thead>
                     <tbody className="text-[14px] font-bold italic">
-                       {selectedBooking.items.map((it, idx) => (
+                       {selectedBooking.items.map((it) => (
                           <tr key={it.id} className="border-b border-black/30">
                              <td className="p-4 border-r border-black/30 uppercase">{it.name}</td>
                              <td className="p-4 text-center border-r border-black/30">{it.qty}</td>
@@ -499,48 +569,136 @@ const Bookings: React.FC<BookingsProps> = ({ company, role, user }) => {
                              <td className="p-4 text-right">৳{(it.qty * it.unitPrice).toLocaleString()}</td>
                           </tr>
                        ))}
+                       {detailNewItems.map((it, idx) => (
+                          <tr key={`new-${idx}`} className="border-b border-black/30 bg-indigo-50/30">
+                             <td className="p-4 border-r border-black/30 uppercase font-black">{it.name} <span className="text-[8px] bg-indigo-600 text-white px-2 py-0.5 rounded ml-2">NEW</span></td>
+                             <td className="p-4 text-center border-r border-black/30">{it.qty}</td>
+                             <td className="p-4 text-center border-r border-black/30">৳{it.tp}</td>
+                             <td className="p-4 text-center border-r border-black/30 text-slate-300">0</td>
+                             <td className="p-4 text-right">৳{(it.qty * Number(it.tp)).toLocaleString()}</td>
+                          </tr>
+                       ))}
                     </tbody>
                  </table>
 
-                 <div className="mt-14 no-print bg-slate-50 p-8 rounded-[2.5rem] border-2 border-dashed border-slate-200">
-                    <h5 className="text-[10px] font-black uppercase text-indigo-600 mb-6 italic tracking-widest text-center">ডেলিভারি ও পেমেন্ট আপডেট টার্মিনাল</h5>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                 <div className="mt-20 flex justify-between items-end px-4 mb-4">
+                    <div className="text-center w-56 border-t border-black pt-2 font-black italic text-[11px] uppercase opacity-40">ক্রেতার স্বাক্ষর</div>
+                    <div className="text-center w-56 border-t border-black pt-2 font-black italic text-[11px] uppercase opacity-40">কর্তৃপক্ষের স্বাক্ষর</div>
+                 </div>
+                 
+                 <div className="text-center mt-12 opacity-10">
+                    <p className="text-[8px] font-black uppercase tracking-[0.4em]">Powered by IFZAERP.com Cloud Terminal</p>
+                 </div>
+              </div>
+
+              {/* Input terminal area hidden from the Ref during PDF capture usually, 
+                  but html2canvas captures whatever is inside the Ref. 
+                  I removed it from inside invoiceRef to ensure a clean PDF. */}
+              <div className="no-print bg-slate-50 p-8 border-t-2 border-slate-100">
+                    <h5 className="text-[10px] font-black uppercase text-indigo-600 mb-6 italic tracking-widest text-center">ডেলিভারি, পেমেন্ট ও নতুন প্রোডাক্ট আপডেট টার্মিনাল</h5>
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                        <div className="space-y-4">
                           <p className="text-[9px] font-black uppercase text-slate-400 ml-4 italic">আজকের ডেলিভারি (পিস)</p>
-                          {selectedBooking.items.map(it => (
-                            <div key={it.id} className="flex justify-between items-center bg-white p-4 rounded-2xl shadow-sm">
-                               <span className="text-[11px] font-black uppercase italic truncate max-w-[150px]">{it.name}</span>
-                               <input 
-                                 type="number" 
-                                 placeholder="0" 
-                                 className="w-20 text-center p-2 bg-indigo-50 border-none rounded-xl font-black text-indigo-600 outline-none" 
-                                 value={deliveryUpdates[it.id] || ""} 
-                                 onChange={e => setDeliveryUpdates({...deliveryUpdates, [it.id]: Number(e.target.value)})} 
-                               />
-                            </div>
-                          ))}
+                          <div className="space-y-2">
+                             {selectedBooking.items.map(it => (
+                               <div key={it.id} className="flex justify-between items-center bg-white p-4 rounded-2xl shadow-sm border border-slate-100">
+                                  <span className="text-[10px] font-black uppercase italic truncate max-w-[150px]">{it.name}</span>
+                                  <input 
+                                    type="number" 
+                                    placeholder="0" 
+                                    disabled={it.delivered_qty >= it.qty}
+                                    className={`w-16 text-center p-2 border-none rounded-xl font-black outline-none ${it.delivered_qty >= it.qty ? 'bg-slate-100 text-slate-300' : 'bg-indigo-50 text-indigo-600'}`}
+                                    value={deliveryUpdates[it.id] || ""} 
+                                    onChange={e => setDeliveryUpdates({...deliveryUpdates, [it.id]: Number(e.target.value)})} 
+                                  />
+                               </div>
+                             ))}
+                          </div>
                        </div>
+
                        <div className="space-y-4">
                           <p className="text-[9px] font-black uppercase text-emerald-500 ml-4 italic">আজকের নগদ জমা (টাকা)</p>
-                          <div className="bg-emerald-50 p-6 rounded-[2.5rem] flex flex-col items-center border border-emerald-100 shadow-inner h-full justify-center">
+                          <div className="bg-emerald-50 p-6 rounded-[2.5rem] flex flex-col items-center border border-emerald-100 shadow-inner h-full min-h-[150px] justify-center">
                              <input 
                                type="number" 
                                placeholder="0.00" 
-                               className="w-full bg-transparent text-center text-5xl font-black italic text-emerald-600 outline-none" 
+                               className="w-full bg-transparent text-center text-4xl font-black italic text-emerald-600 outline-none" 
                                value={newPaymentAmt} 
                                onChange={e => setNewPaymentAmt(e.target.value)} 
                              />
-                             <p className="text-[11px] font-black text-emerald-400 uppercase mt-4 italic">New Collection Entry</p>
+                             <p className="text-[9px] font-black text-emerald-400 uppercase mt-2 italic">Cash Receipt</p>
+                          </div>
+                       </div>
+
+                       <div className="space-y-4">
+                          <p className="text-[9px] font-black uppercase text-indigo-600 ml-4 italic">নতুন মাল যোগ করুন</p>
+                          <div className="bg-white p-4 rounded-[2.5rem] border border-indigo-100 shadow-xl h-full flex flex-col">
+                             {!showDetailProdAdd ? (
+                               <button onClick={() => setShowDetailProdAdd(true)} className="w-full h-full min-h-[100px] rounded-[2rem] bg-indigo-50 text-indigo-600 font-black uppercase text-[10px] italic border-2 border-dashed border-indigo-200 hover:bg-indigo-100 transition-all">
+                                  ➕ আইটেম সিলেক্ট করুন
+                               </button>
+                             ) : (
+                               <div className="space-y-3">
+                                  <input 
+                                    autoFocus
+                                    className="w-full p-3 bg-slate-50 border rounded-xl font-black text-[10px] outline-none"
+                                    placeholder="মডেল সার্চ..."
+                                    value={detailProdSearch}
+                                    onChange={e => setDetailProdSearch(e.target.value)}
+                                  />
+                                  <div className="max-h-40 overflow-y-auto custom-scroll space-y-1">
+                                     {filteredDetailProducts.map(p => (
+                                       <div key={p.id} onClick={() => addDetailNewItem(p)} className="p-3 bg-white border hover:border-indigo-600 cursor-pointer rounded-xl flex justify-between items-center group">
+                                          <span className="text-[9px] font-black uppercase italic group-hover:text-indigo-600">{p.name}</span>
+                                          <span className="text-[10px] font-black text-indigo-400">+</span>
+                                       </div>
+                                     ))}
+                                  </div>
+                                  
+                                  <div className="pt-2 border-t space-y-2">
+                                     {detailNewItems.map((it, idx) => (
+                                       <div key={it.id} className="bg-indigo-50/50 p-3 rounded-2xl space-y-2 border border-indigo-100">
+                                          <div className="flex justify-between items-start">
+                                             <span className="text-[9px] font-black uppercase italic truncate max-w-[120px]">{it.name}</span>
+                                             <button onClick={() => setDetailNewItems(detailNewItems.filter((_,i)=>i!==idx))} className="text-rose-500 font-black text-lg">✕</button>
+                                          </div>
+                                          <div className="grid grid-cols-2 gap-2">
+                                             <div className="space-y-1">
+                                                <label className="text-[7px] font-black uppercase text-slate-400 ml-1">Qty</label>
+                                                <input 
+                                                  type="number" 
+                                                  className="w-full p-2 bg-white border border-slate-100 rounded-lg font-black text-[10px] text-center outline-none" 
+                                                  value={it.qty} 
+                                                  onChange={e => {
+                                                     const next = [...detailNewItems];
+                                                     next[idx].qty = Number(e.target.value);
+                                                     setDetailNewItems(next.filter(n => n.qty > 0));
+                                                  }}
+                                                />
+                                             </div>
+                                             <div className="space-y-1">
+                                                <label className="text-[7px] font-black uppercase text-indigo-400 ml-1">Rate</label>
+                                                <input 
+                                                  type="number" 
+                                                  className="w-full p-2 bg-indigo-50 border border-indigo-100 rounded-lg font-black text-[10px] text-center outline-none text-indigo-600" 
+                                                  value={it.tp} 
+                                                  onChange={e => {
+                                                     const next = [...detailNewItems];
+                                                     next[idx].tp = Number(e.target.value);
+                                                     setDetailNewItems(next);
+                                                  }}
+                                                />
+                                             </div>
+                                          </div>
+                                       </div>
+                                     ))}
+                                  </div>
+                               </div>
+                             )}
                           </div>
                        </div>
                     </div>
                  </div>
-
-                 <div className="mt-24 flex justify-between items-end px-10 border-t-2 border-slate-50 pt-12">
-                    <div className="text-center w-56 border-t border-black pt-2 font-black italic text-[11px] uppercase opacity-30">ক্রেতার স্বাক্ষর</div>
-                    <div className="text-center w-56 border-t border-black pt-2 font-black italic text-[11px] uppercase opacity-30">কর্তৃপক্ষের স্বাক্ষর</div>
-                 </div>
-              </div>
            </div>
         </div>
       )}
