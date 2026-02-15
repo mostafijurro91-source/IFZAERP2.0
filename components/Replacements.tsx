@@ -77,12 +77,12 @@ const Replacements: React.FC<ReplacementsProps> = ({ company, role, user }) => {
     if (!selectedRp || isSaving) return;
     setIsSaving(true);
     try {
+      // CRITICAL FIX: Ensure 'verified_at' is NOT in the payload as it's missing from DB schema
       const { error } = await supabase
         .from('replacements')
         .update({ 
           qty: actualQty,
-          status: 'RECEIVED',
-          verified_at: new Date().toISOString()
+          status: 'RECEIVED'
         })
         .eq('id', selectedRp.id);
 
@@ -128,182 +128,160 @@ const Replacements: React.FC<ReplacementsProps> = ({ company, role, user }) => {
   const sentClaims = replacements.filter(r => r.status === 'SENT_TO_COMPANY');
 
   return (
-    <div className="space-y-10 animate-reveal pb-40 text-slate-900">
+    <div className="space-y-4 animate-reveal pb-20 text-slate-900 px-1">
       
-      {/* 🚀 Premium Header */}
-      <div className="bg-white p-10 rounded-[3rem] shadow-xl border border-slate-100 flex flex-col md:flex-row justify-between items-center gap-8">
-        <div className="flex items-center gap-6">
-           <div className="w-16 h-16 bg-indigo-600 rounded-[1.8rem] flex items-center justify-center text-white text-3xl font-black italic shadow-2xl animate-float">R</div>
+      {/* 🚀 Compact Header */}
+      <div className="bg-white p-4 rounded-3xl shadow-sm border border-slate-100 flex justify-between items-center gap-4">
+        <div className="flex items-center gap-3">
+           <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center text-white text-lg font-black italic shadow-lg">R</div>
            <div>
-              <h3 className="text-3xl font-black uppercase italic tracking-tighter text-slate-800 leading-none">Replacement Hub</h3>
-              <p className="text-[10px] text-slate-400 font-black uppercase tracking-[0.3em] mt-2">Manage Customer Returns & Company Claims</p>
+              <h3 className="text-base font-black uppercase italic tracking-tighter leading-none">Replacement Hub</h3>
+              <p className="text-[7px] text-slate-400 font-bold uppercase mt-1">Manage Returns</p>
            </div>
         </div>
-        <div className="flex items-center gap-4 w-full md:w-auto">
-           <button onClick={() => setShowAddModal(true)} className="flex-1 md:flex-none bg-indigo-600 text-white px-10 py-5 rounded-3xl font-black uppercase text-[11px] tracking-widest shadow-xl active:scale-95 transition-all hover:bg-indigo-700">
-             + নতুন ক্লেম যোগ করুন
-           </button>
-           <button onClick={fetchData} className="w-14 h-14 bg-slate-50 border rounded-2xl flex items-center justify-center text-xl hover:bg-white transition-all shadow-sm">🔄</button>
+        <div className="flex items-center gap-2">
+           <button onClick={() => setShowAddModal(true)} className="bg-indigo-600 text-white px-4 py-2.5 rounded-xl font-black uppercase text-[9px] tracking-widest shadow-md active:scale-95 transition-all">+ নিউ ক্লেম</button>
+           <button onClick={fetchData} className="w-9 h-9 bg-slate-50 border rounded-lg flex items-center justify-center hover:bg-white transition-all shadow-sm">🔄</button>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         
         {/* AREA 1: From Shops */}
-        <div className="space-y-6">
-           <div className="flex items-center justify-between px-6">
-              <h4 className="text-[11px] font-black uppercase tracking-[0.2em] text-slate-400 italic">১. কাস্টমার থেকে সংগ্রহ ({pendingClaims.length})</h4>
-              <div className="w-2 h-2 bg-indigo-500 rounded-full animate-ping"></div>
+        <div className="space-y-3">
+           <div className="flex items-center justify-between px-2">
+              <h4 className="text-[9px] font-black uppercase tracking-widest text-slate-400 italic">১. কাস্টমার থেকে সংগ্রহ ({pendingClaims.length})</h4>
+              <div className="w-1 h-1 bg-indigo-500 rounded-full animate-ping"></div>
            </div>
-           <div className="grid grid-cols-1 gap-6">
+           <div className="grid grid-cols-1 gap-3">
               {pendingClaims.map(rp => (
-                <div key={rp.id} className="bg-white p-8 rounded-[3rem] shadow-lg border border-slate-100 hover:shadow-2xl transition-all duration-500 group relative overflow-hidden">
-                   <div className="absolute top-0 right-0 w-24 h-24 bg-indigo-50 rounded-bl-[4rem] -z-0 opacity-50 group-hover:scale-110 transition-transform"></div>
+                <div key={rp.id} className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 hover:shadow-md transition-all group relative overflow-hidden">
                    <div className="relative z-10">
-                      <div className="flex justify-between items-start mb-6">
-                         <div className="min-w-0 pr-6">
-                            <p className="text-[9px] font-black text-indigo-500 uppercase tracking-widest mb-1">Product Identity</p>
-                            <h4 className="text-lg font-black uppercase italic text-slate-800 leading-tight truncate">{rp.product_name}</h4>
-                            <p className="text-[10px] font-bold text-slate-400 mt-2 uppercase">📍 {rp.customers?.name} • {rp.customers?.address}</p>
+                      <div className="flex justify-between items-start mb-3">
+                         <div className="min-w-0 pr-3">
+                            <h4 className="text-[11px] font-black uppercase italic text-slate-800 leading-tight truncate">{rp.product_name}</h4>
+                            <p className="text-[8px] font-bold text-slate-400 mt-0.5 uppercase">📍 {rp.customers?.name}</p>
                          </div>
                          <div className="text-right">
-                            <p className="text-3xl font-black italic text-slate-900 leading-none">{rp.qty}</p>
-                            <p className="text-[8px] font-black text-slate-400 uppercase mt-1">Claimed Pcs</p>
+                            <p className="text-lg font-black italic text-slate-900">{rp.qty} <span className="text-[7px] font-bold text-slate-400 uppercase ml-0.5">Pcs</span></p>
                          </div>
                       </div>
                       
-                      <div className="flex gap-3 pt-6 border-t border-slate-50">
+                      <div className="flex gap-2 pt-3 border-t border-slate-50">
                          {rp.status === 'RECEIVED' ? (
-                           <button onClick={() => updateStatus(rp.id, 'SENT_TO_COMPANY')} className="flex-1 bg-emerald-600 text-white py-4 rounded-2xl font-black text-[10px] uppercase shadow-lg active:scale-95 transition-all">কোম্পানিতে পাঠান ➔</button>
+                           <button onClick={() => updateStatus(rp.id, 'SENT_TO_COMPANY')} className="flex-1 bg-emerald-600 text-white py-2 rounded-lg font-black text-[8px] uppercase shadow-md active:scale-95 transition-all">কোম্পানিতে পাঠান ➔</button>
                          ) : (
-                           <button onClick={() => { setSelectedRp(rp); setActualQty(rp.qty); setShowVerifyModal(true); }} className="flex-1 bg-indigo-600 text-white py-4 rounded-2xl font-black text-[10px] uppercase shadow-lg active:scale-95 transition-all">বুঝে পেলাম (Receive) ✅</button>
+                           <button onClick={() => { setSelectedRp(rp); setActualQty(rp.qty); setShowVerifyModal(true); }} className="flex-1 bg-indigo-600 text-white py-2 rounded-lg font-black text-[8px] uppercase shadow-md active:scale-95 transition-all">বুঝে পেলাম ✅</button>
                          )}
-                         <button onClick={async () => { if(confirm("ডিলিট করতে চান?")) { await supabase.from('replacements').delete().eq('id', rp.id); fetchData(); } }} className="bg-rose-50 text-rose-500 px-6 rounded-2xl font-black text-sm hover:bg-rose-500 hover:text-white transition-all">×</button>
+                         <button onClick={async () => { if(confirm("ডিলিট?")) { await supabase.from('replacements').delete().eq('id', rp.id); fetchData(); } }} className="bg-rose-50 text-rose-500 px-3 rounded-lg font-black text-[10px] hover:bg-rose-500 hover:text-white transition-all">×</button>
                       </div>
                    </div>
                 </div>
               ))}
-              {pendingClaims.length === 0 && <div className="py-20 text-center opacity-10 font-black uppercase text-xs italic bg-white rounded-[3rem] border border-dashed">No Pending Claims</div>}
+              {pendingClaims.length === 0 && <div className="py-8 text-center opacity-10 font-black uppercase text-[9px] italic bg-white rounded-2xl border border-dashed">No Pending Claims</div>}
            </div>
         </div>
 
         {/* AREA 2: With Company */}
-        <div className="space-y-6">
-           <div className="flex items-center justify-between px-6">
-              <h4 className="text-[11px] font-black uppercase tracking-[0.2em] text-slate-400 italic">২. কোম্পানির নিকট প্রেরিত ({sentClaims.length})</h4>
-              <div className="w-2 h-2 bg-emerald-500 rounded-full"></div>
+        <div className="space-y-3">
+           <div className="flex items-center justify-between px-2">
+              <h4 className="text-[9px] font-black uppercase tracking-widest text-slate-400 italic">২. কোম্পানির নিকট প্রেরিত ({sentClaims.length})</h4>
+              <div className="w-1 h-1 bg-emerald-500 rounded-full"></div>
            </div>
-           <div className="grid grid-cols-1 gap-6">
+           <div className="grid grid-cols-1 gap-3">
               {sentClaims.map(rp => (
-                <div key={rp.id} className="bg-slate-900 p-8 rounded-[3rem] shadow-2xl text-white hover:scale-[1.02] transition-all duration-500 relative overflow-hidden group">
-                   <div className="absolute -bottom-10 -right-10 w-40 h-40 bg-emerald-500/10 blur-[60px] rounded-full"></div>
+                <div key={rp.id} className="bg-slate-900 p-4 rounded-2xl shadow-md text-white relative overflow-hidden group">
                    <div className="relative z-10">
-                      <div className="flex justify-between items-start mb-6">
-                         <div className="min-w-0 pr-6">
-                            <span className="px-3 py-1 bg-emerald-500 text-white text-[8px] font-black rounded-lg uppercase tracking-widest italic">With Company</span>
-                            <h4 className="text-lg font-black uppercase italic mt-4 leading-tight truncate">{rp.product_name}</h4>
-                            <p className="text-[9px] text-slate-500 font-bold uppercase mt-2">Shop: {rp.customers?.name}</p>
+                      <div className="flex justify-between items-start mb-3">
+                         <div className="min-w-0 pr-3">
+                            <span className="px-2 py-0.5 bg-emerald-500 text-white text-[7px] font-black rounded-md uppercase italic">With Company</span>
+                            <h4 className="text-[11px] font-black uppercase italic mt-2 leading-tight truncate">{rp.product_name}</h4>
+                            <p className="text-[7px] text-slate-500 font-bold uppercase mt-0.5">Shop: {rp.customers?.name}</p>
                          </div>
-                         <p className="text-3xl font-black italic text-emerald-400 leading-none">{rp.qty}</p>
+                         <p className="text-lg font-black italic text-emerald-400">{rp.qty}</p>
                       </div>
-                      <div className="flex gap-3 mt-6 pt-6 border-t border-white/5">
+                      <div className="flex gap-2 mt-3 pt-3 border-t border-white/5">
                          <button 
                            disabled={isSaving}
                            onClick={() => handleReturnToInventory(rp)} 
-                           className="flex-1 bg-white text-slate-900 py-4 rounded-2xl font-black text-[10px] uppercase shadow-xl active:scale-95 transition-all hover:bg-emerald-400"
+                           className="flex-1 bg-white text-slate-900 py-2 rounded-lg font-black text-[8px] uppercase shadow-md active:scale-95 transition-all"
                          >
-                            বুঝে পেলাম (Add to Stock) 📦
+                            Add to Stock 📦
                          </button>
-                         <button onClick={async () => { if(confirm("ডিলিট?")) { await supabase.from('replacements').delete().eq('id', rp.id); fetchData(); } }} className="bg-white/10 text-white px-6 rounded-2xl font-black text-sm">×</button>
+                         <button onClick={async () => { if(confirm("ডিলিট?")) { await supabase.from('replacements').delete().eq('id', rp.id); fetchData(); } }} className="bg-white/10 text-white px-3 rounded-lg font-black text-[10px]">×</button>
                       </div>
                    </div>
                 </div>
               ))}
-              {sentClaims.length === 0 && <div className="py-20 text-center opacity-10 font-black uppercase text-xs italic bg-white rounded-[3rem] border border-dashed">No Assets With Company</div>}
+              {sentClaims.length === 0 && <div className="py-8 text-center opacity-10 font-black uppercase text-[9px] italic bg-white rounded-2xl border border-dashed">No Assets With Company</div>}
            </div>
         </div>
       </div>
 
       {/* ➕ Add New Claim Modal */}
       {showAddModal && (
-        <div className="fixed inset-0 bg-slate-950/95 backdrop-blur-2xl z-[4000] flex items-center justify-center p-4">
-           <div className="bg-white rounded-[4rem] w-full max-w-4xl h-[85vh] flex flex-col shadow-2xl animate-reveal overflow-hidden">
-              <div className="p-8 md:p-10 bg-indigo-600 text-white flex justify-between items-center shrink-0">
-                 <div className="flex items-center gap-6">
-                    <div className="w-12 h-12 bg-white/10 rounded-2xl flex items-center justify-center text-xl font-black italic shadow-inner">+</div>
-                    <div>
-                       <h3 className="text-2xl font-black uppercase italic tracking-tighter">Add Replacement Claim</h3>
-                       <p className="text-[10px] text-indigo-200 font-bold uppercase tracking-widest mt-1">Register customer return items</p>
-                    </div>
-                 </div>
-                 <button onClick={() => { setShowAddModal(false); setClaimStep(1); }} className="text-4xl text-white/50 hover:text-white font-black transition-colors">✕</button>
+        <div className="fixed inset-0 bg-slate-950/95 backdrop-blur-xl z-[4000] flex items-center justify-center p-3">
+           <div className="bg-white rounded-3xl w-full max-w-lg h-[70vh] flex flex-col shadow-2xl animate-reveal overflow-hidden">
+              <div className="p-4 bg-indigo-600 text-white flex justify-between items-center shrink-0">
+                 <h3 className="text-sm font-black uppercase italic">Add Claim</h3>
+                 <button onClick={() => { setShowAddModal(false); setClaimStep(1); }} className="text-xl text-white/50 hover:text-white font-black">✕</button>
               </div>
 
               {claimStep === 1 ? (
                 <div className="flex-1 flex flex-col overflow-hidden bg-slate-50">
-                   <div className="p-10 space-y-6">
-                      <p className="text-[11px] font-black text-slate-400 uppercase italic tracking-[0.2em] ml-2">Step 1: Select Customer Shop</p>
-                      <div className="relative">
-                         <input 
-                           className="w-full p-6 bg-white border-2 border-slate-100 rounded-[2.5rem] font-black text-sm uppercase italic shadow-sm outline-none focus:border-indigo-500 transition-all pl-16"
-                           placeholder="সার্চ দোকান আইডি বা নাম..."
-                           value={custSearch}
-                           onChange={e => setCustSearch(e.target.value)}
-                         />
-                         <span className="absolute left-6 top-1/2 -translate-y-1/2 text-2xl opacity-20">🔍</span>
-                      </div>
+                   <div className="p-4 space-y-3">
+                      <p className="text-[9px] font-black text-slate-400 uppercase italic tracking-widest ml-1">Step 1: Select Shop</p>
+                      <input 
+                        className="w-full p-3 bg-white border border-slate-200 rounded-xl font-black text-[11px] uppercase outline-none focus:border-indigo-500 transition-all"
+                        placeholder="সার্চ দোকান..."
+                        value={custSearch}
+                        onChange={e => setCustSearch(e.target.value)}
+                      />
                    </div>
-                   <div className="flex-1 overflow-y-auto custom-scroll px-10 pb-10 space-y-3">
+                   <div className="flex-1 overflow-y-auto custom-scroll px-4 pb-4 space-y-2">
                       {filteredCustomers.map(c => (
-                        <div key={c.id} onClick={() => { setSelectedCust(c); setClaimStep(2); }} className="p-6 bg-white rounded-3xl border-2 border-transparent shadow-sm hover:border-indigo-500 hover:shadow-xl transition-all cursor-pointer flex justify-between items-center group">
+                        <div key={c.id} onClick={() => { setSelectedCust(c); setClaimStep(2); }} className="p-3 bg-white rounded-xl border border-slate-100 hover:border-indigo-500 transition-all cursor-pointer flex justify-between items-center group">
                            <div>
-                              <h4 className="font-black text-slate-800 uppercase italic text-sm group-hover:text-indigo-600 leading-none">{c.name}</h4>
-                              <p className="text-[10px] font-bold text-slate-400 mt-2 uppercase tracking-widest leading-none">📍 {c.address} | 📱 {c.phone}</p>
+                              <h4 className="font-black text-slate-800 uppercase italic text-[11px]">{c.name}</h4>
+                              <p className="text-[7px] font-bold text-slate-400 uppercase">📍 {c.address}</p>
                            </div>
-                           <div className="w-10 h-10 bg-slate-50 rounded-xl flex items-center justify-center group-hover:bg-indigo-50 group-hover:text-indigo-600 transition-all">➔</div>
+                           <div className="text-indigo-600 text-base">➔</div>
                         </div>
                       ))}
                    </div>
                 </div>
               ) : (
-                <div className="flex-1 flex flex-col lg:flex-row overflow-hidden">
-                   <div className="w-full lg:w-1/2 p-10 border-r flex flex-col gap-6 bg-slate-50">
-                      <div className="flex justify-between items-center px-2">
-                        <p className="text-[11px] font-black text-slate-400 uppercase italic tracking-[0.2em]">Step 2: Select Product</p>
-                        <button onClick={() => setClaimStep(1)} className="text-[9px] font-black text-indigo-600 uppercase underline">↩ Change Customer</button>
+                <div className="flex-1 flex flex-col md:flex-row overflow-hidden">
+                   <div className="w-full md:w-1/2 p-4 border-r flex flex-col gap-3 bg-slate-50">
+                      <div className="flex justify-between items-center">
+                        <p className="text-[9px] font-black text-slate-400 uppercase italic">Step 2: Select Item</p>
+                        <button onClick={() => setClaimStep(1)} className="text-[7px] font-black text-indigo-600 uppercase underline">Change Shop</button>
                       </div>
-                      <div className="relative">
-                        <input 
-                           className="w-full p-5 bg-white border-2 border-slate-100 rounded-[2rem] font-black text-xs uppercase italic shadow-sm outline-none focus:border-indigo-500 transition-all pl-14"
-                           placeholder="মডেল সার্চ করুন..."
-                           value={prodSearch}
-                           onChange={e => setProdSearch(e.target.value)}
-                        />
-                        <span className="absolute left-6 top-1/2 -translate-y-1/2 text-xl opacity-20">🔍</span>
-                      </div>
-                      <div className="flex-1 overflow-y-auto custom-scroll space-y-2 pr-2">
+                      <input 
+                        className="w-full p-3 bg-white border border-slate-200 rounded-xl font-black text-[11px] outline-none"
+                        placeholder="মডেল সার্চ..."
+                        value={prodSearch}
+                        onChange={e => setProdSearch(e.target.value)}
+                      />
+                      <div className="flex-1 overflow-y-auto custom-scroll space-y-2">
                          {filteredProducts.map(p => (
-                           <div key={p.id} onClick={() => handleAddClaim(p)} className="p-5 bg-white rounded-[2rem] border border-slate-100 hover:border-indigo-400 hover:shadow-lg transition-all cursor-pointer group flex justify-between items-center">
-                              <p className="text-[11px] font-black uppercase italic text-slate-800 pr-4">{p.name}</p>
-                              <div className="w-8 h-8 bg-slate-50 rounded-lg flex items-center justify-center text-indigo-600 font-black">+</div>
+                           <div key={p.id} onClick={() => handleAddClaim(p)} className="p-3 bg-white rounded-xl border border-slate-100 hover:border-indigo-400 cursor-pointer flex justify-between items-center">
+                              <p className="text-[9px] font-black uppercase italic text-slate-800 truncate pr-3">{p.name}</p>
+                              <div className="text-indigo-600 font-black">+</div>
                            </div>
                          ))}
                       </div>
                    </div>
-                   <div className="w-full lg:w-1/2 p-10 bg-white flex flex-col justify-center items-center text-center">
-                      <div className="w-32 h-32 bg-indigo-50 rounded-[3rem] flex items-center justify-center text-5xl mb-8 shadow-inner animate-float">🔢</div>
-                      <h4 className="text-xl font-black uppercase italic text-slate-900 mb-2">Claim Quantity</h4>
-                      <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mb-10">Set how many units are being returned</p>
-                      
-                      <div className="flex items-center gap-8 bg-slate-50 p-6 rounded-[3rem] border border-slate-100 shadow-inner mb-12 scale-125">
-                         <button onClick={() => setClaimQty(Math.max(1, claimQty - 1))} className="w-12 h-12 rounded-full bg-white shadow-md text-3xl font-black text-slate-400 hover:text-rose-500 transition-colors">×</button>
-                         <input type="number" className="w-20 text-center bg-transparent text-5xl font-black italic outline-none" value={claimQty} onChange={e => setClaimQty(Math.max(1, Number(e.target.value)))} />
-                         <button onClick={() => setClaimQty(claimQty + 1)} className="w-12 h-12 rounded-full bg-white shadow-md text-2xl font-black text-slate-400 hover:text-indigo-600 transition-colors">+</button>
+                   <div className="w-full md:w-1/2 p-6 bg-white flex flex-col justify-center items-center text-center">
+                      <h4 className="text-[11px] font-black uppercase italic text-slate-900 mb-4">Quantity</h4>
+                      <div className="flex items-center gap-4 bg-slate-50 p-3 rounded-2xl border border-slate-100 mb-6">
+                         <button onClick={() => setClaimQty(Math.max(1, claimQty - 1))} className="w-8 h-8 rounded-full bg-white shadow text-lg font-black text-slate-300">-</button>
+                         <input type="number" className="w-12 text-center bg-transparent text-2xl font-black italic outline-none" value={claimQty} onChange={e => setClaimQty(Math.max(1, Number(e.target.value)))} />
+                         <button onClick={() => setClaimQty(claimQty + 1)} className="w-8 h-8 rounded-full bg-white shadow text-lg font-black text-slate-300">+</button>
                       </div>
-
-                      <div className="w-full p-8 bg-indigo-50 rounded-[2.5rem] border border-indigo-100 text-left">
-                         <p className="text-[9px] font-black text-indigo-400 uppercase italic mb-2">Selected Customer:</p>
-                         <p className="font-black text-slate-800 uppercase italic">{selectedCust?.name}</p>
+                      <div className="w-full p-4 bg-indigo-50 rounded-xl text-left">
+                         <p className="text-[7px] font-black text-indigo-400 uppercase italic mb-0.5">Customer:</p>
+                         <p className="font-black text-slate-800 uppercase italic text-[10px] truncate">{selectedCust?.name}</p>
                       </div>
                    </div>
                 </div>
@@ -312,52 +290,43 @@ const Replacements: React.FC<ReplacementsProps> = ({ company, role, user }) => {
         </div>
       )}
 
-      {/* 🛠️ Verify Modal */}
+      {/* 🛠️ Verify Modal - Made more compact */}
       {showVerifyModal && selectedRp && (
-        <div className="fixed inset-0 bg-slate-950/90 backdrop-blur-xl z-[4000] flex items-center justify-center p-4">
-           <div className="bg-white p-10 md:p-14 rounded-[4rem] w-full max-w-lg shadow-2xl animate-reveal text-black">
-              <div className="flex justify-between items-center mb-10 border-b pb-8">
-                 <div>
-                    <h3 className="text-xl font-black uppercase italic leading-none">মাল যাচাইকরণ</h3>
-                    <p className="text-[9px] text-slate-400 font-black uppercase mt-2 tracking-widest">Verification for {selectedRp.customers?.name}</p>
-                 </div>
-                 <button onClick={() => setShowVerifyModal(false)} className="text-4xl text-slate-300 font-black hover:text-slate-900 transition-colors">✕</button>
+        <div className="fixed inset-0 bg-slate-950/90 backdrop-blur-xl z-[4000] flex items-center justify-center p-3">
+           <div className="bg-white p-6 rounded-3xl w-full max-w-xs shadow-2xl animate-reveal text-black border border-white/20">
+              <div className="flex justify-between items-center mb-4 border-b pb-3">
+                 <h3 className="text-sm font-black uppercase italic">মাল যাচাইকরণ</h3>
+                 <button onClick={() => setShowVerifyModal(false)} className="text-xl text-slate-300">✕</button>
               </div>
-
-              <div className="space-y-8">
-                 <div className="p-6 bg-slate-50 rounded-3xl border border-slate-100">
-                    <p className="text-[9px] font-black text-slate-400 uppercase italic mb-2 tracking-widest">Product Name:</p>
-                    <p className="font-black text-slate-800 uppercase italic text-sm">{selectedRp.product_name}</p>
+              
+              <div className="space-y-4">
+                 <div className="text-center p-4 bg-slate-50 rounded-2xl">
+                    <p className="text-[8px] font-black uppercase text-slate-400 mb-1">Product Name</p>
+                    <p className="text-[12px] font-black uppercase italic leading-tight">{selectedRp.product_name}</p>
                  </div>
 
-                 <div className="grid grid-cols-2 gap-4">
-                    <div className="bg-indigo-50 p-6 rounded-3xl border border-indigo-100 text-center">
-                       <p className="text-[9px] font-black text-indigo-400 uppercase mb-2">ক্লেম (Claim)</p>
-                       <p className="text-4xl font-black italic text-indigo-600">{selectedRp.qty}</p>
-                    </div>
-                    <div className="bg-slate-900 p-6 rounded-3xl text-center text-white shadow-xl">
-                       <p className="text-[9px] font-black text-slate-500 uppercase mb-2">প্রাপ্ত (Received)</p>
-                       <input 
-                         autoFocus
-                         type="number" 
-                         className="w-full bg-transparent text-4xl font-black italic text-center outline-none border-b border-white/20 pb-2" 
-                         value={actualQty} 
-                         onChange={e => setActualQty(Math.min(selectedRp.qty, Number(e.target.value)))} 
-                       />
+                 <div className="space-y-2">
+                    <label className="text-[8px] font-black uppercase text-slate-400 ml-1 italic text-center block">প্রাপ্ত পরিমাণ (Qty Received)</label>
+                    <div className="flex items-center gap-4 justify-center bg-indigo-50 p-2 rounded-2xl border border-indigo-100">
+                       <button onClick={() => setActualQty(Math.max(0, actualQty - 1))} className="w-8 h-8 bg-white rounded-full shadow font-black text-lg text-slate-300">-</button>
+                       <input type="number" className="w-12 text-center bg-transparent text-2xl font-black italic text-indigo-600 outline-none" value={actualQty} onChange={e => setActualQty(Number(e.target.value))} />
+                       <button onClick={() => setActualQty(actualQty + 1)} className="w-8 h-8 bg-white rounded-full shadow font-black text-lg text-slate-300">+</button>
                     </div>
                  </div>
 
                  <button 
-                  disabled={isSaving || actualQty <= 0} 
-                  onClick={handleVerifyReceipt}
-                  className="w-full bg-indigo-600 text-white py-6 rounded-[2.2rem] font-black uppercase text-xs tracking-[0.3em] shadow-2xl active:scale-95 transition-all"
+                   disabled={isSaving}
+                   onClick={handleVerifyReceipt}
+                   className="w-full bg-indigo-600 text-white py-3.5 rounded-xl font-black uppercase text-[10px] shadow-lg active:scale-95 transition-all mt-4"
                  >
-                   {isSaving ? "সংরক্ষণ হচ্ছে..." : "কনফার্ম প্রাপ্তি এন্ট্রি ➔"}
+                    {isSaving ? "সংরক্ষণ হচ্ছে..." : "কনফার্ম প্রাপ্তি ✅"}
                  </button>
               </div>
            </div>
         </div>
       )}
+
+      {loading && <div className="fixed inset-0 bg-white/30 backdrop-blur-sm z-[9999] flex items-center justify-center font-black uppercase italic text-blue-600 animate-pulse text-[10px] tracking-widest">Updating Returns...</div>}
     </div>
   );
 };
