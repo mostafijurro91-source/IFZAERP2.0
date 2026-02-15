@@ -22,6 +22,7 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName, user }) 
   const [isDownloading, setIsDownloading] = useState(false);
   const [reportData, setReportData] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
+  const [idSearch, setIdSearch] = useState(""); // Global ID search for old memos
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [selectedRoute, setSelectedRoute] = useState("");
   const [routes, setRoutes] = useState<string[]>([]);
@@ -40,7 +41,7 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName, user }) 
     if (activeReport !== 'MAIN') {
       fetchReport(activeReport);
     }
-  }, [activeReport, company, selectedDate]);
+  }, [activeReport, company, selectedDate, idSearch]);
 
   const fetchRoutes = async () => {
     const { data } = await supabase.from('customers').select('address');
@@ -52,6 +53,25 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName, user }) 
     setLoading(true);
     const dbCompany = mapToDbCompany(company);
     try {
+      // 🕵️ GLOBAL MEMO ID SEARCH ENGINE
+      if (idSearch.trim().length >= 3) {
+         const { data, error } = await supabase
+           .from('transactions')
+           .select('*, customers(id, name, address, phone)')
+           .ilike('id', `%${idSearch.trim()}%`)
+           .order('created_at', { ascending: false });
+         
+         if (!error) {
+            setReportData((data || []).map(t => ({ 
+              ...t, 
+              log_type: t.payment_type === 'COLLECTION' ? 'আদায়' : 'মেমো', 
+              total_qty: t.items?.reduce((acc:any, i:any)=>acc+(Number(i.qty)||0),0) 
+            })));
+            setLoading(false);
+            return;
+         }
+      }
+
       const startOfDay = `${selectedDate}T00:00:00.000Z`;
       const endOfDay = `${selectedDate}T23:59:59.999Z`;
 
@@ -158,7 +178,6 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName, user }) 
   };
 
   const handleDeleteTransaction = async (tx: any) => {
-    // 🛡️ Allow both Admin and Staff to delete mistake entries
     if (!isAdmin && !isStaff) return alert("আপনার ট্রানজেকশন ডিলিট করার অনুমতি নেই।");
     
     const memoIdShort = String(tx.id).slice(-6).toUpperCase();
@@ -170,11 +189,9 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName, user }) 
     
     setLoading(true);
     try {
-      // 1. Revert Stock if it was a Sale Memo
       if (tx.payment_type === 'DUE' && Array.isArray(tx.items)) {
         for (const item of tx.items) {
           if (item.id && item.qty) {
-            // If it was a return, decrement stock; if sale, increment stock
             const amtToRevert = item.action === 'RETURN' ? -Number(item.qty) : Number(item.qty);
             await supabase.rpc('increment_stock', { 
               row_id: item.id, 
@@ -184,14 +201,12 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName, user }) 
         }
       }
 
-      // 2. Remove any associated notifications from customer inbox
       await supabase
         .from('notifications')
         .delete()
         .eq('customer_id', tx.customer_id)
         .ilike('message', `%#${memoIdShort}%`);
 
-      // 3. Delete the transaction
       const { error } = await supabase.from('transactions').delete().eq('id', tx.id);
       if (error) throw error;
 
@@ -328,49 +343,40 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName, user }) 
         <button onClick={() => setActiveReport('MAIN')} className="bg-slate-900 text-white px-10 py-5 rounded-[2rem] font-black text-[11px] uppercase shadow-2xl active:scale-95 transition-all">← ফিরে যান</button>
         
         <div className="flex gap-4 flex-wrap items-center bg-slate-50 p-4 rounded-[2.5rem] border shadow-inner">
-          {!isBooking && !isRepl && (
+          <div className="flex flex-col">
+            <label className="text-[8px] font-black uppercase text-slate-400 ml-4 mb-1 italic">পুরাতন মেমো আইডি (গ্লোবাল সার্চ)</label>
+            <input 
+              className="p-4 border-2 border-indigo-200 rounded-[1.8rem] text-[11px] font-black outline-none bg-white shadow-sm min-w-[200px] focus:border-indigo-600 transition-all" 
+              placeholder="যেমন: b8f4... (অটো সার্চ)" 
+              value={idSearch} 
+              onChange={e => setIdSearch(e.target.value)} 
+            />
+          </div>
+          {!isBooking && !isRepl && !idSearch && (
             <div className="flex flex-col">
-              <label className="text-[8px] font-black uppercase text-slate-400 ml-4 mb-1 italic">তারিখ অনুযায়ী খুঁজুন</label>
+              <label className="text-[8px] font-black uppercase text-slate-400 ml-4 mb-1 italic">তারিখ অনুযায়ী</label>
               <input type="date" className="p-4 border-2 border-white rounded-[1.8rem] text-[11px] font-black outline-none bg-white shadow-sm focus:border-blue-500 transition-all" value={selectedDate} onChange={e => setSelectedDate(e.target.value)} />
             </div>
           )}
           <div className="flex flex-col">
             <label className="text-[8px] font-black uppercase text-slate-400 ml-4 mb-1 italic">সার্চ ({isRepl ? 'প্রোডাক্ট' : 'দোকান'})</label>
-            <input className="p-4 border-2 border-white rounded-[1.8rem] text-[11px] font-black outline-none bg-white shadow-sm min-w-[200px] focus:border-blue-500 transition-all" placeholder="নাম বা ঠিকানা লিখুন..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
+            <input className="p-4 border-2 border-white rounded-[1.8rem] text-[11px] font-black outline-none bg-white shadow-sm min-w-[200px] focus:border-blue-500 transition-all" placeholder="নাম বা ঠিকানা..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
           </div>
           <div className="flex gap-2 self-end">
             <button disabled={isDownloading || loading} onClick={() => handleDownloadPDF(reportRef, 'Full_Report')} className="bg-emerald-600 text-white px-8 py-5 rounded-[1.8rem] font-black text-[11px] uppercase shadow-lg active:scale-95 transition-all">
               {isDownloading ? "ডাউনলোড..." : "PDF ডাউনলোড ⬇"}
             </button>
-            <button onClick={() => window.print()} className="bg-blue-600 text-white px-8 py-5 rounded-[1.8rem] font-black text-[11px] uppercase shadow-lg active:scale-95">প্রিন্ট শিট ⎙</button>
           </div>
         </div>
       </div>
 
       <div className="max-w-[210mm] mx-auto border-2 border-slate-100 p-2 overflow-hidden bg-slate-50 rounded-2xl shadow-inner no-print">
-         <p className="text-[8px] font-black text-center text-slate-400 mb-2 uppercase tracking-widest italic">A4 Page Preview (ডেলিভারি ম্যানের জন্য প্রস্তুত)</p>
          <div ref={reportRef} className="print-area printable-content p-10 bg-white text-black min-h-fit flex flex-col border-2 border-black">
-            <style>{`
-               @media print {
-                  @page { size: A4; margin: 10mm; }
-                  body * { visibility: hidden !important; }
-                  .printable-content, .printable-content * { 
-                    visibility: visible !important; 
-                    color: #000 !important; 
-                    border-color: #000 !important;
-                    -webkit-print-color-adjust: exact;
-                  }
-                  .printable-content { position: static !important; width: 100% !important; padding: 0 !important; border: none !important; box-shadow: none !important; display: block !important; }
-                  table { font-size: 10px !important; border: 1.5px solid #000 !important; border-collapse: collapse !important; width: 100% !important; }
-                  th, td { padding: 12px 6px !important; border: 1px solid #000 !important; }
-                  .no-print-col { display: none !important; }
-               }
-            `}</style>
             <div className="text-center border-b-4 border-black pb-6 mb-8 relative">
                <h1 className="text-5xl font-black uppercase italic mb-1 tracking-tighter text-black leading-none">IFZA ELECTRONICS</h1>
                <p className="text-lg font-black uppercase tracking-[0.4em] mb-2 text-black">{isCombined ? 'ALL' : company} DIVISIONS</p>
                <div className="inline-block px-10 py-2 bg-black text-white text-xs font-black uppercase rounded-full italic tracking-widest mt-2">
-                  {activeReport.replace(/_/g, ' ')} ({new Date(selectedDate).toLocaleDateString('bn-BD')})
+                  {idSearch ? 'GLOBAL SEARCH RESULTS' : activeReport.replace(/_/g, ' ')} ({idSearch ? 'ANY DATE' : new Date(selectedDate).toLocaleDateString('bn-BD')})
                </div>
             </div>
 
@@ -399,7 +405,7 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName, user }) 
                         {!isLog && <th className="p-3 border-r border-black text-center w-24">{isDue ? 'বকেয়া' : 'পরিমাণ'}</th>}
                         {isLog && (
                           <>
-                            <th className="p-3 border-r border-black text-center w-24">আদায় (হাতে)</th>
+                            <th className="p-3 border-r border-black text-center w-24">আদায়ের নোট</th>
                             <th className="p-3 border-r border-black text-center w-28">অ্যাকশন</th>
                           </>
                         )}
@@ -411,7 +417,7 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName, user }) 
                   {loading ? (
                     <tr><td colSpan={6} className="p-20 text-center animate-pulse">লোডিং...</td></tr>
                   ) : filteredData.length === 0 ? (
-                    <tr><td colSpan={6} className="p-20 text-center">এই তারিখে কোনো ডাটা পাওয়া যায়নি</td></tr>
+                    <tr><td colSpan={6} className="p-20 text-center font-black uppercase text-xs italic">কোনো তথ্য পাওয়া যায়নি</td></tr>
                   ) : filteredData.map((item, idx) => {
                      const amount = Number(item.amount || item.balance || item.total_amount || (item.stock * item.tp) || 0);
                      const shopName = item.customers?.name || item.customer_name || item.name || item.product_name;
@@ -428,11 +434,9 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName, user }) 
                                     {isCombined ? <span className="text-blue-700 mr-2">{displayCompany}</span> : ''}
                                     {shopName}
                                  </p>
-                                 {!isRepl && (
-                                   <p className="text-[9px] font-bold italic opacity-80 leading-none mt-1">
-                                     {isBooking ? `${item.name} | ` : ''} 📍 {shopAddress}
-                                   </p>
-                                 )}
+                                 <p className="text-[9px] font-bold italic opacity-80 leading-none mt-1">
+                                    REF: #{item.id.slice(-6).toUpperCase()} | 📍 {shopAddress}
+                                 </p>
                               </div>
                            </td>
                            
@@ -460,14 +464,14 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName, user }) 
                                {!isLog && <td className="p-3 border-r border-black text-center">{isDue ? '—' : (item.stock || item.total_qty || 0)}</td>}
                                {isLog && (
                                <>
-                                  <td className="p-3 border-r border-black h-16 w-24 text-center align-middle">
-                                     {/* Column for manual collection check in print */}
+                                  <td className="p-3 border-r border-black text-center align-middle italic text-[8px]">
+                                     {item.items?.[0]?.note || 'N/A'}
                                   </td>
                                   <td className="p-3 border-r border-black text-center no-print-col">
                                      <button 
                                        onClick={() => handleDeleteTransaction(item)}
                                        className="w-10 h-10 bg-red-50 text-red-600 rounded-xl hover:bg-red-600 hover:text-white transition-all shadow-sm flex items-center justify-center text-sm"
-                                       title="Delete Mistake Memo"
+                                       title="Delete Transaction"
                                      >
                                         🗑️
                                      </button>
@@ -486,7 +490,6 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName, user }) 
                <div className="text-[10px] font-black uppercase italic space-y-1.5">
                   <p>* জেনারেট টাইম: {new Date().toLocaleString('bn-BD')}</p>
                   <p>* রিপোর্ট মেকার: {userName || 'SYSTEM'}</p>
-                  <p className="text-[8px] mt-2 opacity-50 font-black">বিঃদ্রঃ কোনো মেমো ভুল হলে "অ্যাকশন" কলাম থেকে ডিলিট করুন। ডিলিট করলে মাল স্টকে ফিরে যাবে।</p>
                </div>
                <div className="w-64 space-y-2 text-right">
                   <div className="flex justify-between text-[11px] font-black border-b border-black/20 pb-1">
