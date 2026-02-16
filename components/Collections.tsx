@@ -8,6 +8,11 @@ interface CollectionsProps {
   user: User;
 }
 
+interface MultiBalance {
+  reg: number;
+  book: number;
+}
+
 const Collections: React.FC<CollectionsProps> = ({ company, user }) => {
   const [pendingRequests, setPendingRequests] = useState<any[]>([]);
   const [confirmedToday, setConfirmedToday] = useState<any[]>([]);
@@ -21,7 +26,12 @@ const Collections: React.FC<CollectionsProps> = ({ company, user }) => {
   const [amount, setAmount] = useState<string>("");
   const [collectionType, setCollectionType] = useState<'REGULAR' | 'BOOKING'>('REGULAR');
 
-  const [custBalances, setCustBalances] = useState({ transtec: 0, sqLight: 0, sqCables: 0 });
+  const [custBalances, setCustBalances] = useState<Record<string, MultiBalance>>({
+    'Transtec': { reg: 0, book: 0 },
+    'SQ Light': { reg: 0, book: 0 },
+    'SQ Cables': { reg: 0, book: 0 }
+  });
+
   const [globalStats, setGlobalStats] = useState({ todayTotal: 0, transtec: 0, sqLight: 0, sqCables: 0, pendingTotal: 0 });
 
   const isAdmin = user.role === 'ADMIN';
@@ -30,7 +40,11 @@ const Collections: React.FC<CollectionsProps> = ({ company, user }) => {
   useEffect(() => { fetchData(); }, [user.company]);
   useEffect(() => {
     if (selectedCust) fetchCustomerBalances(selectedCust.id);
-    else setCustBalances({ transtec: 0, sqLight: 0, sqCables: 0 });
+    else setCustBalances({
+      'Transtec': { reg: 0, book: 0 },
+      'SQ Light': { reg: 0, book: 0 },
+      'SQ Cables': { reg: 0, book: 0 }
+    });
   }, [selectedCust]);
 
   const fetchData = async () => {
@@ -73,17 +87,27 @@ const Collections: React.FC<CollectionsProps> = ({ company, user }) => {
   const fetchCustomerBalances = async (customerId: string) => {
     try {
       const { data: txs } = await supabase.from('transactions').select('amount, company, payment_type, meta, items').eq('customer_id', customerId);
-      let t_tr = 0, t_sl = 0, t_sc = 0;
+      const newBalances: Record<string, MultiBalance> = {
+        'Transtec': { reg: 0, book: 0 },
+        'SQ Light': { reg: 0, book: 0 },
+        'SQ Cables': { reg: 0, book: 0 }
+      };
+
       txs?.forEach(tx => {
         const amt = Number(tx.amount);
         const dbCo = mapToDbCompany(tx.company);
         const isBooking = tx.meta?.is_booking === true || tx.items?.[0]?.note?.includes('বুকিং');
-        const factor = (tx.payment_type === 'COLLECTION' && !isBooking) ? -amt : (tx.payment_type === 'DUE' ? amt : 0);
-        if (dbCo === 'Transtec') t_tr += factor;
-        else if (dbCo === 'SQ Light') t_sl += factor;
-        else if (dbCo === 'SQ Cables') t_sc += factor;
+
+        if (newBalances[dbCo]) {
+          if (tx.payment_type === 'COLLECTION') {
+             if (isBooking) newBalances[dbCo].book += amt;
+             else newBalances[dbCo].reg -= amt;
+          } else if (tx.payment_type === 'DUE') {
+             newBalances[dbCo].reg += amt;
+          }
+        }
       });
-      setCustBalances({ transtec: t_tr, sqLight: t_sl, sqCables: t_sc });
+      setCustBalances(newBalances);
     } catch (err) {}
   };
 
@@ -136,30 +160,19 @@ const Collections: React.FC<CollectionsProps> = ({ company, user }) => {
 
     setIsSaving(true);
     try {
-      // 1. Delete notifications related to this payment
-      await supabase
-        .from('notifications')
-        .delete()
-        .eq('customer_id', tx.customer_id)
-        .ilike('message', `%#${txIdShort}%`);
-
-      // 2. Delete the transaction
+      await supabase.from('notifications').delete().eq('customer_id', tx.customer_id).ilike('message', `%#${txIdShort}%`);
       const { error } = await supabase.from('transactions').delete().eq('id', tx.id);
       if (error) throw error;
-
       alert("এন্ট্রিটি সফলভাবে মুছে ফেলা হয়েছে!");
       fetchData();
-    } catch (err: any) {
-      alert("ত্রুটি: " + err.message);
-    } finally {
-      setIsSaving(false);
-    }
+    } catch (err: any) { alert("ত্রুটি: " + err.message); } finally { setIsSaving(false); }
   };
 
   const safeFormat = (val: any) => Number(val || 0).toLocaleString();
-  const currentSelectedBalance = useMemo(() => {
+  
+  const currentBalances = useMemo(() => {
     const dbCo = mapToDbCompany(targetCompany);
-    return dbCo === 'Transtec' ? custBalances.transtec : dbCo === 'SQ Light' ? custBalances.sqLight : dbCo === 'SQ Cables';
+    return custBalances[dbCo] || { reg: 0, book: 0 };
   }, [targetCompany, custBalances]);
 
   const uniqueAreas = useMemo(() => Array.from(new Set(customers.map(c => c.address?.trim()).filter(Boolean))).sort(), [customers]);
@@ -170,7 +183,6 @@ const Collections: React.FC<CollectionsProps> = ({ company, user }) => {
       
       {/* 📊 LARGE TOP STATS GRID */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-         {/* Today's Total - Hero Card */}
          <div className="lg:col-span-1 bg-slate-900 p-8 rounded-[2.5rem] text-white shadow-2xl relative overflow-hidden group">
             <div className="absolute -right-4 -bottom-4 text-7xl opacity-10 group-hover:scale-110 transition-transform">💰</div>
             <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-3 italic">আজকের মোট আদায়</p>
@@ -243,14 +255,22 @@ const Collections: React.FC<CollectionsProps> = ({ company, user }) => {
                   <button onClick={() => setCollectionType('BOOKING')} className={`flex-1 py-4 rounded-2xl font-black uppercase text-[10px] transition-all tracking-widest ${collectionType === 'BOOKING' ? 'bg-indigo-600 text-white shadow-xl scale-[1.02]' : 'text-slate-400 hover:text-slate-600'}`}>📅 বুকিং অগ্রিম</button>
                </div>
 
-               {/* Current Balance Display - Large */}
-               <div className="bg-slate-900 p-8 rounded-[3rem] border border-white/5 shadow-2xl flex flex-col items-center">
-                  <p className="text-[10px] font-black text-blue-400 uppercase tracking-[0.4em] text-center mb-4 italic leading-none">{targetCompany.toUpperCase()} CURRENT DUE</p>
-                  <p className={`text-5xl font-black italic tracking-tighter text-center ${currentSelectedBalance > 1 ? 'text-rose-400' : 'text-emerald-400'}`}>
-                     ৳{safeFormat(currentSelectedBalance)}
-                  </p>
+               {/* Split Balance Display */}
+               <div className="bg-slate-900 p-8 rounded-[3rem] border border-white/5 shadow-2xl space-y-6">
+                  <div className="flex flex-col items-center border-b border-white/10 pb-6">
+                     <p className="text-[10px] font-black text-rose-400 uppercase tracking-[0.4em] mb-3 italic">মালের বকেয়া (Regular Due)</p>
+                     <p className={`text-4xl font-black italic tracking-tighter ${currentBalances.reg > 1 ? 'text-rose-400' : 'text-emerald-400'}`}>
+                        ৳{safeFormat(currentBalances.reg)}
+                     </p>
+                  </div>
+                  <div className="flex flex-col items-center">
+                     <p className="text-[10px] font-black text-indigo-400 uppercase tracking-[0.4em] mb-3 italic">বুকিং জমা (Booking Advance)</p>
+                     <p className="text-4xl font-black italic tracking-tighter text-indigo-400">
+                        ৳{safeFormat(currentBalances.book)}
+                     </p>
+                  </div>
                   
-                  <div className="flex gap-2 mt-8 w-full">
+                  <div className="flex gap-2 mt-4 w-full">
                      {['Transtec', 'SQ Light', 'SQ Cables'].map(co => (
                        <button 
                          key={co} 

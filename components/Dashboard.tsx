@@ -10,7 +10,7 @@ interface DashboardProps {
 
 const Dashboard: React.FC<DashboardProps> = ({ company, role }) => {
   const [stats, setStats] = useState({
-    todaySales: 0, todayCollection: 0, totalDue: 0, stockValue: 0, monthSales: 0, monthDeliveryExpense: 0
+    todaySales: 0, todayCollection: 0, regularDue: 0, bookingAdvance: 0, stockValue: 0, monthSales: 0
   });
   const [loading, setLoading] = useState(true);
   const [recentActivity, setRecentActivity] = useState<any[]>([]);
@@ -31,7 +31,7 @@ const Dashboard: React.FC<DashboardProps> = ({ company, role }) => {
         supabase.from('products').select('tp, stock').eq('company', dbCompany)
       ]);
 
-      let t_sales = 0, t_coll = 0, m_sales = 0, total_due = 0, m_exp = 0;
+      let t_sales = 0, t_coll = 0, reg_due = 0, book_adv = 0;
       const recent: any[] = [];
       const monthlyMap: Record<string, { month: string, sales: number, collection: number }> = {};
       const monthNames = ["জানুয়ারি", "ফেব্রুয়ারি", "মার্চ", "এপ্রিল", "মে", "জুন", "জুলাই", "আগস্ট", "সেপ্টেম্বর", "অক্টোবর", "নভেম্বর", "ডিসেম্বর"];
@@ -44,20 +44,33 @@ const Dashboard: React.FC<DashboardProps> = ({ company, role }) => {
         const amt = Number(tx.amount) || 0;
         const txDate = tx.created_at.split('T')[0];
         const txMonth = tx.created_at.slice(0, 7);
+        const isBooking = tx.meta?.is_booking === true || tx.items?.[0]?.note?.includes('বুকিং');
+
         if (tx.payment_type === 'COLLECTION') {
           if (txDate === todayStr) t_coll += amt;
-          total_due -= amt;
+          if (isBooking) {
+            book_adv += amt;
+          } else {
+            reg_due -= amt;
+          }
           if (monthlyMap[txMonth]) monthlyMap[txMonth].collection += amt;
         } else if (tx.payment_type === 'DUE') {
           if (txDate === todayStr) t_sales += amt;
-          total_due += amt;
+          reg_due += amt;
           if (monthlyMap[txMonth]) monthlyMap[txMonth].sales += amt;
         }
         if (txDate === todayStr) recent.push({ name: tx.customers?.name || 'Unknown', amount: amt, date: tx.created_at, type: tx.payment_type === 'COLLECTION' ? 'C' : 'S' });
       });
 
       const sValue = prodRes.data?.reduce((acc, p) => acc + (Number(p.tp) * Number(p.stock)), 0) || 0;
-      setStats({ todaySales: t_sales, todayCollection: t_coll, totalDue: total_due, stockValue: sValue, monthSales: m_sales, monthDeliveryExpense: m_exp });
+      setStats({ 
+        todaySales: t_sales, 
+        todayCollection: t_coll, 
+        regularDue: reg_due, 
+        bookingAdvance: book_adv, 
+        stockValue: sValue, 
+        monthSales: 0 
+      });
       setRecentActivity(recent.sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()).slice(0, 10));
       setMonthlyData(Object.values(monthlyMap));
     } finally { setLoading(false); }
@@ -75,7 +88,7 @@ const Dashboard: React.FC<DashboardProps> = ({ company, role }) => {
   return (
     <div className="space-y-6 pb-40 animate-reveal text-slate-900">
       
-      {/* 🎭 Compact Cinematic Hero Banner */}
+      {/* 🎭 Cinematic Hero Banner */}
       <div className={`p-8 md:p-12 rounded-[2.5rem] bg-gradient-to-br ${brandTheme.gradient} text-white shadow-xl relative overflow-hidden group`}>
          <div className="absolute right-[-20px] top-[-20px] text-[160px] opacity-10 font-bold italic group-hover:scale-110 group-hover:rotate-12 transition-all duration-[3000ms] animate-float">{brandTheme.icon}</div>
          <div className="relative z-10">
@@ -89,18 +102,19 @@ const Dashboard: React.FC<DashboardProps> = ({ company, role }) => {
          </div>
       </div>
 
-      {/* 📊 Compact Stat Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      {/* 📊 Stat Cards Grid */}
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
         {[
           { label: 'আজকের বিক্রি', val: stats.todaySales, color: 'text-blue-600', icon: '🛒', bg: 'bg-blue-50' },
           { label: 'আজকের আদায়', val: stats.todayCollection, color: 'text-emerald-600', icon: '💰', bg: 'bg-emerald-50' },
-          { label: 'মার্কেট বাকি', val: stats.totalDue, color: 'text-rose-600', icon: '⏳', bg: 'bg-rose-50' },
+          { label: 'মালের বকেয়া', val: stats.regularDue, color: 'text-rose-600', icon: '⏳', bg: 'bg-rose-50' },
+          { label: 'বুকিং জমা', val: stats.bookingAdvance, color: 'text-indigo-600', icon: '📅', bg: 'bg-indigo-50' },
           { label: 'স্টক ভ্যালু', val: stats.stockValue, color: 'text-slate-900', icon: '📦', bg: 'bg-slate-100' }
         ].map((card, i) => (
           <div key={i} className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-md hover:shadow-xl transition-all duration-700 hover:-translate-y-1 animate-reveal relative overflow-hidden group" style={{ animationDelay: `${i*0.1}s` }}>
              <div className={`absolute top-0 right-0 w-16 h-16 ${card.bg} rounded-bl-[2.5rem] -z-0 opacity-40 group-hover:scale-125 transition-transform`}></div>
              <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-3 italic relative z-10 leading-none">{card.label}</p>
-             <p className={`text-lg md:text-2xl font-black italic tracking-tighter ${card.color} leading-none relative z-10`}>{formatCurrency(card.val)}</p>
+             <p className={`text-lg md:text-xl font-black italic tracking-tighter ${card.color} leading-none relative z-10`}>{formatCurrency(card.val)}</p>
           </div>
         ))}
       </div>
