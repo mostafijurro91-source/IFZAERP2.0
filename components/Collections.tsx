@@ -41,7 +41,7 @@ const Collections: React.FC<CollectionsProps> = ({ company, user }) => {
       const [custRes, reqRes, txRes] = await Promise.all([
         db.getCustomers(),
         supabase.from('collection_requests').select('*, customers(name, address, phone)').eq('status', 'PENDING').order('created_at', { ascending: false }),
-        supabase.from('transactions').select('*, customers(name)').gte('created_at', today + 'T00:00:00Z').order('created_at', { ascending: false })
+        supabase.from('transactions').select('*, customers(name)').gte('created_at', today + 'T00:00:00.000Z').order('created_at', { ascending: false })
       ]);
 
       setCustomers(custRes || []);
@@ -209,7 +209,7 @@ const Collections: React.FC<CollectionsProps> = ({ company, user }) => {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
          {/* 💰 PREMIUM COLLECTION FORM */}
-         <div className="bg-white p-10 md:p-14 rounded-[4rem] border border-slate-100 shadow-2xl space-y-10 relative overflow-hidden">
+         <div className="bg-white p-10 md:p-14 rounded-[4rem] border border-slate-100 shadow-2xl space-y-10 relative overflow-hidden h-fit">
             <div className="absolute top-0 right-0 w-32 h-32 bg-blue-50/50 rounded-bl-full -z-0"></div>
             
             <div className="flex items-center gap-6 relative z-10">
@@ -289,61 +289,61 @@ const Collections: React.FC<CollectionsProps> = ({ company, user }) => {
          </div>
 
          {/* ⏳ SIDE LISTS: Pending & History */}
-         <div className="space-y-8">
-            <div className="bg-white rounded-[3.5rem] border border-slate-100 shadow-xl overflow-hidden flex flex-col h-full max-h-[900px]">
-               <div className="p-8 border-b bg-slate-50/50 flex justify-between items-center">
+         <div className="space-y-8 h-full">
+            <div className="bg-white rounded-[3.5rem] border border-slate-100 shadow-xl overflow-hidden flex flex-col min-h-[700px] lg:min-h-[900px]">
+               <div className="p-10 border-b bg-slate-50/50 flex justify-between items-center shrink-0">
                   <div>
-                     <h4 className="text-lg font-black text-slate-800 uppercase italic tracking-tighter">অপেক্ষমাণ অনুমোদন</h4>
-                     <p className="text-[10px] font-bold text-slate-400 uppercase mt-1">Pending Approvals ({pendingRequests.length})</p>
+                     <h4 className="text-xl font-black text-slate-800 uppercase italic tracking-tighter">অপেক্ষমাণ অনুমোদন</h4>
+                     <p className="text-[11px] font-bold text-slate-400 uppercase mt-2 tracking-widest">Pending Approvals ({pendingRequests.length})</p>
                   </div>
-                  <div className="w-10 h-10 bg-orange-100 rounded-xl flex items-center justify-center text-orange-600 animate-pulse font-black italic">!</div>
+                  <div className="w-12 h-12 bg-orange-100 rounded-2xl flex items-center justify-center text-orange-600 animate-pulse font-black italic text-xl">!</div>
                </div>
                
-               <div className="flex-1 overflow-y-auto custom-scroll p-6 space-y-3">
+               <div className="flex-1 overflow-y-auto custom-scroll p-8 space-y-4">
                   {pendingRequests.map(req => {
                     const isBooking = req.submitted_by?.includes('[BOOKING]');
                     const name = req.submitted_by?.replace('[BOOKING] ', '');
                     return (
-                      <div key={req.id} className={`bg-white p-6 rounded-[2.5rem] border-2 shadow-sm flex justify-between items-center group animate-reveal ${isBooking ? 'border-indigo-100' : 'border-slate-50 hover:border-blue-100'} transition-all`}>
+                      <div key={req.id} className={`bg-white p-8 rounded-[3rem] border-2 shadow-sm flex flex-col sm:flex-row justify-between items-start sm:items-center gap-6 group animate-reveal ${isBooking ? 'border-indigo-100' : 'border-slate-50 hover:border-blue-100'} transition-all`}>
                          <div className="min-w-0 pr-4">
-                            <h4 className="font-black text-slate-800 uppercase italic text-[14px] truncate leading-none mb-2">{req.customers?.name}</h4>
-                            <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{req.company} • {name}</p>
-                            {isBooking && <span className="inline-block mt-2 px-3 py-1 bg-indigo-50 text-indigo-600 text-[8px] font-black rounded-lg uppercase italic">Booking Advance</span>}
+                            <h4 className="font-black text-slate-800 uppercase italic text-[16px] truncate leading-none mb-3">{req.customers?.name}</h4>
+                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{req.company} • {name}</p>
+                            {isBooking && <span className="inline-block mt-3 px-4 py-1.5 bg-indigo-50 text-indigo-600 text-[9px] font-black rounded-xl uppercase italic">Booking Advance</span>}
                          </div>
-                         <div className="text-right flex items-center gap-4 shrink-0">
-                            <p className={`text-xl font-black italic tracking-tighter ${isBooking ? 'text-indigo-600' : 'text-slate-900'}`}>৳{safeFormat(req.amount)}</p>
+                         <div className="text-right flex items-center gap-6 shrink-0 w-full sm:w-auto border-t sm:border-t-0 pt-4 sm:pt-0">
+                            <p className={`text-2xl font-black italic tracking-tighter ${isBooking ? 'text-indigo-600' : 'text-slate-900'}`}>৳{safeFormat(req.amount)}</p>
                             {isAdmin && (
-                               <button onClick={() => handleApprove(req)} className="bg-emerald-600 text-white px-6 py-3 rounded-2xl font-black text-[10px] uppercase shadow-lg active:scale-95 hover:bg-emerald-700 transition-all">APPROVE</button>
+                               <button onClick={() => handleApprove(req)} className="bg-emerald-600 text-white px-8 py-4 rounded-2xl font-black text-[11px] uppercase shadow-lg active:scale-95 hover:bg-emerald-700 transition-all tracking-widest">APPROVE</button>
                             )}
                          </div>
                       </div>
                     );
                   })}
                   {pendingRequests.length === 0 && (
-                     <div className="py-20 text-center opacity-10 flex flex-col items-center">
-                        <span className="text-6xl mb-4">✅</span>
+                     <div className="py-32 text-center opacity-10 flex flex-col items-center">
+                        <span className="text-8xl mb-6">✅</span>
                         <p className="text-sm font-black uppercase tracking-[0.4em]">সব রিকোয়েস্ট অনুমোদিত</p>
                      </div>
                   )}
                </div>
 
-               <div className="p-8 border-t bg-emerald-50/30">
-                  <h4 className="text-[10px] font-black text-emerald-600 uppercase italic tracking-widest mb-6 ml-2">আজকের কনফার্মড আদায়</h4>
-                  <div className="space-y-3">
+               <div className="p-10 border-t bg-emerald-50/30 shrink-0">
+                  <h4 className="text-[11px] font-black text-emerald-600 uppercase italic tracking-widest mb-8 ml-2">আজকের কনফার্মড আদায়</h4>
+                  <div className="space-y-4">
                      {confirmedToday.map(tx => {
                        const isBookingTx = tx.meta?.is_booking === true || tx.items?.[0]?.note?.includes('বুকিং');
                        return (
-                         <div key={tx.id} className={`p-5 rounded-[2rem] border-2 flex justify-between items-center animate-reveal group ${isBookingTx ? 'bg-indigo-50 border-indigo-100' : 'bg-white border-emerald-100'} hover:shadow-lg transition-all`}>
+                         <div key={tx.id} className={`p-6 rounded-[2.5rem] border-2 flex justify-between items-center animate-reveal group ${isBookingTx ? 'bg-indigo-50 border-indigo-100' : 'bg-white border-emerald-100'} hover:shadow-lg transition-all`}>
                             <div className="min-w-0 pr-4">
-                               <h4 className="font-black text-slate-700 uppercase italic text-[12px] truncate leading-none mb-1.5">{tx.customers?.name}</h4>
-                               <p className="text-[8px] font-bold text-slate-400 uppercase tracking-widest">{tx.company} • {isBookingTx ? 'বুকিং জমা' : 'নগদ আদায়'}</p>
+                               <h4 className="font-black text-slate-700 uppercase italic text-[14px] truncate leading-none mb-2">{tx.customers?.name}</h4>
+                               <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">{tx.company} • {isBookingTx ? 'বুকিং জমা' : 'নগদ আদায়'}</p>
                             </div>
-                            <div className="flex items-center gap-4">
-                               <p className={`text-lg font-black italic tracking-tighter ${isBookingTx ? 'text-indigo-700' : 'text-emerald-700'}`}>৳{safeFormat(tx.amount)}</p>
+                            <div className="flex items-center gap-6">
+                               <p className={`text-xl font-black italic tracking-tighter ${isBookingTx ? 'text-indigo-700' : 'text-emerald-700'}`}>৳{safeFormat(tx.amount)}</p>
                                {(isAdmin || isStaff) && (
                                  <button 
                                    onClick={() => handleDeleteTransaction(tx)}
-                                   className="w-8 h-8 bg-rose-50 text-rose-500 rounded-lg flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition-opacity hover:bg-rose-500 hover:text-white"
+                                   className="w-10 h-10 bg-rose-50 text-rose-500 rounded-xl flex items-center justify-center text-sm opacity-0 group-hover:opacity-100 transition-opacity hover:bg-rose-500 hover:text-white"
                                    title="Delete Entry"
                                  >
                                     🗑️
@@ -354,7 +354,7 @@ const Collections: React.FC<CollectionsProps> = ({ company, user }) => {
                        );
                      })}
                      {confirmedToday.length === 0 && (
-                        <p className="text-center py-6 text-[10px] font-black text-slate-300 uppercase italic">আজ কোনো আদায় নেই</p>
+                        <p className="text-center py-10 text-[11px] font-black text-slate-300 uppercase italic tracking-widest">আজ কোনো আদায় নেই</p>
                      )}
                   </div>
                </div>

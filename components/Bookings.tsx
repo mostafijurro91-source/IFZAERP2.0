@@ -43,7 +43,7 @@ const Bookings: React.FC<BookingsProps> = ({ company, role, user }) => {
 
   // Detail View Specific States
   const [deliveryUpdates, setDeliveryUpdates] = useState<Record<string, number>>({});
-  const [orderQtyUpdates, setOrderQtyUpdates] = useState<Record<string, number>>({}); // New: Tracks changes to original order qty
+  const [orderQtyUpdates, setOrderQtyUpdates] = useState<Record<string, number>>({}); 
   const [newPaymentAmt, setNewPaymentAmt] = useState<string>("");
   const [showDetailProdAdd, setShowDetailProdAdd] = useState(false);
   const [detailProdSearch, setDetailProdSearch] = useState("");
@@ -480,7 +480,15 @@ const Bookings: React.FC<BookingsProps> = ({ company, role, user }) => {
                                <div key={it.product_id} className="p-5 bg-slate-50 rounded-[2.5rem] border border-slate-100 flex items-center justify-between">
                                   <div className="min-w-0 flex-1 pr-6">
                                      <p className="text-[11px] font-black uppercase italic text-slate-800 truncate mb-1">{it.name}</p>
-                                     <p className="text-[9px] font-bold text-indigo-500 uppercase">৳{it.unitPrice}</p>
+                                     <div className="flex items-center gap-2">
+                                        <span className="text-[8px] font-black text-slate-400 uppercase italic">দর:</span>
+                                        <input 
+                                          type="number"
+                                          className="w-20 p-1 bg-white border border-slate-200 rounded-lg font-black text-[10px] text-indigo-600 outline-none focus:border-indigo-500"
+                                          value={it.unitPrice}
+                                          onChange={(e) => updateCartItem(idx, { unitPrice: Number(e.target.value) })}
+                                        />
+                                     </div>
                                   </div>
                                   <div className="flex items-center gap-4">
                                      <div className="flex items-center bg-white rounded-2xl p-1 border shadow-inner">
