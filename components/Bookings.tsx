@@ -43,6 +43,7 @@ const Bookings: React.FC<BookingsProps> = ({ company, role, user }) => {
 
   // Detail View Specific States
   const [deliveryUpdates, setDeliveryUpdates] = useState<Record<string, number>>({});
+  const [orderQtyUpdates, setOrderQtyUpdates] = useState<Record<string, number>>({}); // New: Tracks changes to original order qty
   const [newPaymentAmt, setNewPaymentAmt] = useState<string>("");
   const [showDetailProdAdd, setShowDetailProdAdd] = useState(false);
   const [detailProdSearch, setDetailProdSearch] = useState("");
@@ -97,23 +98,19 @@ const Bookings: React.FC<BookingsProps> = ({ company, role, user }) => {
     setIsDownloading(true);
     try {
       const element = invoiceRef.current;
-      
-      // We set specific scale and scroll settings to prevent cutting off
       const canvas = await html2canvas(element, { 
-        scale: 3, // High resolution
+        scale: 3, 
         useCORS: true, 
         backgroundColor: '#ffffff',
         logging: false,
-        height: element.scrollHeight, // Force capture full content height
+        height: element.scrollHeight,
         windowHeight: element.scrollHeight,
-        scrollY: -window.scrollY // Reset scroll offset for capture
+        scrollY: -window.scrollY 
       });
       
       const imgData = canvas.toDataURL('image/jpeg', 1.0);
       const pdf = new jsPDF('p', 'mm', 'a4');
       const pageWidth = pdf.internal.pageSize.getWidth();
-      const pageHeight = pdf.internal.pageSize.getHeight();
-      
       const imgWidth = pageWidth;
       const imgHeight = (canvas.height * imgWidth) / canvas.width;
       
@@ -134,10 +131,12 @@ const Bookings: React.FC<BookingsProps> = ({ company, role, user }) => {
       const dbCo = mapToDbCompany(company);
       
       const updatedExistingItems = selectedBooking.items.map(item => {
-        const updateVal = Number(deliveryUpdates[item.id] || 0);
+        const dUpdateVal = Number(deliveryUpdates[item.id] || 0);
+        const newOrderQty = orderQtyUpdates[item.id] !== undefined ? orderQtyUpdates[item.id] : item.qty;
         return { 
           ...item, 
-          delivered_qty: (item.delivered_qty || 0) + updateVal 
+          qty: newOrderQty,
+          delivered_qty: (item.delivered_qty || 0) + dUpdateVal 
         };
       });
 
@@ -154,8 +153,9 @@ const Bookings: React.FC<BookingsProps> = ({ company, role, user }) => {
       
       const payAmt = Number(newPaymentAmt) || 0;
       const newAdvanceTotal = (selectedBooking.advance_amount || 0) + payAmt;
-      const addedValue = detailNewItems.reduce((acc, it) => acc + (it.qty * Number(it.tp)), 0);
-      const finalTotalAmount = selectedBooking.total_amount + addedValue;
+      
+      // Recalculate total amount from all items
+      const finalTotalAmount = finalItems.reduce((acc, it) => acc + (it.qty * it.unitPrice), 0);
 
       const isAllDelivered = finalItems.every(i => i.delivered_qty >= i.qty);
       const isAllPaid = newAdvanceTotal >= finalTotalAmount;
@@ -197,6 +197,7 @@ const Bookings: React.FC<BookingsProps> = ({ company, role, user }) => {
       alert("বুকিং ফাইল আপডেট করা হয়েছে! ✅");
       setShowDetailModal(false);
       setDeliveryUpdates({});
+      setOrderQtyUpdates({});
       setNewPaymentAmt("");
       setDetailNewItems([]);
       setShowDetailProdAdd(false);
@@ -279,9 +280,12 @@ const Bookings: React.FC<BookingsProps> = ({ company, role, user }) => {
   };
 
   const addDetailNewItem = (p: Product) => {
-    if (detailNewItems.find(i => i.id === p.id) || selectedBooking?.items.find(i => i.product_id === p.id)) {
-        return alert("এই প্রোডাক্টটি অলরেডি লিস্টে আছে!");
+    if (selectedBooking?.items.find(i => i.product_id === p.id)) {
+        alert("এই প্রোডাক্টটি আগে থেকেই অর্ডার লিস্টে আছে। আপনি লিস্ট থেকে সরাসরি এর সংখ্যা বাড়িয়ে নিতে পারেন।");
+        setShowDetailProdAdd(false);
+        return;
     }
+    if (detailNewItems.find(i => i.id === p.id)) return;
     setDetailNewItems([...detailNewItems, { ...p, qty: 1, tp: p.tp }]);
     setDetailProdSearch("");
   };
@@ -302,8 +306,13 @@ const Bookings: React.FC<BookingsProps> = ({ company, role, user }) => {
 
   const currentTotal = useMemo(() => {
     if (!selectedBooking) return 0;
-    return selectedBooking.total_amount + detailNewItems.reduce((s,i)=>s+(i.qty*Number(i.tp)), 0);
-  }, [selectedBooking, detailNewItems]);
+    const existingVal = selectedBooking.items.reduce((acc, it) => {
+       const qty = orderQtyUpdates[it.id] !== undefined ? orderQtyUpdates[it.id] : it.qty;
+       return acc + (qty * it.unitPrice);
+    }, 0);
+    const newVal = detailNewItems.reduce((s,i)=>s+(i.qty*Number(i.tp)), 0);
+    return existingVal + newVal;
+  }, [selectedBooking, detailNewItems, orderQtyUpdates]);
 
   const currentCollected = useMemo(() => {
     if (!selectedBooking) return 0;
@@ -355,7 +364,7 @@ const Bookings: React.FC<BookingsProps> = ({ company, role, user }) => {
         {loading ? (
           <div className="col-span-full py-40 text-center animate-pulse text-slate-300 font-black uppercase italic text-xs">Loading Terminal...</div>
         ) : filteredBookings.map((b, idx) => (
-            <div key={b.id} onClick={() => { setSelectedBooking(b); setDeliveryUpdates({}); setNewPaymentAmt(""); setDetailNewItems([]); setShowDetailProdAdd(false); setShowDetailModal(true); }} className="bg-white p-8 md:p-10 rounded-[2.5rem] md:rounded-[3.5rem] border border-slate-100 shadow-lg hover:shadow-2xl transition-all duration-700 cursor-pointer group relative flex flex-col justify-between animate-reveal" style={{ animationDelay: `${idx * 0.05}s` }}>
+            <div key={b.id} onClick={() => { setSelectedBooking(b); setDeliveryUpdates({}); setOrderQtyUpdates({}); setNewPaymentAmt(""); setDetailNewItems([]); setShowDetailProdAdd(false); setShowDetailModal(true); }} className="bg-white p-8 md:p-10 rounded-[2.5rem] md:rounded-[3.5rem] border border-slate-100 shadow-lg hover:shadow-2xl transition-all duration-700 cursor-pointer group relative flex flex-col justify-between animate-reveal" style={{ animationDelay: `${idx * 0.05}s` }}>
                <div className="mb-6 md:mb-8">
                   <div className="flex justify-between items-start mb-4 md:mb-6">
                      <span className={`px-3 py-1 md:px-4 md:py-1.5 rounded-lg md:rounded-xl text-[8px] font-black uppercase tracking-widest shadow-sm ${
@@ -508,7 +517,7 @@ const Bookings: React.FC<BookingsProps> = ({ company, role, user }) => {
 
       {/* 🔍 Booking Detail Modal */}
       {showDetailModal && selectedBooking && (
-        <div className="fixed inset-0 bg-slate-950/95 backdrop-blur-3xl z-[5000] flex flex-col items-center p-4 overflow-y-auto no-print">
+        <div className="fixed inset-0 bg-slate-950/95 backdrop-blur-xl z-[5000] flex flex-col items-center p-4 overflow-y-auto no-print">
            <div className="w-full max-w-4xl flex justify-between items-center mb-6 sticky top-0 z-[5001] bg-slate-900/90 p-6 rounded-[2.5rem] border border-white/10 shadow-2xl">
               <button onClick={() => setShowDetailModal(false)} className="text-white font-black uppercase text-[10px] px-6 transition-colors hover:text-indigo-400">← ফিরে যান</button>
               <div className="flex gap-3">
@@ -553,22 +562,38 @@ const Bookings: React.FC<BookingsProps> = ({ company, role, user }) => {
                     <thead>
                        <tr className="bg-slate-100 text-[11px] font-black uppercase italic border-b-2 border-black">
                           <th className="p-4 text-left border-r border-black">পণ্যের নাম</th>
-                          <th className="p-4 text-center border-r border-black w-24">পরিমাণ (Qty)</th>
+                          <th className="p-4 text-center border-r border-black w-32">অর্ডার পরিমাণ (Qty)</th>
                           <th className="p-4 text-center border-r border-black w-24">দর (Rate)</th>
                           <th className="p-4 text-center border-r border-black w-24">গেছে (Dlv)</th>
                           <th className="p-4 text-right border-black w-28">মোট (Total)</th>
                        </tr>
                     </thead>
                     <tbody className="text-[14px] font-bold italic">
-                       {selectedBooking.items.map((it) => (
+                       {selectedBooking.items.map((it) => {
+                          const currentQty = orderQtyUpdates[it.id] !== undefined ? orderQtyUpdates[it.id] : it.qty;
+                          return (
                           <tr key={it.id} className="border-b border-black/30">
                              <td className="p-4 border-r border-black/30 uppercase">{it.name}</td>
-                             <td className="p-4 text-center border-r border-black/30">{it.qty}</td>
+                             <td className="p-4 border-r border-black/30 text-center">
+                                <div className="flex items-center justify-center gap-2 no-print">
+                                   <button 
+                                     onClick={() => setOrderQtyUpdates({...orderQtyUpdates, [it.id]: Math.max(it.delivered_qty || 0, currentQty - 1)})}
+                                     className="w-7 h-7 bg-slate-100 rounded-full flex items-center justify-center text-slate-400 hover:bg-red-100 hover:text-red-500"
+                                   >-</button>
+                                   <span className="min-w-[30px] font-black">{currentQty}</span>
+                                   <button 
+                                     onClick={() => setOrderQtyUpdates({...orderQtyUpdates, [it.id]: currentQty + 1})}
+                                     className="w-7 h-7 bg-slate-100 rounded-full flex items-center justify-center text-slate-400 hover:bg-blue-100 hover:text-blue-600"
+                                   >+</button>
+                                </div>
+                                <span className="hidden print:block">{currentQty}</span>
+                             </td>
                              <td className="p-4 text-center border-r border-black/30">৳{it.unitPrice}</td>
                              <td className="p-4 text-center border-r border-black/30 text-emerald-600 font-black">{it.delivered_qty}</td>
-                             <td className="p-4 text-right">৳{(it.qty * it.unitPrice).toLocaleString()}</td>
+                             <td className="p-4 text-right">৳{(currentQty * it.unitPrice).toLocaleString()}</td>
                           </tr>
-                       ))}
+                          );
+                       })}
                        {detailNewItems.map((it, idx) => (
                           <tr key={`new-${idx}`} className="border-b border-black/30 bg-indigo-50/30">
                              <td className="p-4 border-r border-black/30 uppercase font-black">{it.name} <span className="text-[8px] bg-indigo-600 text-white px-2 py-0.5 rounded ml-2">NEW</span></td>
@@ -591,28 +616,35 @@ const Bookings: React.FC<BookingsProps> = ({ company, role, user }) => {
                  </div>
               </div>
 
-              {/* Input terminal area hidden from the Ref during PDF capture usually, 
-                  but html2canvas captures whatever is inside the Ref. 
-                  I removed it from inside invoiceRef to ensure a clean PDF. */}
               <div className="no-print bg-slate-50 p-8 border-t-2 border-slate-100">
                     <h5 className="text-[10px] font-black uppercase text-indigo-600 mb-6 italic tracking-widest text-center">ডেলিভারি, পেমেন্ট ও নতুন প্রোডাক্ট আপডেট টার্মিনাল</h5>
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                        <div className="space-y-4">
                           <p className="text-[9px] font-black uppercase text-slate-400 ml-4 italic">আজকের ডেলিভারি (পিস)</p>
                           <div className="space-y-2">
-                             {selectedBooking.items.map(it => (
+                             {selectedBooking.items.map(it => {
+                               const currentQty = orderQtyUpdates[it.id] !== undefined ? orderQtyUpdates[it.id] : it.qty;
+                               return (
                                <div key={it.id} className="flex justify-between items-center bg-white p-4 rounded-2xl shadow-sm border border-slate-100">
                                   <span className="text-[10px] font-black uppercase italic truncate max-w-[150px]">{it.name}</span>
                                   <input 
                                     type="number" 
                                     placeholder="0" 
-                                    disabled={it.delivered_qty >= it.qty}
-                                    className={`w-16 text-center p-2 border-none rounded-xl font-black outline-none ${it.delivered_qty >= it.qty ? 'bg-slate-100 text-slate-300' : 'bg-indigo-50 text-indigo-600'}`}
+                                    disabled={it.delivered_qty >= currentQty}
+                                    className={`w-16 text-center p-2 border-none rounded-xl font-black outline-none ${it.delivered_qty >= currentQty ? 'bg-slate-100 text-slate-300' : 'bg-indigo-50 text-indigo-600'}`}
                                     value={deliveryUpdates[it.id] || ""} 
-                                    onChange={e => setDeliveryUpdates({...deliveryUpdates, [it.id]: Number(e.target.value)})} 
+                                    onChange={e => {
+                                       const val = Number(e.target.value);
+                                       if (val + (it.delivered_qty || 0) > currentQty) {
+                                          alert("ডেলিভারি পরিমাণ অর্ডার পরিমাণের চেয়ে বেশি হতে পারবে না!");
+                                          return;
+                                       }
+                                       setDeliveryUpdates({...deliveryUpdates, [it.id]: val});
+                                    }} 
                                   />
                                </div>
-                             ))}
+                               );
+                             })}
                           </div>
                        </div>
 
