@@ -129,10 +129,37 @@ const Collections: React.FC<CollectionsProps> = ({ company, user }) => {
     } catch (err: any) { alert("ত্রুটি: " + err.message); } finally { setIsSaving(false); }
   };
 
+  const handleDeleteTransaction = async (tx: any) => {
+    if (!isAdmin && !isStaff) return;
+    const txIdShort = String(tx.id).slice(-6).toUpperCase();
+    if (!confirm(`আপনি কি নিশ্চিত এই জমার এন্ট্রিটি (#${txIdShort}) ডিলিট করতে চান?`)) return;
+
+    setIsSaving(true);
+    try {
+      // 1. Delete notifications related to this payment
+      await supabase
+        .from('notifications')
+        .delete()
+        .eq('customer_id', tx.customer_id)
+        .ilike('message', `%#${txIdShort}%`);
+
+      // 2. Delete the transaction
+      const { error } = await supabase.from('transactions').delete().eq('id', tx.id);
+      if (error) throw error;
+
+      alert("এন্ট্রিটি সফলভাবে মুছে ফেলা হয়েছে!");
+      fetchData();
+    } catch (err: any) {
+      alert("ত্রুটি: " + err.message);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   const safeFormat = (val: any) => Number(val || 0).toLocaleString();
   const currentSelectedBalance = useMemo(() => {
     const dbCo = mapToDbCompany(targetCompany);
-    return dbCo === 'Transtec' ? custBalances.transtec : dbCo === 'SQ Light' ? custBalances.sqLight : custBalances.sqCables;
+    return dbCo === 'Transtec' ? custBalances.transtec : dbCo === 'SQ Light' ? custBalances.sqLight : dbCo === 'SQ Cables';
   }, [targetCompany, custBalances]);
 
   const uniqueAreas = useMemo(() => Array.from(new Set(customers.map(c => c.address?.trim()).filter(Boolean))).sort(), [customers]);
@@ -303,18 +330,32 @@ const Collections: React.FC<CollectionsProps> = ({ company, user }) => {
                <div className="p-8 border-t bg-emerald-50/30">
                   <h4 className="text-[10px] font-black text-emerald-600 uppercase italic tracking-widest mb-6 ml-2">আজকের কনফার্মড আদায়</h4>
                   <div className="space-y-3">
-                     {confirmedToday.slice(0, 5).map(tx => {
+                     {confirmedToday.map(tx => {
                        const isBookingTx = tx.meta?.is_booking === true || tx.items?.[0]?.note?.includes('বুকিং');
                        return (
-                         <div key={tx.id} className={`p-5 rounded-[2rem] border-2 flex justify-between items-center animate-reveal ${isBookingTx ? 'bg-indigo-50 border-indigo-100' : 'bg-white border-emerald-100'}`}>
+                         <div key={tx.id} className={`p-5 rounded-[2rem] border-2 flex justify-between items-center animate-reveal group ${isBookingTx ? 'bg-indigo-50 border-indigo-100' : 'bg-white border-emerald-100'} hover:shadow-lg transition-all`}>
                             <div className="min-w-0 pr-4">
                                <h4 className="font-black text-slate-700 uppercase italic text-[12px] truncate leading-none mb-1.5">{tx.customers?.name}</h4>
                                <p className="text-[8px] font-bold text-slate-400 uppercase tracking-widest">{tx.company} • {isBookingTx ? 'বুকিং জমা' : 'নগদ আদায়'}</p>
                             </div>
-                            <p className={`text-lg font-black italic tracking-tighter ${isBookingTx ? 'text-indigo-700' : 'text-emerald-700'}`}>৳{safeFormat(tx.amount)}</p>
+                            <div className="flex items-center gap-4">
+                               <p className={`text-lg font-black italic tracking-tighter ${isBookingTx ? 'text-indigo-700' : 'text-emerald-700'}`}>৳{safeFormat(tx.amount)}</p>
+                               {(isAdmin || isStaff) && (
+                                 <button 
+                                   onClick={() => handleDeleteTransaction(tx)}
+                                   className="w-8 h-8 bg-rose-50 text-rose-500 rounded-lg flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition-opacity hover:bg-rose-500 hover:text-white"
+                                   title="Delete Entry"
+                                 >
+                                    🗑️
+                                 </button>
+                               )}
+                            </div>
                          </div>
                        );
                      })}
+                     {confirmedToday.length === 0 && (
+                        <p className="text-center py-6 text-[10px] font-black text-slate-300 uppercase italic">আজ কোনো আদায় নেই</p>
+                     )}
                   </div>
                </div>
             </div>
