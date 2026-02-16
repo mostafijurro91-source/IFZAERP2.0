@@ -107,6 +107,7 @@ const Sidebar: React.FC<SidebarProps> = ({
     { id: 'portal_dashboard', label: '🏠 কাস্টমার হোম', roles: ['CUSTOMER'] },
     { id: 'portal_order', label: '🛒 অর্ডার করুন', roles: ['CUSTOMER'] },
     { id: 'showroom', label: '💎 ডিজিটাল শোরুম', roles: ['ADMIN', 'CUSTOMER'] },
+    { id: 'portal_booking', label: '📅 আমার বুকিং', roles: ['CUSTOMER'] },
     { id: 'portal_ledger', label: '📒 আমার লেজার', roles: ['CUSTOMER'], badge: 'due' },
     { id: 'portal_catalog', label: '📢 অফার ও রেট', roles: ['CUSTOMER'] },
     { id: 'ad_manager', label: '📢 ক্যাটালগ ম্যানেজার', roles: ['ADMIN'] },

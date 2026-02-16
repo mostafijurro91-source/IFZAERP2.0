@@ -1,10 +1,10 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { User, Advertisement, Company, Product } from '../types';
+import { User, Advertisement, Company, Product, Booking } from '../types';
 import { supabase, mapToDbCompany } from '../lib/supabase';
 
 interface PortalProps {
-  type: 'DASHBOARD' | 'CATALOG' | 'LEDGER' | 'ORDER';
+  type: 'DASHBOARD' | 'CATALOG' | 'LEDGER' | 'ORDER' | 'BOOKING';
   user: User;
 }
 
@@ -29,6 +29,8 @@ const CustomerPortal: React.FC<PortalProps> = ({ type, user }) => {
   const [activeCompany, setActiveCompany] = useState<Company>('Transtec');
   const [ads, setAds] = useState<Advertisement[]>([]);
   const [ledger, setLedger] = useState<any[]>([]);
+  const [bookings, setBookings] = useState<Booking[]>([]);
+  const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [productSearch, setProductSearch] = useState("");
@@ -54,6 +56,7 @@ const CustomerPortal: React.FC<PortalProps> = ({ type, user }) => {
     if (user.customer_id) {
       if (type === 'CATALOG' || type === 'ORDER') fetchProducts();
       if (type === 'LEDGER') fetchLedgerForCompany(activeCompany);
+      if (type === 'BOOKING') fetchBookingsForCompany(activeCompany);
     }
   }, [type, activeCompany, user.customer_id]);
 
@@ -81,6 +84,22 @@ const CustomerPortal: React.FC<PortalProps> = ({ type, user }) => {
       if (error) throw error;
       setLedger(data || []);
     } catch (err) { setLedger([]); } finally { setLoading(false); }
+  };
+
+  const fetchBookingsForCompany = async (co: Company) => {
+    if (!user.customer_id) return;
+    setLoading(true);
+    try {
+      const dbCo = mapToDbCompany(co);
+      const { data, error } = await supabase
+        .from('bookings')
+        .select('*')
+        .eq('customer_id', user.customer_id)
+        .eq('company', dbCo)
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      setBookings(data || []);
+    } catch (err) { setBookings([]); } finally { setLoading(false); }
   };
 
   const fetchAllData = async () => {
@@ -232,6 +251,140 @@ const CustomerPortal: React.FC<PortalProps> = ({ type, user }) => {
                 </table>
               </div>
            </div>
+        </div>
+      )}
+
+      {type === 'BOOKING' && (
+        <div className="space-y-4 px-1">
+           <div className="bg-slate-200/50 p-1.5 rounded-2xl flex gap-2">
+              {companies.map(co => (
+                <button key={co} onClick={() => setActiveCompany(co)} className={`flex-1 py-3.5 rounded-xl font-black uppercase text-[10px] transition-all ${activeCompany === co ? 'bg-white text-slate-900 shadow-md scale-[1.02]' : 'text-slate-500'}`}>{co}</button>
+              ))}
+           </div>
+
+           <div className="grid grid-cols-1 gap-4">
+              {loading ? (
+                <div className="py-20 text-center text-slate-300 font-black uppercase italic text-xs animate-pulse">Syncing Bookings...</div>
+              ) : bookings.length === 0 ? (
+                <div className="py-20 text-center bg-white rounded-[3rem] border border-dashed border-slate-200 opacity-30">
+                   <p className="text-sm font-black uppercase italic">কোনো বুকিং অর্ডার পাওয়া যায়নি</p>
+                </div>
+              ) : bookings.map((b) => (
+                <div key={b.id} onClick={() => setSelectedBooking(b)} className="bg-white p-6 md:p-8 rounded-[2.5rem] border border-slate-100 shadow-sm flex flex-col md:flex-row justify-between items-center gap-6 group hover:shadow-xl transition-all cursor-pointer relative overflow-hidden">
+                   <div className={`absolute left-0 top-0 bottom-0 w-2 ${b.status === 'COMPLETED' ? 'bg-emerald-500' : b.status === 'PARTIAL' ? 'bg-orange-500' : 'bg-indigo-500'}`}></div>
+                   <div className="flex-1 min-w-0 text-center md:text-left pl-2">
+                      <div className="flex items-center justify-center md:justify-start gap-3 mb-2">
+                         <span className={`px-3 py-1 rounded-lg text-[8px] font-black uppercase italic ${b.status === 'COMPLETED' ? 'bg-emerald-50 text-emerald-600' : b.status === 'PARTIAL' ? 'bg-orange-50 text-orange-600' : 'bg-indigo-50 text-indigo-600'}`}>
+                            {b.status === 'PARTIAL' ? 'অংশিক মাল ডেলিভারি' : b.status === 'COMPLETED' ? 'সম্পন্ন' : 'পেন্ডিং'}
+                         </span>
+                         <span className="text-[9px] font-black text-slate-300 uppercase italic">ID: #{b.id.slice(-6).toUpperCase()}</span>
+                      </div>
+                      <h4 className="text-xl font-black uppercase italic tracking-tighter text-slate-800 truncate">{b.items[0]?.name} {b.items.length > 1 ? `(+${b.items.length - 1} more)` : ''}</h4>
+                      <p className="text-[10px] font-bold text-slate-400 uppercase mt-1 italic">{new Date(b.created_at).toLocaleDateString('bn-BD', { day: 'numeric', month: 'long', year: 'numeric' })}</p>
+                   </div>
+                   <div className="flex gap-10 text-center md:text-right shrink-0">
+                      <div>
+                         <p className="text-[9px] font-black text-slate-400 uppercase mb-1">Total Bill</p>
+                         <p className="text-xl font-black italic text-slate-900 tracking-tighter">৳{safeFormat(b.total_amount)}</p>
+                      </div>
+                      <div>
+                         <p className="text-[9px] font-black text-emerald-500 uppercase mb-1">Advance</p>
+                         <p className="text-xl font-black italic text-emerald-600 tracking-tighter">৳{safeFormat(b.advance_amount)}</p>
+                      </div>
+                   </div>
+                </div>
+              ))}
+           </div>
+
+           {/* 🔍 Digital Booking Memo View */}
+           {selectedBooking && (
+             <div className="fixed inset-0 bg-slate-950/95 backdrop-blur-xl z-[5000] flex flex-col items-center p-4 overflow-y-auto">
+                <div className="w-full max-w-2xl flex justify-between items-center mb-6 sticky top-0 z-[5001] bg-slate-900/90 p-6 rounded-[2.5rem] border border-white/10 shadow-2xl">
+                   <h3 className="text-white font-black uppercase italic text-[11px] tracking-widest pl-4">Digital Booking Memo</h3>
+                   <button onClick={() => setSelectedBooking(null)} className="bg-white/10 text-white w-10 h-10 rounded-full flex items-center justify-center font-black hover:bg-red-500 transition-colors">✕</button>
+                </div>
+
+                <div className="bg-white rounded-[3rem] w-full max-w-2xl shadow-2xl overflow-hidden flex flex-col mb-20 border-[6px] border-slate-100">
+                   <div className="p-10 md:p-14 bg-white text-black min-h-fit">
+                      <div className="text-center border-b-4 border-black pb-8 mb-10">
+                         <h1 className="text-4xl font-black uppercase italic tracking-tighter leading-none mb-1 text-indigo-600">IFZA ELECTRONICS</h1>
+                         <p className="text-lg font-black uppercase tracking-[0.4em] mb-4 text-black">{activeCompany.toUpperCase()} DIVISION</p>
+                         <div className="inline-block px-10 py-2 bg-black text-white text-[11px] font-black uppercase rounded-full italic tracking-widest">
+                            Booking Order Statement
+                         </div>
+                      </div>
+
+                      <div className="flex justify-between items-start gap-10 mb-12">
+                         <div className="space-y-3 flex-1">
+                            <p className="text-[10px] font-black opacity-30 uppercase border-b border-black w-fit mb-4">Customer Info:</p>
+                            <p className="text-3xl font-black uppercase italic leading-none">{user.name}</p>
+                            <p className="text-[13px] font-bold mt-2 italic text-slate-500 tracking-widest leading-none">Registered Shop Account</p>
+                         </div>
+                         <div className="text-right space-y-3 w-56 shrink-0">
+                            <p className="text-[10px] font-black opacity-30 uppercase border-b border-black w-fit ml-auto mb-4">Summary:</p>
+                            <div className="space-y-1">
+                               <p className="flex justify-between font-bold text-[13px]"><span>Memo ID:</span> <span className="font-black">#{selectedBooking.id.slice(-6).toUpperCase()}</span></p>
+                               <p className="flex justify-between font-bold text-[13px]"><span>Date:</span> <span className="font-black">{new Date(selectedBooking.created_at).toLocaleDateString('bn-BD')}</span></p>
+                               <p className="flex justify-between font-black text-[16px] text-indigo-600 border-t-2 border-slate-100 pt-3 mt-3"><span>Bill:</span> <span>৳{selectedBooking.total_amount.toLocaleString()}</span></p>
+                               <p className="flex justify-between font-black text-[16px] text-emerald-600"><span>Paid:</span> <span>৳{selectedBooking.advance_amount.toLocaleString()}</span></p>
+                               <p className="flex justify-between font-black text-[20px] text-rose-600 border-t-4 border-black pt-3 mt-3 italic tracking-tighter">
+                                  <span>Due:</span> 
+                                  <span>৳{(selectedBooking.total_amount - selectedBooking.advance_amount).toLocaleString()}</span>
+                                </p>
+                            </div>
+                         </div>
+                      </div>
+
+                      <table className="w-full border-collapse border-2 border-black">
+                         <thead>
+                            <tr className="bg-slate-100 text-[10px] font-black uppercase italic border-b-2 border-black">
+                               <th className="p-3 text-left border-r border-black">পণ্যের নাম</th>
+                               <th className="p-3 text-center border-r border-black w-24">পরিমাণ (Qty)</th>
+                               <th className="p-3 text-center border-r border-black w-24">গেছে (Dlv)</th>
+                               <th className="p-3 text-right border-black w-24">মোট</th>
+                            </tr>
+                         </thead>
+                         <tbody className="text-[12px] font-bold italic">
+                            {selectedBooking.items.map((it) => (
+                               <tr key={it.id} className="border-b border-black/30">
+                                  <td className="p-3 border-r border-black/30 uppercase">{it.name}</td>
+                                  <td className="p-3 border-r border-black/30 text-center">{it.qty}</td>
+                                  <td className={`p-3 border-r border-black/30 text-center font-black ${it.delivered_qty >= it.qty ? 'text-emerald-600' : 'text-blue-600'}`}>
+                                     {it.delivered_qty}
+                                  </td>
+                                  <td className="p-3 text-right">৳{(it.qty * it.unitPrice).toLocaleString()}</td>
+                               </tr>
+                            ))}
+                         </tbody>
+                      </table>
+
+                      <div className="mt-16 p-8 bg-slate-50 border-2 border-black rounded-[2.5rem]">
+                         <h5 className="text-[10px] font-black uppercase italic tracking-widest mb-4">স্বয়ংক্রিয় স্ট্যাটাস রিপোর্ট:</h5>
+                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div>
+                               <p className="text-[9px] font-black text-slate-400 uppercase italic">মাল ডেলিভারি অবস্থা:</p>
+                               <div className="mt-2 flex items-center gap-3">
+                                  <div className="w-3 h-3 rounded-full bg-blue-500 animate-pulse"></div>
+                                  <p className="text-[13px] font-black italic uppercase">{selectedBooking.status === 'COMPLETED' ? 'সব মাল ডেলিভারি হয়েছে' : 'কিছু মাল ডেলিভারি হওয়া বাকি'}</p>
+                                </div>
+                            </div>
+                            <div>
+                               <p className="text-[9px] font-black text-slate-400 uppercase italic">পেমেন্ট অবস্থা:</p>
+                               <div className="mt-2 flex items-center gap-3">
+                                  <div className={`w-3 h-3 rounded-full ${selectedBooking.advance_amount >= selectedBooking.total_amount ? 'bg-emerald-500' : 'bg-rose-500'}`}></div>
+                                  <p className="text-[13px] font-black italic uppercase">{selectedBooking.advance_amount >= selectedBooking.total_amount ? 'সম্পূর্ণ পরিশোধিত' : 'অংশিক বকেয়া আছে'}</p>
+                                </div>
+                            </div>
+                         </div>
+                      </div>
+
+                      <div className="mt-20 border-t border-black pt-6 text-center opacity-10">
+                         <p className="text-[8px] font-black uppercase tracking-[0.4em]">This is a cloud-verified booking statement generated by IFZAERP.com Terminal</p>
+                      </div>
+                   </div>
+                </div>
+             </div>
+           )}
         </div>
       )}
 
