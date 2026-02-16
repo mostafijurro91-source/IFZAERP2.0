@@ -22,7 +22,7 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName, user }) 
   const [isDownloading, setIsDownloading] = useState(false);
   const [reportData, setReportData] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
-  const [idSearch, setIdSearch] = useState(""); // Global ID search for old memos
+  const [idSearch, setIdSearch] = useState(""); 
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [selectedRoute, setSelectedRoute] = useState("");
   const [routes, setRoutes] = useState<string[]>([]);
@@ -53,7 +53,6 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName, user }) 
     setLoading(true);
     const dbCompany = mapToDbCompany(company);
     try {
-      // 🕵️ GLOBAL MEMO ID SEARCH ENGINE
       if (idSearch.trim().length >= 3) {
          const { data, error } = await supabase
            .from('transactions')
@@ -89,7 +88,7 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName, user }) 
         data?.forEach(r => {
           const key = r.product_name || 'Unknown Product';
           if (!groupedMap[key]) {
-            groupedMap[key] = { name: key, qty: 0, pending: 0, received: 0, sent: 0 };
+            groupedMap[key] = { id: key, name: key, qty: 0, pending: 0, received: 0, sent: 0 };
           }
           groupedMap[key].qty += Number(r.qty || 0);
           if (r.status === 'PENDING') groupedMap[key].pending += Number(r.qty || 0);
@@ -193,10 +192,7 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName, user }) 
         for (const item of tx.items) {
           if (item.id && item.qty) {
             const amtToRevert = item.action === 'RETURN' ? -Number(item.qty) : Number(item.qty);
-            await supabase.rpc('increment_stock', { 
-              row_id: item.id, 
-              amt: amtToRevert
-            });
+            await supabase.rpc('increment_stock', { row_id: item.id, amt: amtToRevert });
           }
         }
       }
@@ -224,13 +220,7 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName, user }) 
     setIsDownloading(true);
     try {
       const element = ref.current;
-      const canvas = await html2canvas(element, { 
-        scale: 2, 
-        useCORS: true, 
-        backgroundColor: '#ffffff',
-        logging: false
-      });
-      
+      const canvas = await html2canvas(element, { scale: 2, useCORS: true, backgroundColor: '#ffffff' });
       const imgData = canvas.toDataURL('image/jpeg', 0.95);
       const pdf = new jsPDF('p', 'mm', 'a4');
       const pageWidth = pdf.internal.pageSize.getWidth();
@@ -250,7 +240,6 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName, user }) 
         pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight);
         heightLeft -= pageHeight;
       }
-      
       pdf.save(`${filename}_${new Date().getTime()}.pdf`);
     } catch (err) {
       alert("PDF ডাউনলোড ব্যর্থ হয়েছে।");
@@ -262,7 +251,7 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName, user }) 
   const filteredData = useMemo(() => {
     return reportData.filter(item => {
       const q = searchQuery.toLowerCase().trim();
-      const name = item.customers?.name || item.customer_name || item.name || "";
+      const name = item.customers?.name || item.customer_name || item.name || item.product_name || "";
       const addr = item.customers?.address || item.address || "";
       const matchesSearch = !q || name.toLowerCase().includes(q) || addr.toLowerCase().includes(q);
       const matchesRoute = selectedRoute ? addr.trim() === selectedRoute.trim() : true;
@@ -424,6 +413,7 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName, user }) 
                      const shopAddress = item.customers?.address || item.address || '—';
                      const displayCompany = item.company ? `[${item.company}]` : '';
                      const isCollection = item.payment_type === 'COLLECTION' || item.log_type === 'আদায়';
+                     const refId = item.id ? String(item.id).slice(-6).toUpperCase() : `GEN-${idx}`;
 
                      return (
                         <tr key={idx} className="border-b border-black text-black">
@@ -435,7 +425,7 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName, user }) 
                                     {shopName}
                                  </p>
                                  <p className="text-[9px] font-bold italic opacity-80 leading-none mt-1">
-                                    REF: #{item.id.slice(-6).toUpperCase()} | 📍 {shopAddress}
+                                    REF: #{refId} | 📍 {shopAddress}
                                  </p>
                               </div>
                            </td>
@@ -451,10 +441,10 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName, user }) 
                              </>
                            ) : isRepl ? (
                              <>
-                               <td className="p-3 border-r border-black text-center text-slate-400">{item.pending}</td>
-                               <td className="p-3 border-r border-black text-center text-blue-600">{item.received}</td>
-                               <td className="p-3 border-r border-black text-center text-rose-500">{item.sent}</td>
-                               <td className="p-3 border-r border-black text-center font-black">{item.qty}</td>
+                               <td className="p-3 border-r border-black text-center text-slate-400">{item.pending || 0}</td>
+                               <td className="p-3 border-r border-black text-center text-blue-600">{item.received || 0}</td>
+                               <td className="p-3 border-r border-black text-center text-rose-500">{item.sent || 0}</td>
+                               <td className="p-3 border-r border-black text-center font-black">{item.qty || 0}</td>
                              </>
                            ) : (
                              <>
@@ -532,7 +522,7 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName, user }) 
                  </div>
                  <div className="text-right">
                     <p className="text-[10px] font-black border-b border-black w-fit ml-auto mb-2 uppercase opacity-60">চালান তথ্য:</p>
-                    <p className="text-[14px] font-black">বুকিং আইডি: #{selectedSlipData.booking_id.slice(-6).toUpperCase()}</p>
+                    <p className="text-[14px] font-black">বুকিং আইডি: #{selectedSlipData.booking_id ? String(selectedSlipData.booking_id).slice(-6).toUpperCase() : 'N/A'}</p>
                     <p className="text-[14px] font-black">তারিখ: {new Date().toLocaleDateString('bn-BD')}</p>
                  </div>
               </div>
