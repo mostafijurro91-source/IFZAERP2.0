@@ -36,12 +36,11 @@ const Bookings: React.FC<BookingsProps> = ({ company, role, user }) => {
   
   const [custSearch, setCustSearch] = useState("");
   const [prodSearch, setProdSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState<string>("ACTIVE"); // Default changed to ACTIVE only
+  const [statusFilter, setStatusFilter] = useState<string>("ACTIVE"); 
   const [modalAreaSelection, setModalAreaSelection] = useState("");
   const [currentStep, setCurrentStep] = useState(1);
   const [form, setForm] = useState({ advance: 0 });
 
-  // Detail View Specific States
   const [deliveryUpdates, setDeliveryUpdates] = useState<Record<string, number>>({});
   const [orderQtyUpdates, setOrderQtyUpdates] = useState<Record<string, number>>({}); 
   const [newPaymentAmt, setNewPaymentAmt] = useState<string>("");
@@ -51,6 +50,7 @@ const Bookings: React.FC<BookingsProps> = ({ company, role, user }) => {
 
   const invoiceRef = useRef<HTMLDivElement>(null);
   const isAdmin = role === 'ADMIN';
+  const isStaff = role === 'STAFF';
 
   useEffect(() => { fetchData(); }, [company]);
 
@@ -81,6 +81,24 @@ const Bookings: React.FC<BookingsProps> = ({ company, role, user }) => {
       setCustomers(custData || []);
       setProducts(prodData.data || []);
     } catch (err) { console.error(err); } finally { setLoading(false); }
+  };
+
+  const handleDeleteBooking = async (e: React.MouseEvent, id: string) => {
+    e.stopPropagation(); // Prevent opening the detail modal
+    if (!isAdmin && !isStaff) return;
+    if (!confirm("আপনি কি নিশ্চিতভাবে এই বুকিং রেকর্ডটি মুছে ফেলতে চান? এটি আর ফিরে পাওয়া যাবে না।")) return;
+
+    setLoading(true);
+    try {
+      const { error } = await supabase.from('bookings').delete().eq('id', id);
+      if (error) throw error;
+      alert("বুকিং সফলভাবে মুছে ফেলা হয়েছে!");
+      fetchData();
+    } catch (err: any) {
+      alert("ত্রুটি: " + err.message);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const fetchActiveBookingsForCustomer = async (cid: string) => {
@@ -154,7 +172,6 @@ const Bookings: React.FC<BookingsProps> = ({ company, role, user }) => {
       const payAmt = Number(newPaymentAmt) || 0;
       const newAdvanceTotal = (selectedBooking.advance_amount || 0) + payAmt;
       
-      // Recalculate total amount from all items
       const finalTotalAmount = finalItems.reduce((acc, it) => acc + (it.qty * it.unitPrice), 0);
 
       const isAllDelivered = finalItems.every(i => i.delivered_qty >= i.qty);
@@ -329,7 +346,6 @@ const Bookings: React.FC<BookingsProps> = ({ company, role, user }) => {
   return (
     <div className="space-y-6 md:space-y-10 pb-40 animate-reveal text-slate-900 font-sans mt-2">
       
-      {/* Stat Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 md:gap-6 no-print px-1">
         <div className="bg-white p-6 md:p-10 rounded-[2.5rem] border border-slate-100 shadow-xl flex flex-col justify-between group overflow-hidden relative">
            <div className="absolute top-0 right-0 w-24 h-24 bg-blue-50 rounded-bl-[4rem] -z-0 opacity-40 group-hover:scale-110 transition-transform"></div>
@@ -385,6 +401,9 @@ const Bookings: React.FC<BookingsProps> = ({ company, role, user }) => {
                      }`}>{b.status === 'PARTIAL' ? 'অংশিক' : b.status}</span>
                      <div className="flex items-center gap-2">
                         <span className="text-[9px] font-black text-slate-300">#{b.id.slice(-4).toUpperCase()}</span>
+                        {(isAdmin || isStaff) && (
+                          <button onClick={(e) => handleDeleteBooking(e, b.id)} className="w-8 h-8 bg-rose-50 text-rose-500 rounded-lg flex items-center justify-center text-xs hover:bg-rose-500 hover:text-white transition-all">🗑️</button>
+                        )}
                      </div>
                   </div>
                   <h4 className="font-black text-slate-800 text-base md:text-lg uppercase italic leading-tight truncate mb-2 group-hover:text-indigo-600 transition-colors">{b.customer_name}</h4>
@@ -404,7 +423,6 @@ const Bookings: React.FC<BookingsProps> = ({ company, role, user }) => {
         ))}
       </div>
 
-      {/* ➕ Add New Booking Modal */}
       {showAddModal && (
         <div className="fixed inset-0 bg-slate-950/95 backdrop-blur-xl z-[4000] flex items-center justify-center p-4">
            <div className="bg-white rounded-[4rem] w-full max-w-4xl h-[85vh] flex flex-col shadow-2xl animate-reveal overflow-hidden">
@@ -536,7 +554,6 @@ const Bookings: React.FC<BookingsProps> = ({ company, role, user }) => {
         </div>
       )}
 
-      {/* 🔍 Booking Detail Modal */}
       {showDetailModal && selectedBooking && (
         <div className="fixed inset-0 bg-slate-950/95 backdrop-blur-xl z-[5000] flex flex-col items-center p-4 overflow-y-auto no-print">
            <div className="w-full max-w-4xl flex justify-between items-center mb-6 sticky top-0 z-[5001] bg-slate-900/90 p-6 rounded-[2.5rem] border border-white/10 shadow-2xl">
@@ -712,7 +729,7 @@ const Bookings: React.FC<BookingsProps> = ({ company, role, user }) => {
                                      {detailNewItems.map((it, idx) => (
                                        <div key={it.id} className="bg-indigo-50/50 p-3 rounded-2xl space-y-2 border border-indigo-100">
                                           <div className="flex justify-between items-start">
-                                             <span className="text-[9px] font-black uppercase italic truncate max-w-[120px]">{it.name}</span>
+                                             <span className="text-[9px] font-black uppercase italic truncate max-w-[150px]">{it.name}</span>
                                              <button onClick={() => setDetailNewItems(detailNewItems.filter((_,i)=>i!==idx))} className="text-rose-500 font-black text-lg">✕</button>
                                           </div>
                                           <div className="grid grid-cols-2 gap-2">
