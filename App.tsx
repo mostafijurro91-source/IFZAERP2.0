@@ -19,6 +19,7 @@ import MarketingPage from './components/MarketingPage';
 import CustomerPortal from './components/CustomerPortal';
 import Showroom from './components/Showroom';
 import Tracking from './components/Tracking';
+import DatabaseExplorer from './components/DatabaseExplorer';
 import { User, Company } from './types';
 import { supabase, checkSupabaseConnection } from './lib/supabase';
 
@@ -67,7 +68,6 @@ const App: React.FC = () => {
             if (Notification.permission === "granted") {
                if ('serviceWorker' in navigator) {
                   navigator.serviceWorker.ready.then(registration => {
-                    // Fix: Cast options to any to support 'vibrate' and 'badge' properties not included in standard NotificationOptions
                     registration.showNotification(title, {
                       body: message,
                       icon: 'https://r.jina.ai/i/0f7939be338446b5a32b904586927500',
@@ -212,6 +212,8 @@ const App: React.FC = () => {
             {activeTab === 'dashboard' && <Dashboard company={selectedCompany} role={user.role} />}
             {activeTab === 'portal_dashboard' && <CustomerPortal type="DASHBOARD" user={user} />}
             {activeTab === 'portal_ledger' && <CustomerPortal type="LEDGER" user={user} />}
+            {activeTab === 'portal_order' && <CustomerPortal type="ORDER" user={user} />}
+            {activeTab === 'portal_order_history' && <CustomerPortal type="ORDER_HISTORY" user={user} />}
             {activeTab === 'portal_catalog' && <CustomerPortal type="CATALOG" user={user} />}
             {activeTab === 'portal_booking' && <CustomerPortal type="BOOKING" user={user} />}
             {activeTab === 'showroom' && <Showroom />}
@@ -227,6 +229,7 @@ const App: React.FC = () => {
             {activeTab === 'ledger' && <CompanyLedger company={selectedCompany} role={user.role} />}
             {activeTab === 'reports' && <Reports company={selectedCompany} userRole={user.role} userName={user.name} />}
             {activeTab === 'team' && <Team />}
+            {activeTab === 'db_explorer' && <DatabaseExplorer />}
             {activeTab === 'github_sync' && <Tracking />}
           </div>
         </div>
