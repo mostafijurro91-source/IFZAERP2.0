@@ -104,7 +104,11 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName, user }) 
         setReportData(data || []);
       }
       else if (type === 'BOOKING_LOG') {
-        let q = supabase.from('bookings').select('*, customers(name, address, phone)').eq('company', dbCompany);
+        let q = supabase.from('bookings')
+          .select('*, customers(name, address, phone)')
+          .eq('company', dbCompany)
+          .neq('status', 'COMPLETED'); // AUTOMATIC HIDE COMPLETED BOOKINGS
+        
         if (startOfDay && endOfDay) q = q.gte('created_at', startOfDay).lte('created_at', endOfDay);
         const { data: bookings, error } = await q.order('created_at', { ascending: false });
         
@@ -113,7 +117,7 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName, user }) 
         const flatBookings: any[] = [];
         bookings?.forEach(b => {
           b.items.forEach((item: any) => {
-            if (item.delivered_qty > 0 || !selectedDate) { // If date filter active, show deliveries. If not, show all items.
+            if (item.delivered_qty > 0 || !selectedDate) {
               flatBookings.push({
                 ...item,
                 customer_name: b.customers?.name,
@@ -296,7 +300,7 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName, user }) 
     const reportOptions = [
       { id: 'MASTER_LOG_ALL', title: 'MASTER LOG (3-IN-1)', icon: '🚛', desc: 'তিন কোম্পানির রিপোর্ট এক সাথে দেখুন', color: 'bg-blue-600', anim: 'hover-float', roles: ['ADMIN'] },
       { id: 'DELIVERY_LOG_A4', title: 'DIVISION LOG', icon: '🚚', desc: 'ডেলিভারি ও আদায় শিট', color: 'bg-slate-900', anim: 'hover-truck', roles: ['ADMIN'] },
-      { id: 'BOOKING_LOG', title: 'BOOKING LOG', icon: '📅', desc: 'বুকিং ডেলিভারি হিস্টোরি', color: 'bg-indigo-600', anim: 'hover-pulse', roles: ['ADMIN', 'STAFF'] },
+      { id: 'BOOKING_LOG', title: 'BOOKING LOG', icon: '📅', desc: 'চলমান বুকিং ডেলিভারি হিস্টোরি', color: 'bg-indigo-600', anim: 'hover-pulse', roles: ['ADMIN', 'STAFF'] },
       { id: 'REPLACEMENT_SUMMARY', title: 'REPLACEMENT LOG', icon: '🔄', desc: 'রিপ্লেসমেন্ট স্টকের রিপোর্ট', color: 'bg-rose-500', anim: 'hover-pulse', roles: ['ADMIN', 'STAFF'] },
       { id: 'MARKET_ORDERS', title: 'MARKET ORDERS', icon: '🛍️', desc: 'অপেক্ষমাণ মার্কেট অর্ডার', color: 'bg-orange-600', anim: 'hover-sway', roles: ['ADMIN', 'STAFF'] },
       { id: 'STOCK_REPORT', title: 'STOCK LIST', icon: '📦', desc: 'ইনভেন্টরি রিপোর্ট', color: 'bg-slate-800', anim: 'hover-pulse', roles: ['ADMIN', 'STAFF'] },
@@ -365,7 +369,7 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName, user }) 
                <h1 className="text-5xl font-black uppercase italic mb-1 tracking-tighter text-black leading-none">IFZA ELECTRONICS</h1>
                <p className="text-lg font-black uppercase tracking-[0.4em] mb-2 text-black">{isCombined ? 'ALL' : company} DIVISIONS</p>
                <div className="inline-block px-10 py-2 bg-black text-white text-xs font-black uppercase rounded-full italic tracking-widest mt-2">
-                  {idSearch ? 'GLOBAL SEARCH RESULTS' : activeReport.replace(/_/g, ' ')} ({selectedDate ? new Date(selectedDate).toLocaleDateString('bn-BD') : 'সব সময়ের রিপোর্ট'})
+                  {idSearch ? 'GLOBAL SEARCH RESULTS' : activeReport.replace(/_/g, ' ')} ({selectedDate ? new Date(selectedDate).toLocaleDateString('bn-BD') : 'চলমান পেন্ডিং রিপোর্ট'})
                </div>
             </div>
 
@@ -394,7 +398,7 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName, user }) 
                         {!isLog && <th className="p-3 border-r border-black text-center w-24">{isDue ? 'বকেয়া' : 'পরিমাণ'}</th>}
                         {isLog && (
                           <>
-                            <th className="p-3 border-r border-black text-center w-24">আদায়ের নোট</th>
+                            <th className="p-3 border-r border-black text-center w-24">আদায়ের নোট</th>
                             <th className="p-3 border-r border-black text-center w-28">অ্যাকশন</th>
                           </>
                         )}

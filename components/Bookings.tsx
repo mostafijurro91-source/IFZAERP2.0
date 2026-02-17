@@ -36,7 +36,7 @@ const Bookings: React.FC<BookingsProps> = ({ company, role, user }) => {
   
   const [custSearch, setCustSearch] = useState("");
   const [prodSearch, setProdSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState<string>("ALL");
+  const [statusFilter, setStatusFilter] = useState<string>("ACTIVE"); // Default changed to ACTIVE only
   const [modalAreaSelection, setModalAreaSelection] = useState("");
   const [currentStep, setCurrentStep] = useState(1);
   const [form, setForm] = useState({ advance: 0 });
@@ -194,7 +194,7 @@ const Bookings: React.FC<BookingsProps> = ({ company, role, user }) => {
         if (q > 0) await supabase.rpc('increment_stock', { row_id: id, amt: -q });
       }
 
-      alert("বুকিং ফাইল আপডেট করা হয়েছে! ✅");
+      alert(newStatus === 'COMPLETED' ? "বুকিং সম্পন্ন হয়েছে এবং তালিকা থেকে সরিয়ে দেওয়া হয়েছে! ✅" : "বুকিং ফাইল আপডেট করা হয়েছে! ✅");
       setShowDetailModal(false);
       setDeliveryUpdates({});
       setOrderQtyUpdates({});
@@ -302,7 +302,14 @@ const Bookings: React.FC<BookingsProps> = ({ company, role, user }) => {
   const filteredProducts = useMemo(() => products.filter(p => p.name.toLowerCase().includes(prodSearch.toLowerCase())), [products, prodSearch]);
   const filteredDetailProducts = useMemo(() => products.filter(p => p.name.toLowerCase().includes(detailProdSearch.toLowerCase())), [products, detailProdSearch]);
   const uniqueAreas = useMemo(() => Array.from(new Set(customers.map(c => c.address?.trim()).filter(Boolean))).sort() as string[], [customers]);
-  const filteredBookings = useMemo(() => bookings.filter(b => statusFilter === "ALL" || b.status === statusFilter), [bookings, statusFilter]);
+  
+  const filteredBookings = useMemo(() => {
+    return bookings.filter(b => {
+      if (statusFilter === "ACTIVE") return b.status === 'PENDING' || b.status === 'PARTIAL';
+      if (statusFilter === "ALL") return true;
+      return b.status === statusFilter;
+    });
+  }, [bookings, statusFilter]);
 
   const currentTotal = useMemo(() => {
     if (!selectedBooking) return 0;
@@ -351,10 +358,11 @@ const Bookings: React.FC<BookingsProps> = ({ company, role, user }) => {
         </div>
         <div className="flex gap-2 w-full md:w-auto">
           <select className="flex-1 md:flex-none p-4 md:p-5 bg-slate-50 border border-slate-100 rounded-2xl md:rounded-3xl text-[9px] font-black uppercase outline-none shadow-inner" value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
-             <option value="ALL">সকল বুকিং</option>
-             <option value="PENDING">পেন্ডিং</option>
-             <option value="PARTIAL">অংশিক</option>
-             <option value="COMPLETED">সম্পন্ন</option>
+             <option value="ACTIVE">চলমান বুকিং (Active)</option>
+             <option value="ALL">সকল রেকর্ড (Include Completed)</option>
+             <option value="PENDING">নতুন বুকিং (Pending)</option>
+             <option value="PARTIAL">অংশিক (Partial)</option>
+             <option value="COMPLETED">সম্পন্ন (History)</option>
           </select>
           <button onClick={() => { setShowAddModal(true); setCurrentStep(1); setBookingCart([]); setSelectedCust(null); setTargetBookingId(null); }} className="flex-[1.5] md:flex-none bg-indigo-600 text-white px-6 md:px-10 py-4 md:p-5 rounded-2xl md:rounded-3xl font-black uppercase text-[9px] tracking-widest shadow-xl active:scale-95 transition-all">+ নিউ বুকিং</button>
         </div>
@@ -363,6 +371,11 @@ const Bookings: React.FC<BookingsProps> = ({ company, role, user }) => {
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-8 no-print px-1">
         {loading ? (
           <div className="col-span-full py-40 text-center animate-pulse text-slate-300 font-black uppercase italic text-xs">Loading Terminal...</div>
+        ) : filteredBookings.length === 0 ? (
+          <div className="col-span-full py-20 text-center bg-white rounded-[3rem] border-2 border-dashed border-slate-200 opacity-30 flex flex-col items-center">
+             <span className="text-6xl mb-4">🏜️</span>
+             <p className="text-sm font-black uppercase tracking-widest">বর্তমানে কোনো চলমান বুকিং নেই</p>
+          </div>
         ) : filteredBookings.map((b, idx) => (
             <div key={b.id} onClick={() => { setSelectedBooking(b); setDeliveryUpdates({}); setOrderQtyUpdates({}); setNewPaymentAmt(""); setDetailNewItems([]); setShowDetailProdAdd(false); setShowDetailModal(true); }} className="bg-white p-8 md:p-10 rounded-[2.5rem] md:rounded-[3.5rem] border border-slate-100 shadow-lg hover:shadow-2xl transition-all duration-700 cursor-pointer group relative flex flex-col justify-between animate-reveal" style={{ animationDelay: `${idx * 0.05}s` }}>
                <div className="mb-6 md:mb-8">

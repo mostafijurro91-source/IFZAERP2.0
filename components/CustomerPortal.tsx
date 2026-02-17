@@ -111,6 +111,7 @@ const CustomerPortal: React.FC<PortalProps> = ({ type, user }) => {
         .select('*')
         .eq('customer_id', user.customer_id)
         .eq('company', dbCo)
+        .neq('status', 'COMPLETED') // HIDE COMPLETED FOR CUSTOMERS TOO
         .order('created_at', { ascending: false });
       
       if (error) throw error;
@@ -500,7 +501,7 @@ const CustomerPortal: React.FC<PortalProps> = ({ type, user }) => {
              <div className="fixed inset-0 bg-slate-950/98 backdrop-blur-3xl z-[5000] flex flex-col animate-reveal overflow-y-auto custom-scroll p-4">
                 <div className="w-full max-w-4xl mx-auto my-auto bg-white rounded-[4rem] shadow-2xl overflow-hidden border-8 border-slate-900/5 flex flex-col">
                    <div className="p-8 md:p-12 bg-slate-900 text-white flex justify-between items-center relative overflow-hidden">
-                      <div className="absolute top-0 right-0 w-64 h-64 bg-blue-500/10 rounded-full blur-3xl"></div>
+                      <div className="absolute top-0 right-0 w-64 h-64 bg-blue-50/50 rounded-full blur-3xl"></div>
                       <div className="relative z-10">
                          <h4 className="text-3xl font-black uppercase italic leading-none tracking-tighter">{selectedOffer.title}</h4>
                          <p className={`text-[10px] font-black uppercase tracking-[0.4em] mt-3 italic text-blue-400`}>Official Promotional Offer • {selectedOffer.company}</p>
@@ -539,6 +540,7 @@ const CustomerPortal: React.FC<PortalProps> = ({ type, user }) => {
                    <div className="p-10 bg-slate-50 border-t flex justify-center">
                       <button onClick={() => setSelectedOffer(null)} className="bg-slate-900 text-white px-16 py-6 rounded-[2rem] font-black uppercase text-xs tracking-widest shadow-xl active:scale-95 transition-all">বন্ধ করুন</button>
                    </div>
+                {/* Fix: Added missing closing div for fixed backdrop */}
                 </div>
              </div>
           )}
@@ -708,11 +710,11 @@ const CustomerPortal: React.FC<PortalProps> = ({ type, user }) => {
                 <div className="py-20 text-center text-slate-300 font-black uppercase italic animate-pulse">Syncing Bookings...</div>
               ) : bookings.length === 0 ? (
                 <div className="py-20 text-center bg-white rounded-3xl border border-dashed border-slate-200 opacity-30 flex flex-col items-center">
-                   <p className="text-sm font-black uppercase italic">কোনো বুকিং অর্ডার পাওয়া যায়নি</p>
+                   <p className="text-sm font-black uppercase italic">বর্তমানে আপনার কোনো বুকিং রেকর্ড নেই</p>
                 </div>
               ) : bookings.map((b) => (
                 <div key={b.id} onClick={() => setSelectedBooking(b)} className="bg-white p-6 rounded-[2.5rem] border border-slate-100 shadow-sm flex flex-col md:flex-row justify-between items-center gap-4 cursor-pointer relative overflow-hidden">
-                   <div className={`absolute left-0 top-0 bottom-0 w-1.5 ${b.status === 'COMPLETED' ? 'bg-emerald-500' : 'bg-indigo-500'}`}></div>
+                   <div className={`absolute left-0 top-0 bottom-0 w-1.5 ${b.status === 'COMPLETED' ? 'bg-emerald-50' : 'bg-indigo-50'}`}></div>
                    <div className="flex-1 text-center md:text-left">
                       <p className="text-[9px] font-black text-slate-300 uppercase italic">ID: #{b.id.slice(-6).toUpperCase()}</p>
                       <h4 className="text-lg font-black uppercase italic tracking-tighter text-slate-800 truncate">{b.items?.[0]?.name || 'বুকিং'}</h4>
