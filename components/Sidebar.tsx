@@ -106,6 +106,7 @@ const Sidebar: React.FC<SidebarProps> = ({
     { id: 'dashboard', label: '📊 ড্যাশবোর্ড', roles: ['ADMIN', 'STAFF', 'DELIVERY'] },
     { id: 'portal_dashboard', label: '🏠 কাস্টমার হোম', roles: ['CUSTOMER'] },
     { id: 'portal_order', label: '🛒 অর্ডার করুন', roles: ['CUSTOMER'] },
+    { id: 'portal_order_history', label: '📦 আমার অর্ডারসমূহ', roles: ['CUSTOMER'] },
     { id: 'showroom', label: '💎 ডিজিটাল শোরুম', roles: ['ADMIN', 'CUSTOMER'] },
     { id: 'portal_booking', label: '📅 আমার বুকিং', roles: ['CUSTOMER'] },
     { id: 'portal_ledger', label: '📒 আমার লেজার', roles: ['CUSTOMER'], badge: 'due' },
@@ -120,6 +121,7 @@ const Sidebar: React.FC<SidebarProps> = ({
     { id: 'inventory', label: '📦 স্টক ইনভেন্টরি', roles: ['ADMIN'] },
     { id: 'customers', label: '👥 কাস্টমার ডাটা', roles: ['ADMIN', 'STAFF', 'DELIVERY'] },
     { id: 'ledger', label: '📒 কোম্পানি লেজার', roles: ['ADMIN'] },
+    { id: 'db_explorer', label: '🗄️ ডেটাবেজ এক্সপ্লোরার', roles: ['ADMIN'] },
     { id: 'reports', label: '📁 অল রিপোর্টস', roles: ['ADMIN', 'STAFF'] },
     { id: 'team', label: '🛡️ টিম মনিটরিং', roles: ['ADMIN'] }
   ].filter(m => m.roles.includes(user.role));

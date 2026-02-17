@@ -34,7 +34,7 @@ const OrderManagement: React.FC<OrderManagementProps> = ({ company, user }) => {
 
   const handleApproveOrder = async () => {
     if (!selectedOrder || isSaving) return;
-    if (!confirm("অর্ডারটি কি সম্পন্ন হয়েছে?")) return;
+    if (!confirm("অর্ডারটি কি সম্পন্ন হয়েছে? এটি করলে শুধুমাত্র স্ট্যাটাস পরিবর্তন হবে। স্টক অ্যাডজাস্ট করতে সেলস মেমো তৈরি করুন।")) return;
     setIsSaving(true);
     try {
       const { error } = await supabase.from('market_orders').update({ status: 'COMPLETED' }).eq('id', selectedOrder.id);
@@ -93,14 +93,19 @@ const OrderManagement: React.FC<OrderManagementProps> = ({ company, user }) => {
                  </div>
                  <div className="space-y-1.5">
                     {selectedOrder.items?.map((item: any, idx: number) => (
-                      <div key={idx} className="p-2.5 bg-slate-50 rounded-lg flex justify-between items-center text-[10px] border border-slate-100">
-                         <div className="flex-1 font-black uppercase italic text-slate-600">{item.name}</div>
+                      <div key={idx} className={`p-2.5 rounded-lg flex justify-between items-center text-[10px] border ${item.action === 'RETURN' ? 'bg-red-50 border-red-100' : item.action === 'REPLACE' ? 'bg-cyan-50 border-cyan-100' : 'bg-slate-50 border-slate-100'}`}>
+                         <div className="flex-1">
+                            <p className="font-black uppercase italic text-slate-800">{item.name}</p>
+                            <span className={`text-[7px] font-black px-1 rounded border ${item.action === 'RETURN' ? 'text-red-500 border-red-200' : item.action === 'REPLACE' ? 'text-cyan-500 border-cyan-200' : 'text-slate-400 border-slate-200'}`}>
+                               {item.action || 'SALE'}
+                            </span>
+                         </div>
                          <div className="text-right font-black italic ml-4 text-slate-900">{item.qty} পিস</div>
                       </div>
                     ))}
                  </div>
                  <div className="pt-4 flex justify-between items-center border-t-2">
-                    <p className="text-[9px] font-black uppercase text-slate-400 italic">টোটাল অর্ডার ভ্যালু</p>
+                    <p className="text-[9px] font-black uppercase text-slate-400 italic">টোটাল অর্ডার ভ্যালু (Est.)</p>
                     <p className="text-xl font-black italic text-slate-900 tracking-tighter">৳{Math.round(selectedOrder.total_amount).toLocaleString()}</p>
                  </div>
               </div>

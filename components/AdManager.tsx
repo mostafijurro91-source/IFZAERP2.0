@@ -2,7 +2,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Company, Advertisement, UserRole } from '../types';
 import { supabase } from '../lib/supabase';
-import { GoogleGenAI } from "@google/genai";
 
 const AdManager: React.FC = () => {
   const [ads, setAds] = useState<Advertisement[]>([]);
@@ -10,21 +9,14 @@ const AdManager: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [showNotifyModal, setShowNotifyModal] = useState(false);
-  const [showVideoModal, setShowVideoModal] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [editingAd, setEditingAd] = useState<Advertisement | null>(null);
   
-  // AI Video States
-  const [videoPrompt, setVideoPrompt] = useState("");
-  const [isGeneratingVideo, setIsGeneratingVideo] = useState(false);
-  const [generatedVideoUrl, setGeneratedVideoUrl] = useState<string | null>(null);
-  const [videoStatus, setVideoStatus] = useState("");
-
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [formData, setFormData] = useState({
-    title: '', content: '', company: 'Transtec' as Company, type: 'OFFICIAL_CATALOG' as any, image_url: '', external_url: ''
+    title: '', content: '', company: 'Transtec' as Company, type: 'OFFER' as any, image_url: '', external_url: ''
   });
 
   const [notifyData, setNotifyData] = useState({
@@ -47,39 +39,6 @@ const AdManager: React.FC = () => {
   const fetchCustomers = async () => {
     const { data } = await supabase.from('customers').select('id, name, address').order('name');
     setCustomers(data || []);
-  };
-
-  const handleGenerateVideo = async () => {
-    if (!videoPrompt) return alert("ভিডিওর জন্য একটি প্রম্পট লিখুন!");
-    const apiKey = process.env.API_KEY;
-    if (!apiKey) return alert("API Key missing!");
-    setIsGeneratingVideo(true);
-    setGeneratedVideoUrl(null);
-    setVideoStatus("Initializing AI Engine...");
-
-    try {
-      const ai = new GoogleGenAI({ apiKey });
-      setVideoStatus("AI is imagining your video... (Approx 1-2 mins)");
-      let operation = await ai.models.generateVideos({
-        model: 'veo-3.1-fast-generate-preview',
-        prompt: videoPrompt + " for IFZA Electronics company branding, cinematic look, 4k",
-        config: { numberOfVideos: 1, resolution: '720p', aspectRatio: '16:9' }
-      });
-
-      while (!operation.done) {
-        setVideoStatus("Generating frames and motion... Please wait.");
-        await new Promise(resolve => setTimeout(resolve, 10000));
-        operation = await ai.operations.getVideosOperation({ operation: operation });
-      }
-
-      const downloadLink = operation.response?.generatedVideos?.[0]?.video?.uri;
-      if (downloadLink) {
-        const response = await fetch(`${downloadLink}&key=${apiKey}`);
-        const blob = await response.blob();
-        setGeneratedVideoUrl(URL.createObjectURL(blob));
-        setVideoStatus("Done!");
-      }
-    } catch (err: any) { alert("ভিডিও তৈরিতে সমস্যা হয়েছে: " + err.message); } finally { setIsGeneratingVideo(false); }
   };
 
   const compressImage = (file: File): Promise<string> => {
@@ -120,7 +79,7 @@ const AdManager: React.FC = () => {
       const payload = { ...formData, content: formData.content || formData.title };
       const res = editingAd ? await supabase.from('advertisements').update(payload).eq('id', editingAd.id) : await supabase.from('advertisements').insert([payload]);
       if (res.error) throw res.error;
-      alert("সফলভাবে পাবলিশ হয়েছে!");
+      alert("অফারটি সফলভাবে পাবলিশ হয়েছে! এটি এখন কাস্টমাররা প্রিমিয়াম কার্ড আকারে দেখতে পাবে।");
       setShowModal(false);
       fetchAds();
     } catch (err: any) { alert(err.message); } finally { setIsSaving(false); }
@@ -146,17 +105,16 @@ const AdManager: React.FC = () => {
   return (
     <div className="space-y-10 pb-40 animate-reveal text-slate-900">
       
-      {/* 📢 Communication Hub Header */}
+      {/* 📢 Catalog Hub Header */}
       <div className="bg-[#0f172a] p-12 md:p-16 rounded-[4rem] shadow-2xl border border-white/5 flex flex-col md:flex-row justify-between items-center gap-10 relative overflow-hidden">
         <div className="absolute top-0 right-0 w-96 h-96 bg-indigo-600/10 blur-[120px] rounded-full"></div>
         <div className="relative z-10">
           <h3 className="text-4xl font-black text-white uppercase italic tracking-tighter leading-none">Catalog Hub</h3>
-          <p className="text-[10px] text-indigo-400 font-black uppercase tracking-[0.6em] mt-4">Broadcast & Social Media Management</p>
+          <p className="text-[10px] text-indigo-400 font-black uppercase tracking-[0.6em] mt-4">Manage Offers & Events</p>
         </div>
         <div className="flex flex-wrap justify-center gap-4 relative z-10">
-          <button onClick={() => setShowVideoModal(true)} className="bg-emerald-600 text-white px-10 py-5 rounded-[2.5rem] font-black uppercase text-[11px] tracking-widest shadow-xl active:scale-95 transition-all hover:bg-emerald-700">AI প্রোমো ভিডিও 🎬</button>
           <button onClick={() => setShowNotifyModal(true)} className="bg-indigo-600 text-white px-10 py-5 rounded-[2.5rem] font-black uppercase text-[11px] tracking-widest shadow-xl active:scale-95 transition-all hover:bg-indigo-700">মেসেজ পাঠান 🔔</button>
-          <button onClick={() => { setEditingAd(null); setFormData({title:'', content:'', company:'Transtec', type:'OFFICIAL_CATALOG', image_url:'', external_url:''}); setShowModal(true); }} className="bg-white text-slate-900 px-10 py-5 rounded-[2.5rem] font-black uppercase text-[11px] tracking-widest shadow-xl active:scale-95 transition-all hover:scale-105">নতুন ক্যাটালগ +</button>
+          <button onClick={() => { setEditingAd(null); setFormData({title:'', content:'', company:'Transtec', type:'OFFER', image_url:'', external_url:''}); setShowModal(true); }} className="bg-white text-slate-900 px-10 py-5 rounded-[2.5rem] font-black uppercase text-[11px] tracking-widest shadow-xl active:scale-95 transition-all hover:scale-105">নতুন অফার তৈরি +</button>
         </div>
       </div>
 
@@ -169,7 +127,7 @@ const AdManager: React.FC = () => {
                 {ad.image_url ? <img src={ad.image_url} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-[4000ms]" /> : <div className="w-full h-full flex items-center justify-center opacity-5 font-black text-6xl italic">IFZA</div>}
                 <div className="absolute top-8 left-8 flex gap-3">
                    <span className="px-5 py-2 bg-black/80 backdrop-blur-2xl text-white text-[9px] font-black rounded-2xl uppercase tracking-widest italic border border-white/10">{ad.company}</span>
-                   <span className="px-5 py-2 bg-indigo-600 text-white text-[9px] font-black rounded-2xl uppercase tracking-widest italic shadow-xl">{ad.type}</span>
+                   <span className="px-5 py-2 bg-rose-600 text-white text-[9px] font-black rounded-2xl uppercase tracking-widest italic shadow-xl">{ad.type}</span>
                 </div>
              </div>
              <div className="p-10">
@@ -186,63 +144,99 @@ const AdManager: React.FC = () => {
         ))}
       </div>
       
-      {/* AI Video Generator Modal */}
-      {showVideoModal && (
-        <div className="fixed inset-0 bg-[#020617]/98 backdrop-blur-3xl z-[3000] flex items-center justify-center p-4 overflow-y-auto">
-           <div className="bg-white rounded-[4.5rem] w-full max-w-4xl shadow-2xl animate-reveal overflow-hidden flex flex-col my-auto border border-white/20">
-              <div className="p-10 md:p-14 bg-slate-900 text-white flex justify-between items-center shrink-0">
-                 <div className="flex items-center gap-6">
-                    <div className="w-14 h-14 bg-indigo-600 rounded-3xl flex items-center justify-center text-3xl animate-pulse shadow-2xl">🎞️</div>
-                    <div>
-                       <h3 className="text-2xl font-black uppercase italic tracking-tighter">Gemini AI Cinematic Video</h3>
-                       <p className="text-[9px] text-indigo-400 font-black uppercase mt-2 tracking-widest">Powered by Veo 3.1 Advanced Engine</p>
-                    </div>
-                 </div>
-                 <button onClick={() => setShowVideoModal(false)} className="text-4xl text-slate-500 hover:text-white font-black transition-colors">✕</button>
+      {/* Add/Edit Offer Modal */}
+      {showModal && (
+        <div className="fixed inset-0 bg-slate-950/90 backdrop-blur-xl z-[3000] flex items-center justify-center p-4 overflow-y-auto">
+           <div className="bg-white rounded-[4.5rem] w-full max-w-2xl shadow-2xl animate-reveal overflow-hidden flex flex-col my-auto border border-white/20">
+              <div className="p-10 bg-slate-900 text-white flex justify-between items-center shrink-0">
+                 <h3 className="text-2xl font-black uppercase italic tracking-tighter">অফার ক্রিয়েটর</h3>
+                 <button onClick={() => setShowModal(false)} className="text-4xl text-slate-500 hover:text-white font-black transition-colors">✕</button>
               </div>
-
-              <div className="flex-1 overflow-y-auto p-10 md:p-14 space-y-12 custom-scroll">
-                 <div className="space-y-6">
-                    <p className="text-[11px] font-black text-slate-400 uppercase italic tracking-widest ml-6">ভিডিওতে কি দেখাতে চান (প্রম্পট দিন):</p>
-                    <textarea 
-                      className="w-full p-10 bg-slate-50 border-2 border-slate-100 rounded-[3.5rem] font-bold text-lg italic h-48 outline-none focus:border-indigo-600 transition-all shadow-inner text-slate-900"
-                      placeholder="যেমন: A high-end luxury electrical switch panel on a marble wall with soft cinematic neon lighting, slow motion, 8k resolution..."
-                      value={videoPrompt}
-                      onChange={e => setVideoPrompt(e.target.value)}
-                    />
-                    <div className="flex justify-between items-center">
-                       <p className="text-[9px] text-slate-400 font-black uppercase italic ml-6">English prompts deliver superior results.</p>
-                       <button 
-                         disabled={isGeneratingVideo}
-                         onClick={handleGenerateVideo}
-                         className="bg-indigo-600 text-white px-12 py-5 rounded-[2.5rem] font-black uppercase text-[11px] tracking-widest shadow-2xl active:scale-95 transition-all hover:bg-emerald-600"
-                       >
-                         {isGeneratingVideo ? "AI Rendering... ⏳" : "ভিডিও তৈরি করুন ✨"}
-                       </button>
+              <form onSubmit={handleSave} className="p-10 space-y-6">
+                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                       <label className="text-[9px] font-black uppercase text-slate-400 ml-4 italic">কোম্পানি</label>
+                       <select className="w-full p-5 bg-slate-50 border border-slate-100 rounded-3xl outline-none font-black text-xs uppercase" value={formData.company} onChange={e => setFormData({...formData, company: e.target.value as Company})}>
+                          <option value="Transtec">Transtec</option>
+                          <option value="SQ Light">SQ Light</option>
+                          <option value="SQ Cables">SQ Cables</option>
+                       </select>
+                    </div>
+                    <div className="space-y-1.5">
+                       <label className="text-[9px] font-black uppercase text-slate-400 ml-4 italic">অফারের ধরণ</label>
+                       <select className="w-full p-5 bg-slate-50 border border-slate-100 rounded-3xl outline-none font-black text-xs uppercase" value={formData.type} onChange={e => setFormData({...formData, type: e.target.value as any})}>
+                          <option value="OFFER">Special Offer 🎁</option>
+                          <option value="NEW_PRODUCT">New Product 🚀</option>
+                          <option value="NOTICE">Official Notice 📢</option>
+                          <option value="OFFICIAL_CATALOG">Price Catalog 📄</option>
+                       </select>
                     </div>
                  </div>
 
-                 {isGeneratingVideo && (
-                    <div className="bg-slate-50 p-16 rounded-[4rem] flex flex-col items-center justify-center space-y-8 border-4 border-dashed border-indigo-100">
-                       <div className="w-20 h-20 border-8 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
-                       <p className="font-black text-indigo-600 uppercase italic tracking-[0.4em] text-sm text-center">{videoStatus}</p>
-                       <p className="text-[9px] text-slate-400 font-bold uppercase tracking-widest">Generating motion vectors. Do not disconnect.</p>
-                    </div>
-                 )}
+                 <div className="space-y-1.5">
+                    <label className="text-[9px] font-black uppercase text-slate-400 ml-4 italic">অফার হেডলাইন (যেমন: ১ লক্ষের মালে মোবাইল গিফট)</label>
+                    <input required className="w-full p-6 bg-slate-50 border border-slate-100 rounded-3xl outline-none font-black italic text-[14px]" value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} placeholder="হেডলাইন লিখুন..." />
+                 </div>
 
-                 {generatedVideoUrl && (
-                    <div className="space-y-8 animate-reveal">
-                       <p className="text-[11px] font-black text-emerald-600 uppercase italic tracking-[0.2em] text-center">✓ Cinematic Rendering Successful</p>
-                       <div className="rounded-[4rem] overflow-hidden border-[12px] border-slate-900 shadow-[0_50px_100px_rgba(0,0,0,0.5)] aspect-video bg-black group relative">
-                          <video src={generatedVideoUrl} controls autoPlay loop className="w-full h-full object-cover" />
-                       </div>
-                       <div className="flex gap-4">
-                          <a href={generatedVideoUrl} download="IFZA_Cinematic_Promo.mp4" className="flex-1 bg-emerald-600 text-white py-8 rounded-[3rem] font-black uppercase text-center text-xs tracking-[0.3em] shadow-2xl active:scale-95 transition-all hover:bg-emerald-700">ভিডিও ডাউনলোড করুন 📥</a>
-                          <button onClick={() => setGeneratedVideoUrl(null)} className="px-10 bg-slate-100 text-slate-400 font-black rounded-[3rem] uppercase text-[10px] tracking-widest active:scale-95">নতুন ভিডিও তৈরি</button>
-                       </div>
+                 <div className="space-y-1.5">
+                    <label className="text-[9px] font-black uppercase text-slate-400 ml-4 italic">বিস্তারিত বিবরণ ও শর্তাবলী</label>
+                    <textarea required className="w-full p-6 bg-slate-50 border border-slate-100 rounded-3xl outline-none font-bold italic h-32" value={formData.content} onChange={e => setFormData({...formData, content: e.target.value})} placeholder="অফারের শর্তাবলী বিস্তারিত লিখুন..." />
+                 </div>
+
+                 <div className="space-y-4">
+                    <p className="text-[9px] font-black uppercase text-slate-400 ml-4 italic">অফার ব্যানার / ছবি (ঐচ্ছিক)</p>
+                    <div className="p-8 border-4 border-dashed border-slate-100 rounded-[3rem] flex flex-col items-center justify-center gap-4 bg-slate-50/50 hover:bg-white transition-all cursor-pointer group" onClick={() => fileInputRef.current?.click()}>
+                       <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleImageUpload} />
+                       {formData.image_url ? (
+                         <div className="relative">
+                            <img src={formData.image_url} className="h-40 rounded-2xl shadow-xl" />
+                            <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity rounded-2xl">
+                               <p className="text-[10px] font-black text-white uppercase">Change Image</p>
+                            </div>
+                         </div>
+                       ) : (
+                         <>
+                            <div className="text-4xl">📸</div>
+                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Click to upload banner</p>
+                         </>
+                       )}
                     </div>
-                 )}
+                 </div>
+
+                 <button disabled={isSaving || isUploading} type="submit" className="w-full bg-slate-900 text-white py-8 rounded-[3rem] font-black uppercase text-xs tracking-[0.3em] shadow-2xl active:scale-95 transition-all">
+                    {isSaving ? "PUBLISHING..." : "অফারটি পাবলিশ করুন ➔"}
+                 </button>
+              </form>
+           </div>
+        </div>
+      )}
+
+      {/* Messaging Modal */}
+      {showNotifyModal && (
+        <div className="fixed inset-0 bg-slate-950/90 backdrop-blur-xl z-[3000] flex items-center justify-center p-4">
+           <div className="bg-white rounded-[4rem] w-full max-w-md shadow-2xl animate-reveal overflow-hidden">
+              <div className="p-8 bg-indigo-600 text-white flex justify-between items-center">
+                 <h3 className="text-xl font-black uppercase italic tracking-tighter">সরাসরি মেসেজ পাঠান</h3>
+                 <button onClick={() => setShowNotifyModal(false)} className="text-3xl text-white/50 hover:text-white font-black">✕</button>
               </div>
+              <form onSubmit={handleSendNotification} className="p-10 space-y-6">
+                 <div className="space-y-1.5">
+                    <label className="text-[9px] font-black uppercase text-slate-400 ml-4 italic">দোকান নির্বাচন</label>
+                    <select required className="w-full p-5 bg-slate-50 border border-slate-100 rounded-3xl outline-none font-bold text-xs" value={notifyData.customer_id} onChange={e => setNotifyData({...notifyData, customer_id: e.target.value})}>
+                       <option value="">দোকান সিলেক্ট করুন...</option>
+                       {customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                    </select>
+                 </div>
+                 <div className="space-y-1.5">
+                    <label className="text-[9px] font-black uppercase text-slate-400 ml-4 italic">মেসেজ শিরোনাম</label>
+                    <input className="w-full p-5 bg-slate-50 border border-slate-100 rounded-2xl outline-none font-bold italic" value={notifyData.title} onChange={e => setNotifyData({...notifyData, title: e.target.value})} placeholder="যেমন: জরুরি নোটিশ" />
+                 </div>
+                 <div className="space-y-1.5">
+                    <label className="text-[9px] font-black uppercase text-slate-400 ml-4 italic">মেসেজ টেক্সট</label>
+                    <textarea required className="w-full p-6 bg-slate-50 border border-slate-100 rounded-2xl outline-none font-bold italic h-32" value={notifyData.message} onChange={e => setNotifyData({...notifyData, message: e.target.value})} placeholder="আপনার মেসেজটি লিখুন..." />
+                 </div>
+                 <button disabled={isSaving} type="submit" className="w-full bg-slate-900 text-white py-6 rounded-[2.5rem] font-black uppercase text-xs tracking-widest shadow-xl active:scale-95 transition-all">মেসেজ পাঠান ➔</button>
+              </form>
            </div>
         </div>
       )}

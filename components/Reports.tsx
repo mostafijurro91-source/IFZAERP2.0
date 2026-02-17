@@ -23,7 +23,7 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName, user }) 
   const [reportData, setReportData] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [idSearch, setIdSearch] = useState(""); 
-  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+  const [selectedDate, setSelectedDate] = useState(""); // empty means ALL
   const [selectedRoute, setSelectedRoute] = useState("");
   const [routes, setRoutes] = useState<string[]>([]);
   
@@ -71,8 +71,8 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName, user }) 
          }
       }
 
-      const startOfDay = `${selectedDate}T00:00:00.000Z`;
-      const endOfDay = `${selectedDate}T23:59:59.999Z`;
+      const startOfDay = selectedDate ? `${selectedDate}T00:00:00.000Z` : null;
+      const endOfDay = selectedDate ? `${selectedDate}T23:59:59.999Z` : null;
 
       if (type === 'STOCK_REPORT') {
         const { data } = await supabase.from('products').select('*').eq('company', dbCompany).order('name');
@@ -98,22 +98,22 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName, user }) 
         setReportData(Object.values(groupedMap).sort((a,b) => b.qty - a.qty));
       }
       else if (type === 'MARKET_ORDERS') {
-        const { data } = await supabase.from('market_orders').select('*, customers(name, address, phone)').eq('company', dbCompany).gte('created_at', startOfDay).lte('created_at', endOfDay).order('created_at', { ascending: false });
+        let q = supabase.from('market_orders').select('*, customers(name, address, phone)').eq('company', dbCompany);
+        if (startOfDay && endOfDay) q = q.gte('created_at', startOfDay).lte('created_at', endOfDay);
+        const { data } = await q.order('created_at', { ascending: false });
         setReportData(data || []);
       }
       else if (type === 'BOOKING_LOG') {
-        const { data: bookings, error } = await supabase
-          .from('bookings')
-          .select('*, customers(name, address, phone)')
-          .eq('company', dbCompany)
-          .order('created_at', { ascending: false });
+        let q = supabase.from('bookings').select('*, customers(name, address, phone)').eq('company', dbCompany);
+        if (startOfDay && endOfDay) q = q.gte('created_at', startOfDay).lte('created_at', endOfDay);
+        const { data: bookings, error } = await q.order('created_at', { ascending: false });
         
         if (error) throw error;
         
         const flatBookings: any[] = [];
         bookings?.forEach(b => {
           b.items.forEach((item: any) => {
-            if (item.delivered_qty > 0) {
+            if (item.delivered_qty > 0 || !selectedDate) { // If date filter active, show deliveries. If not, show all items.
               flatBookings.push({
                 ...item,
                 customer_name: b.customers?.name,
@@ -130,13 +130,10 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName, user }) 
       }
       else if (type === 'DELIVERY_LOG_A4' || type === 'MASTER_LOG_ALL') {
         let query = supabase.from('transactions')
-          .select('*, customers(id, name, address)')
-          .gte('created_at', startOfDay)
-          .lte('created_at', endOfDay);
+          .select('*, customers(id, name, address)');
         
-        if (type === 'DELIVERY_LOG_A4') {
-          query = query.eq('company', dbCompany);
-        }
+        if (startOfDay && endOfDay) query = query.gte('created_at', startOfDay).lte('created_at', endOfDay);
+        if (type === 'DELIVERY_LOG_A4') query = query.eq('company', dbCompany);
 
         const { data: txs, error } = await query.order('created_at', { ascending: true });
         if (error) throw error;
@@ -341,10 +338,13 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName, user }) 
               onChange={e => setIdSearch(e.target.value)} 
             />
           </div>
-          {!isBooking && !isRepl && !idSearch && (
+          {!isRepl && !idSearch && (
             <div className="flex flex-col">
-              <label className="text-[8px] font-black uppercase text-slate-400 ml-4 mb-1 italic">তারিখ অনুযায়ী</label>
-              <input type="date" className="p-4 border-2 border-white rounded-[1.8rem] text-[11px] font-black outline-none bg-white shadow-sm focus:border-blue-500 transition-all" value={selectedDate} onChange={e => setSelectedDate(e.target.value)} />
+              <label className="text-[8px] font-black uppercase text-slate-400 ml-4 mb-1 italic">তারিখ অনুযায়ী (ফাঁকা রাখলে সব)</label>
+              <div className="flex items-center gap-2">
+                 <input type="date" className="p-4 border-2 border-white rounded-[1.8rem] text-[11px] font-black outline-none bg-white shadow-sm focus:border-blue-500 transition-all" value={selectedDate} onChange={e => setSelectedDate(e.target.value)} />
+                 {selectedDate && <button onClick={() => setSelectedDate("")} className="bg-slate-200 p-2 rounded-full text-xs">✕</button>}
+              </div>
             </div>
           )}
           <div className="flex flex-col">
@@ -365,7 +365,7 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName, user }) 
                <h1 className="text-5xl font-black uppercase italic mb-1 tracking-tighter text-black leading-none">IFZA ELECTRONICS</h1>
                <p className="text-lg font-black uppercase tracking-[0.4em] mb-2 text-black">{isCombined ? 'ALL' : company} DIVISIONS</p>
                <div className="inline-block px-10 py-2 bg-black text-white text-xs font-black uppercase rounded-full italic tracking-widest mt-2">
-                  {idSearch ? 'GLOBAL SEARCH RESULTS' : activeReport.replace(/_/g, ' ')} ({idSearch ? 'ANY DATE' : new Date(selectedDate).toLocaleDateString('bn-BD')})
+                  {idSearch ? 'GLOBAL SEARCH RESULTS' : activeReport.replace(/_/g, ' ')} ({selectedDate ? new Date(selectedDate).toLocaleDateString('bn-BD') : 'সব সময়ের রিপোর্ট'})
                </div>
             </div>
 
