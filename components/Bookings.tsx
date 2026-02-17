@@ -62,7 +62,7 @@ const Bookings: React.FC<BookingsProps> = ({ company, role, user }) => {
         'postgres_changes',
         { event: '*', schema: 'public', table: 'bookings' },
         () => {
-          fetchData(); // Re-fetch whenever any booking changes
+          fetchData(); 
         }
       )
       .subscribe();
@@ -132,9 +132,14 @@ const Bookings: React.FC<BookingsProps> = ({ company, role, user }) => {
      setActiveBookingsForCust(data || []);
   };
 
-  /**
-   * Fix: Added missing computed values and functions for the Detail Modal
-   */
+  const filteredBookings = useMemo(() => {
+    return bookings.filter(b => {
+      if (statusFilter === "ACTIVE") return b.status === 'PENDING' || b.status === 'PARTIAL';
+      if (statusFilter === "ALL") return true;
+      return b.status === statusFilter;
+    });
+  }, [bookings, statusFilter]);
+
   const currentTotal = useMemo(() => {
     if (!selectedBooking) return 0;
     const itemsTotal = selectedBooking.items.reduce((sum, it) => {
@@ -326,19 +331,11 @@ const Bookings: React.FC<BookingsProps> = ({ company, role, user }) => {
 
   const filteredProducts = useMemo(() => products.filter(p => p.name.toLowerCase().includes(prodSearch.toLowerCase())), [products, prodSearch]);
   const uniqueAreas = useMemo(() => Array.from(new Set(customers.map(c => c.address?.trim()).filter(Boolean))).sort() as string[], [customers]);
-  
-  const filteredBookings = useMemo(() => {
-    return bookings.filter(b => {
-      if (statusFilter === "ACTIVE") return b.status === 'PENDING' || b.status === 'PARTIAL';
-      if (statusFilter === "ALL") return true;
-      return b.status === statusFilter;
-    });
-  }, [bookings, statusFilter]);
 
   return (
     <div className="space-y-6 md:space-y-10 pb-40 animate-reveal text-slate-900 font-sans mt-2">
       
-      {/* 📊 Top Stats */}
+      {/* 📊 Top Stats Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 md:gap-6 no-print px-1">
         <div className="bg-white p-6 md:p-10 rounded-[2.5rem] border border-slate-100 shadow-xl flex flex-col justify-between group overflow-hidden relative">
            <div className="absolute top-0 right-0 w-24 h-24 bg-blue-50 rounded-bl-[4rem] -z-0 opacity-40 group-hover:scale-110 transition-transform"></div>
