@@ -52,11 +52,28 @@ const Bookings: React.FC<BookingsProps> = ({ company, role, user }) => {
   const isAdmin = role === 'ADMIN';
   const isStaff = role === 'STAFF';
 
-  useEffect(() => { fetchData(); }, [company]);
+  // 🔄 Real-time Listener for immediate updates
+  useEffect(() => {
+    fetchData();
+
+    const channel = supabase
+      .channel('booking-changes')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'bookings' },
+        () => {
+          fetchData(); // Re-fetch whenever any booking changes
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [company]);
 
   const fetchData = async () => {
     try {
-      setLoading(true);
       const dbCompany = mapToDbCompany(company);
       const { data: bkData, error: bkErr } = await supabase
         .from('bookings')
@@ -80,11 +97,15 @@ const Bookings: React.FC<BookingsProps> = ({ company, role, user }) => {
       setBookings(formattedBookings || []);
       setCustomers(custData || []);
       setProducts(prodData.data || []);
-    } catch (err) { console.error(err); } finally { setLoading(false); }
+    } catch (err) { 
+      console.error("Fetch Error:", err); 
+    } finally { 
+      setLoading(false); 
+    }
   };
 
   const handleDeleteBooking = async (e: React.MouseEvent, id: string) => {
-    e.stopPropagation(); // Prevent opening the detail modal
+    e.stopPropagation();
     if (!isAdmin && !isStaff) return;
     if (!confirm("আপনি কি নিশ্চিতভাবে এই বুকিং রেকর্ডটি মুছে ফেলতে চান? এটি আর ফিরে পাওয়া যাবে না।")) return;
 
@@ -111,35 +132,33 @@ const Bookings: React.FC<BookingsProps> = ({ company, role, user }) => {
      setActiveBookingsForCust(data || []);
   };
 
-  const downloadPDF = async () => {
-    if (!invoiceRef.current || isDownloading) return;
-    setIsDownloading(true);
-    try {
-      const element = invoiceRef.current;
-      const canvas = await html2canvas(element, { 
-        scale: 3, 
-        useCORS: true, 
-        backgroundColor: '#ffffff',
-        logging: false,
-        height: element.scrollHeight,
-        windowHeight: element.scrollHeight,
-        scrollY: -window.scrollY 
-      });
-      
-      const imgData = canvas.toDataURL('image/jpeg', 1.0);
-      const pdf = new jsPDF('p', 'mm', 'a4');
-      const pageWidth = pdf.internal.pageSize.getWidth();
-      const imgWidth = pageWidth;
-      const imgHeight = (canvas.height * imgWidth) / canvas.width;
-      
-      pdf.addImage(imgData, 'JPEG', 0, 0, imgWidth, imgHeight);
-      pdf.save(`Booking_Memo_${selectedBooking?.customer_name?.replace(/\s+/g, '_')}_${selectedBooking?.id.slice(-4).toUpperCase()}.pdf`);
-    } catch (err) {
-      console.error(err);
-      alert("PDF ডাউনলোড ব্যর্থ হয়েছে।");
-    } finally {
-      setIsDownloading(false);
-    }
+  /**
+   * Fix: Added missing computed values and functions for the Detail Modal
+   */
+  const currentTotal = useMemo(() => {
+    if (!selectedBooking) return 0;
+    const itemsTotal = selectedBooking.items.reduce((sum, it) => {
+      const q = orderQtyUpdates[it.id] !== undefined ? orderQtyUpdates[it.id] : it.qty;
+      return sum + (q * it.unitPrice);
+    }, 0);
+    const newItemsTotal = detailNewItems.reduce((sum, it) => sum + (it.qty * Number(it.tp)), 0);
+    return itemsTotal + newItemsTotal;
+  }, [selectedBooking, orderQtyUpdates, detailNewItems]);
+
+  const currentCollected = useMemo(() => {
+    if (!selectedBooking) return 0;
+    return Number(selectedBooking.advance_amount) + (Number(newPaymentAmt) || 0);
+  }, [selectedBooking, newPaymentAmt]);
+
+  const filteredDetailProducts = useMemo(() => 
+    products.filter(p => p.name.toLowerCase().includes(detailProdSearch.toLowerCase())), 
+    [products, detailProdSearch]
+  );
+
+  const addDetailNewItem = (p: Product) => {
+    if (detailNewItems.find(i => i.id === p.id)) return;
+    setDetailNewItems([...detailNewItems, { ...p, qty: 1 }]);
+    setDetailProdSearch("");
   };
 
   const handleUpdateBookingStats = async () => {
@@ -148,80 +167,75 @@ const Bookings: React.FC<BookingsProps> = ({ company, role, user }) => {
     try {
       const dbCo = mapToDbCompany(company);
       
-      const updatedExistingItems = selectedBooking.items.map(item => {
-        const dUpdateVal = Number(deliveryUpdates[item.id] || 0);
-        const newOrderQty = orderQtyUpdates[item.id] !== undefined ? orderQtyUpdates[item.id] : item.qty;
+      const updatedItems = selectedBooking.items.map(it => {
+        const d_qty = deliveryUpdates[it.id] || 0;
+        const o_qty = orderQtyUpdates[it.id] !== undefined ? orderQtyUpdates[it.id] : it.qty;
         return { 
-          ...item, 
-          qty: newOrderQty,
-          delivered_qty: (item.delivered_qty || 0) + dUpdateVal 
+          ...it, 
+          qty: o_qty,
+          delivered_qty: (it.delivered_qty || 0) + d_qty 
         };
       });
 
-      const formattedNewItems = detailNewItems.map(it => ({
+      const finalItems = [...updatedItems, ...detailNewItems.map(it => ({
         id: it.id,
         product_id: it.id,
         name: it.name,
         qty: it.qty,
-        unitPrice: Number(it.tp), 
+        unitPrice: it.tp,
         delivered_qty: 0
-      }));
+      }))];
 
-      const finalItems = [...updatedExistingItems, ...formattedNewItems];
-      
-      const payAmt = Number(newPaymentAmt) || 0;
-      const newAdvanceTotal = (selectedBooking.advance_amount || 0) + payAmt;
-      
-      const finalTotalAmount = finalItems.reduce((acc, it) => acc + (it.qty * it.unitPrice), 0);
+      const newTotal = finalItems.reduce((s, i) => s + (i.qty * i.unitPrice), 0);
+      const newAdvance = currentCollected;
 
-      const isAllDelivered = finalItems.every(i => i.delivered_qty >= i.qty);
-      const isAllPaid = newAdvanceTotal >= finalTotalAmount;
-      
-      let newStatus = selectedBooking.status;
-      if (isAllDelivered && isAllPaid) {
-        newStatus = 'COMPLETED';
-      } else if (isAllDelivered || isAllPaid || finalItems.some(i => i.delivered_qty > 0)) {
-        newStatus = 'PARTIAL';
-      }
-
-      const { error: bkError } = await supabase.from('bookings').update({
+      const { error: bkErr } = await supabase.from('bookings').update({
         items: finalItems,
-        advance_amount: newAdvanceTotal,
-        total_amount: finalTotalAmount,
-        status: newStatus,
-        qty: finalItems.reduce((s, i) => s + i.qty, 0)
+        total_amount: newTotal,
+        advance_amount: newAdvance,
+        qty: finalItems.reduce((s, i) => s + i.qty, 0),
+        status: newTotal <= newAdvance ? 'COMPLETED' : 'PARTIAL'
       }).eq('id', selectedBooking.id);
 
-      if (bkError) throw bkError;
+      if (bkErr) throw bkErr;
 
-      if (payAmt > 0) {
-        await supabase.from('transactions').insert([{
-          customer_id: selectedBooking.customer_id,
-          company: dbCo,
-          amount: payAmt,
-          payment_type: 'COLLECTION',
-          items: [{ note: `বুকিং পেমেন্ট (#${selectedBooking.id.slice(-4).toUpperCase()})` }],
-          submitted_by: user.name,
-          meta: { is_booking: true }
+      if (Number(newPaymentAmt) > 0) {
+        await supabase.from('transactions').insert([{ 
+          customer_id: selectedBooking.customer_id, company: dbCo, amount: Number(newPaymentAmt), 
+          payment_type: 'COLLECTION', items: [{ note: `বুকিং জমা (#${selectedBooking.id.slice(-4).toUpperCase()})` }], 
+          submitted_by: user.name, meta: { is_booking: true }
         }]);
       }
 
-      for (const id in deliveryUpdates) {
-        const q = Number(deliveryUpdates[id]);
-        if (q > 0) await supabase.rpc('increment_stock', { row_id: id, amt: -q });
+      for (const it of selectedBooking.items) {
+        const d_qty = deliveryUpdates[it.id] || 0;
+        if (d_qty > 0) {
+          await supabase.rpc('increment_stock', { row_id: it.id, amt: -d_qty });
+        }
       }
 
-      alert(newStatus === 'COMPLETED' ? "বুকিং সম্পন্ন হয়েছে এবং তালিকা থেকে সরিয়ে দেওয়া হয়েছে! ✅" : "বুকিং ফাইল আপডেট করা হয়েছে! ✅");
+      alert("বুকিং আপডেট সফল হয়েছে!");
       setShowDetailModal(false);
       setDeliveryUpdates({});
       setOrderQtyUpdates({});
       setNewPaymentAmt("");
       setDetailNewItems([]);
-      setShowDetailProdAdd(false);
       fetchData();
-    } catch (err: any) {
-      alert("ত্রুটি: " + err.message);
-    } finally { setIsSaving(false); }
+    } catch (err: any) { alert("ত্রুটি: " + err.message); } finally { setIsSaving(false); }
+  };
+
+  const downloadPDF = async () => {
+    if (!invoiceRef.current || isDownloading) return;
+    setIsDownloading(true);
+    try {
+      const canvas = await html2canvas(invoiceRef.current, { scale: 3, useCORS: true, backgroundColor: '#ffffff' });
+      const imgData = canvas.toDataURL('image/jpeg', 1.0);
+      const pdf = new jsPDF('p', 'mm', 'a4');
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const imgHeight = (canvas.height * pdfWidth) / canvas.width;
+      pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, imgHeight);
+      pdf.save(`Booking_${selectedBooking?.customer_name}.pdf`);
+    } catch (e) { alert("PDF তৈরি করা যায়নি।"); } finally { setIsDownloading(false); }
   };
 
   const handleAddBooking = async () => {
@@ -239,6 +253,8 @@ const Bookings: React.FC<BookingsProps> = ({ company, role, user }) => {
         delivered_qty: 0 
       }));
 
+      let resultId = null;
+
       if (targetBookingId) {
          const existing = activeBookingsForCust.find(b => b.id === targetBookingId);
          const combinedItems = [...(existing.items || []), ...newItemsFormatted];
@@ -253,8 +269,9 @@ const Bookings: React.FC<BookingsProps> = ({ company, role, user }) => {
            status: 'PARTIAL'
          }).eq('id', targetBookingId);
          if (error) throw error;
+         resultId = targetBookingId;
       } else {
-         const { error } = await supabase.from('bookings').insert([{ 
+         const { data, error } = await supabase.from('bookings').insert([{ 
            customer_id: selectedCust.id, 
            company: dbCo, 
            product_name: newItemsFormatted[0].name, 
@@ -263,8 +280,9 @@ const Bookings: React.FC<BookingsProps> = ({ company, role, user }) => {
            advance_amount: Number(form.advance), 
            total_amount: newItemsValue, 
            status: 'PENDING' 
-         }]);
+         }]).select();
          if (error) throw error;
+         resultId = data[0].id;
       }
 
       if (Number(form.advance) > 0) {
@@ -274,11 +292,12 @@ const Bookings: React.FC<BookingsProps> = ({ company, role, user }) => {
         }]);
       }
 
-      alert("বুকিং সফল হয়েছে!");
+      alert(`বুকিং সফলভাবে সম্পন্ন হয়েছে! ID: #${resultId.slice(-4).toUpperCase()}`);
       setShowAddModal(false);
       setBookingCart([]);
       setSelectedCust(null);
       setTargetBookingId(null);
+      setForm({ advance: 0 });
       setCurrentStep(1);
       fetchData();
     } catch (err: any) { alert("ত্রুটি: " + err.message); } finally { setIsSaving(false); }
@@ -296,17 +315,6 @@ const Bookings: React.FC<BookingsProps> = ({ company, role, user }) => {
     setBookingCart(updated.filter(i => i.qty > 0 || updates.qty === undefined));
   };
 
-  const addDetailNewItem = (p: Product) => {
-    if (selectedBooking?.items.find(i => i.product_id === p.id)) {
-        alert("এই প্রোডাক্টটি আগে থেকেই অর্ডার লিস্টে আছে। আপনি লিস্ট থেকে সরাসরি এর সংখ্যা বাড়িয়ে নিতে পারেন।");
-        setShowDetailProdAdd(false);
-        return;
-    }
-    if (detailNewItems.find(i => i.id === p.id)) return;
-    setDetailNewItems([...detailNewItems, { ...p, qty: 1, tp: p.tp }]);
-    setDetailProdSearch("");
-  };
-
   const filteredModalCustomers = useMemo(() => {
     return customers.filter(c => {
       const q = custSearch.toLowerCase().trim();
@@ -317,7 +325,6 @@ const Bookings: React.FC<BookingsProps> = ({ company, role, user }) => {
   }, [customers, custSearch, modalAreaSelection]);
 
   const filteredProducts = useMemo(() => products.filter(p => p.name.toLowerCase().includes(prodSearch.toLowerCase())), [products, prodSearch]);
-  const filteredDetailProducts = useMemo(() => products.filter(p => p.name.toLowerCase().includes(detailProdSearch.toLowerCase())), [products, detailProdSearch]);
   const uniqueAreas = useMemo(() => Array.from(new Set(customers.map(c => c.address?.trim()).filter(Boolean))).sort() as string[], [customers]);
   
   const filteredBookings = useMemo(() => {
@@ -328,24 +335,10 @@ const Bookings: React.FC<BookingsProps> = ({ company, role, user }) => {
     });
   }, [bookings, statusFilter]);
 
-  const currentTotal = useMemo(() => {
-    if (!selectedBooking) return 0;
-    const existingVal = selectedBooking.items.reduce((acc, it) => {
-       const qty = orderQtyUpdates[it.id] !== undefined ? orderQtyUpdates[it.id] : it.qty;
-       return acc + (qty * it.unitPrice);
-    }, 0);
-    const newVal = detailNewItems.reduce((s,i)=>s+(i.qty*Number(i.tp)), 0);
-    return existingVal + newVal;
-  }, [selectedBooking, detailNewItems, orderQtyUpdates]);
-
-  const currentCollected = useMemo(() => {
-    if (!selectedBooking) return 0;
-    return selectedBooking.advance_amount + (Number(newPaymentAmt) || 0);
-  }, [selectedBooking, newPaymentAmt]);
-
   return (
     <div className="space-y-6 md:space-y-10 pb-40 animate-reveal text-slate-900 font-sans mt-2">
       
+      {/* 📊 Top Stats */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 md:gap-6 no-print px-1">
         <div className="bg-white p-6 md:p-10 rounded-[2.5rem] border border-slate-100 shadow-xl flex flex-col justify-between group overflow-hidden relative">
            <div className="absolute top-0 right-0 w-24 h-24 bg-blue-50 rounded-bl-[4rem] -z-0 opacity-40 group-hover:scale-110 transition-transform"></div>
@@ -380,6 +373,7 @@ const Bookings: React.FC<BookingsProps> = ({ company, role, user }) => {
              <option value="PARTIAL">অংশিক (Partial)</option>
              <option value="COMPLETED">সম্পন্ন (History)</option>
           </select>
+          <button onClick={() => { fetchData(); }} className="w-12 h-12 md:w-14 md:h-14 bg-slate-100 rounded-2xl flex items-center justify-center hover:bg-indigo-50 transition-colors shadow-sm">🔄</button>
           <button onClick={() => { setShowAddModal(true); setCurrentStep(1); setBookingCart([]); setSelectedCust(null); setTargetBookingId(null); }} className="flex-[1.5] md:flex-none bg-indigo-600 text-white px-6 md:px-10 py-4 md:p-5 rounded-2xl md:rounded-3xl font-black uppercase text-[9px] tracking-widest shadow-xl active:scale-95 transition-all">+ নিউ বুকিং</button>
         </div>
       </div>
@@ -393,7 +387,7 @@ const Bookings: React.FC<BookingsProps> = ({ company, role, user }) => {
              <p className="text-sm font-black uppercase tracking-widest">বর্তমানে কোনো চলমান বুকিং নেই</p>
           </div>
         ) : filteredBookings.map((b, idx) => (
-            <div key={b.id} onClick={() => { setSelectedBooking(b); setDeliveryUpdates({}); setOrderQtyUpdates({}); setNewPaymentAmt(""); setDetailNewItems([]); setShowDetailProdAdd(false); setShowDetailModal(true); }} className="bg-white p-8 md:p-10 rounded-[2.5rem] md:rounded-[3.5rem] border border-slate-100 shadow-lg hover:shadow-2xl transition-all duration-700 cursor-pointer group relative flex flex-col justify-between animate-reveal" style={{ animationDelay: `${idx * 0.05}s` }}>
+            <div key={b.id} onClick={() => { setSelectedBooking(b); setShowDetailModal(true); }} className="bg-white p-8 md:p-10 rounded-[2.5rem] md:rounded-[3.5rem] border border-slate-100 shadow-lg hover:shadow-2xl transition-all duration-700 cursor-pointer group relative flex flex-col justify-between animate-reveal" style={{ animationDelay: `${idx * 0.05}s` }}>
                <div className="mb-6 md:mb-8">
                   <div className="flex justify-between items-start mb-4 md:mb-6">
                      <span className={`px-3 py-1 md:px-4 md:py-1.5 rounded-lg md:rounded-xl text-[8px] font-black uppercase tracking-widest shadow-sm ${
@@ -423,6 +417,7 @@ const Bookings: React.FC<BookingsProps> = ({ company, role, user }) => {
         ))}
       </div>
 
+      {/* ➕ Add New Booking Modal */}
       {showAddModal && (
         <div className="fixed inset-0 bg-slate-950/95 backdrop-blur-xl z-[4000] flex items-center justify-center p-4">
            <div className="bg-white rounded-[4rem] w-full max-w-4xl h-[85vh] flex flex-col shadow-2xl animate-reveal overflow-hidden">
@@ -554,6 +549,7 @@ const Bookings: React.FC<BookingsProps> = ({ company, role, user }) => {
         </div>
       )}
 
+      {/* 🔍 Booking Detail Modal */}
       {showDetailModal && selectedBooking && (
         <div className="fixed inset-0 bg-slate-950/95 backdrop-blur-xl z-[5000] flex flex-col items-center p-4 overflow-y-auto no-print">
            <div className="w-full max-w-4xl flex justify-between items-center mb-6 sticky top-0 z-[5001] bg-slate-900/90 p-6 rounded-[2.5rem] border border-white/10 shadow-2xl">
