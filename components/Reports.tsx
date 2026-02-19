@@ -27,9 +27,7 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName, user }) 
   const [selectedRoute, setSelectedRoute] = useState("");
   const [routes, setRoutes] = useState<string[]>([]);
   
-  // States for Booking Aggregate stats
   const [bookingStats, setBookingStats] = useState({ totalValue: 0, advance: 0, due: 0 });
-
   const [showSlipModal, setShowSlipModal] = useState(false);
   const [selectedSlipData, setSelectedSlipData] = useState<any>(null);
 
@@ -82,11 +80,7 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName, user }) 
         setReportData(data || []);
       } 
       else if (type === 'REPLACEMENT_SUMMARY') {
-        const { data } = await supabase
-          .from('replacements')
-          .select('*')
-          .eq('company', dbCompany);
-        
+        const { data } = await supabase.from('replacements').select('*').eq('company', dbCompany);
         const groupedMap: Record<string, any> = {};
         data?.forEach(r => {
           const key = r.product_name || 'Unknown Product';
@@ -107,28 +101,24 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName, user }) 
         setReportData(data || []);
       }
       else if (type === 'BOOKING_LOG') {
-        let q = supabase.from('bookings')
-          .select('*, customers(name, address, phone)')
-          .eq('company', dbCompany)
-          .neq('status', 'COMPLETED');
-        
-        if (startOfDay && endOfDay) q = q.gte('created_at', startOfDay).lte('created_at', endOfDay);
+        let q = supabase.from('bookings').select('*, customers(name, address, phone)').eq('company', dbCompany);
         const { data: bookings, error } = await q.order('created_at', { ascending: false });
-        
         if (error) throw error;
         
         const flatBookings: any[] = [];
         bookings?.forEach(b => {
           b.items.forEach((item: any) => {
-            if (item.delivered_qty > 0 || !selectedDate) {
+            const remaining = Number(item.qty) - Number(item.delivered_qty || 0);
+            if (remaining > 0) {
               flatBookings.push({
-                ...item,
+                ...item, // Contains name and unitPrice
                 customer_name: b.customers?.name,
                 address: b.customers?.address,
                 phone: b.customers?.phone,
                 booking_id: b.id,
                 status: b.status,
-                booking_created_at: b.created_at
+                booking_created_at: b.created_at,
+                remaining_qty: remaining
               });
             }
           });
@@ -136,53 +126,43 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName, user }) 
         setReportData(flatBookings);
       }
       else if (type === 'BOOKING_AGGREGATE') {
-        const { data: bks, error } = await supabase
-          .from('bookings')
-          .select('*')
-          .eq('company', dbCompany)
-          .in('status', ['PENDING', 'PARTIAL']);
-        
+        const { data: bks, error } = await supabase.from('bookings').select('*').eq('company', dbCompany);
         if (error) throw error;
-
+        
         const summary: Record<string, any> = {};
         let tVal = 0, tAdv = 0;
-
+        
         bks?.forEach(b => {
-          tVal += Number(b.total_amount || 0);
-          tAdv += Number(b.advance_amount || 0);
+          const bTotalOrdered = b.items?.reduce((s:number, i:any) => s + i.qty, 0) || 0;
+          const bTotalDelivered = b.items?.reduce((s:number, i:any) => s + (i.delivered_qty || 0), 0) || 0;
+          const bRemaining = bTotalOrdered - bTotalDelivered;
 
-          b.items?.forEach((item: any) => {
-            const key = `${item.name?.trim()}_${item.unitPrice}`;
-            if (!summary[key]) {
-              summary[key] = {
-                name: item.name,
-                price: Number(item.unitPrice) || 0,
-                ordered: 0,
-                delivered: 0,
-                remaining: 0
-              };
-            }
-            const qty = Number(item.qty) || 0;
-            const delivered = Number(item.delivered_qty) || 0;
-            summary[key].ordered += qty;
-            summary[key].delivered += delivered;
-            summary[key].remaining += (qty - delivered);
-          });
+          if (bRemaining > 0) {
+              tVal += Number(b.total_amount || 0);
+              tAdv += Number(b.advance_amount || 0);
+              b.items?.forEach((item: any) => {
+                const key = `${item.name?.trim()}_${item.unitPrice}`;
+                if (!summary[key]) {
+                  summary[key] = { name: item.name, price: Number(item.unitPrice) || 0, ordered: 0, delivered: 0, remaining: 0 };
+                }
+                const qty = Number(item.qty) || 0;
+                const delivered = Number(item.delivered_qty) || 0;
+                summary[key].ordered += qty;
+                summary[key].delivered += delivered;
+                summary[key].remaining += (qty - delivered);
+              });
+          }
         });
-
+        
         setBookingStats({ totalValue: tVal, advance: tAdv, due: tVal - tAdv });
-        setReportData(Object.values(summary).filter(s => s.ordered > 0).sort((a, b) => b.remaining - a.remaining));
+        setReportData(Object.values(summary).filter(s => s.remaining > 0).sort((a, b) => b.ordered - a.ordered));
       }
       else if (type === 'DELIVERY_LOG_A4' || type === 'MASTER_LOG_ALL') {
-        let query = supabase.from('transactions')
-          .select('*, customers(id, name, address)');
-        
+        let query = supabase.from('transactions').select('*, customers(id, name, address)');
         if (startOfDay && endOfDay) query = query.gte('created_at', startOfDay).lte('created_at', endOfDay);
         if (type === 'DELIVERY_LOG_A4') query = query.eq('company', dbCompany);
-
         const { data: txs, error } = await query.order('created_at', { ascending: true });
         if (error) throw error;
-
         const list = (txs || []).map(t => {
           const items = t.items || [];
           const totalQty = items.reduce((acc: number, item: any) => acc + (Number(item.qty) || 0), 0);
@@ -222,8 +202,8 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName, user }) 
     if (!isAdmin && !isStaff) return alert("আপনার ট্রানজেকশন ডিলিট করার অনুমতি নেই।");
     const memoIdShort = String(tx.id).slice(-6).toUpperCase();
     const confirmMsg = tx.payment_type === 'DUE' 
-      ? `আপনি কি নিশ্চিত এই মেমোটি (#${memoIdShort}) ডিলিট করতে চান? এটি ডিলিট করলে মালের স্টক স্বয়ংক্রিয়ভাবে আবার ইনভেন্টরিতে যোগ হয়ে যাবে।` 
-      : `আপনি কি নিশ্চিত এই আদায়ের এন্ট্রিটি (#${memoIdShort}) মুছে ফেলতে চান?`;
+      ? `আপনি কি নিশ্চিত এই মেমোটি (#${memoIdShort}) ডিলিট করতে চান?` 
+      : `আপনি কি নিশ্চিত এই আদায়ের এন্ট্রিটি (#${memoIdShort}) মুছে ফেলতে চান?`;
     if (!confirm(confirmMsg)) return;
     setLoading(true);
     try {
@@ -238,9 +218,9 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName, user }) 
       await supabase.from('notifications').delete().eq('customer_id', tx.customer_id).ilike('message', `%#${memoIdShort}%`);
       const { error } = await supabase.from('transactions').delete().eq('id', tx.id);
       if (error) throw error;
-      alert("সফলভাবে ডিলিট এবং স্টক অ্যাডজাস্ট করা হয়েছে!");
+      alert("সফলভাবে ডিলিট করা হয়েছে!");
       fetchReport(activeReport);
-    } catch (err: any) { alert("ডিলিট করা যায়নি: " + err.message); } finally { setLoading(false); }
+    } catch (err: any) { alert("ত্রুটি: " + err.message); } finally { setLoading(false); }
   };
 
   const handleDownloadPDF = async (ref: React.RefObject<HTMLDivElement>, filename: string) => {
@@ -302,8 +282,8 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName, user }) 
         totalQty += (Number(item.total_qty) || 0);
       }
       else if (activeReport === 'BOOKING_LOG') {
-        totalQty += (item.delivered_qty || 0);
-        sales += (item.delivered_qty || 0) * (item.unitPrice || 0);
+        totalQty += (item.remaining_qty || 0);
+        sales += (item.remaining_qty || 0) * (item.unitPrice || 0);
       }
       else {
         const amt = Number(item.amount || item.total_amount || 0);
@@ -317,9 +297,9 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName, user }) 
   const isLog = activeReport === 'DELIVERY_LOG_A4' || activeReport === 'MASTER_LOG_ALL';
   const isBooking = activeReport === 'BOOKING_LOG';
   const isAgg = activeReport === 'BOOKING_AGGREGATE';
+  const isDue = activeReport === 'CUSTOMER_DUES';
   const isRepl = activeReport === 'REPLACEMENT_SUMMARY';
   const isCombined = activeReport === 'MASTER_LOG_ALL';
-  const isDue = activeReport === 'CUSTOMER_DUES';
 
   if (activeReport === 'MAIN') {
     const reportOptions = [
@@ -354,96 +334,92 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName, user }) 
   }
 
   return (
-    <div className="bg-white p-6 md:p-12 rounded-[4rem] shadow-2xl min-h-[85vh] border relative animate-reveal text-black">
+    <div className="bg-white p-2 md:p-12 rounded-[2rem] md:rounded-[4rem] shadow-2xl min-h-[85vh] border relative animate-reveal text-black overflow-hidden">
       
       {/* 📊 Special HUD for Aggregates */}
       {isAgg && (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 no-print mb-12">
-            <div className="bg-slate-900 p-8 rounded-[3rem] text-white flex flex-col justify-center relative overflow-hidden group shadow-xl">
-               <div className="absolute -right-4 -bottom-4 text-7xl opacity-5 group-hover:scale-110 transition-transform">📅</div>
-               <p className="text-[9px] font-black text-indigo-400 uppercase tracking-widest mb-1 italic relative z-10">Total Booking Balance</p>
-               <h3 className="text-3xl font-black italic tracking-tighter relative z-10">৳{bookingStats.totalValue.toLocaleString()}</h3>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 no-print mb-8 px-2">
+            <div className="bg-slate-900 p-6 rounded-[2rem] text-white flex flex-col justify-center relative overflow-hidden group shadow-xl">
+               <div className="absolute -right-4 -bottom-4 text-6xl opacity-5 group-hover:scale-110 transition-transform">📅</div>
+               <p className="text-[8px] font-black text-indigo-400 uppercase tracking-widest mb-1 italic relative z-10">Total Booking Balance</p>
+               <h3 className="text-2xl font-black italic tracking-tighter relative z-10">৳{bookingStats.totalValue.toLocaleString()}</h3>
             </div>
-            <div className="bg-emerald-50 p-8 rounded-[3rem] border border-emerald-100 flex flex-col justify-center shadow-xl">
-               <p className="text-[9px] font-black text-emerald-600 uppercase tracking-widest mb-1 italic">Total Collected Advance</p>
-               <h3 className="text-3xl font-black italic tracking-tighter text-slate-900">৳{bookingStats.advance.toLocaleString()}</h3>
+            <div className="bg-emerald-50 p-6 rounded-[2rem] border border-emerald-100 flex flex-col justify-center shadow-xl">
+               <p className="text-[8px] font-black text-emerald-600 uppercase tracking-widest mb-1 italic">Total Collected Advance</p>
+               <h3 className="text-2xl font-black italic tracking-tighter text-slate-900">৳{bookingStats.advance.toLocaleString()}</h3>
             </div>
-            <div className="bg-rose-50 p-8 rounded-[3rem] border border-rose-100 flex flex-col justify-center shadow-xl">
-               <p className="text-[9px] font-black text-rose-600 uppercase tracking-widest mb-1 italic">Net Remaining Bill</p>
-               <h3 className="text-3xl font-black italic tracking-tighter text-rose-600">৳{bookingStats.due.toLocaleString()}</h3>
+            <div className="bg-rose-50 p-6 rounded-[2rem] border border-rose-100 flex flex-col justify-center shadow-xl">
+               <p className="text-[8px] font-black text-rose-600 uppercase tracking-widest mb-1 italic">Net Remaining Bill</p>
+               <h3 className="text-2xl font-black italic tracking-tighter text-rose-600">৳{bookingStats.due.toLocaleString()}</h3>
             </div>
         </div>
       )}
 
-      <div className="flex justify-between items-center mb-12 no-print flex-wrap gap-6">
-        <button onClick={() => setActiveReport('MAIN')} className="bg-slate-900 text-white px-10 py-5 rounded-[2rem] font-black text-[11px] uppercase shadow-2xl active:scale-95 transition-all">← ফিরে যান</button>
+      <div className="flex justify-between items-center mb-8 no-print flex-wrap gap-4 px-2">
+        <button onClick={() => setActiveReport('MAIN')} className="bg-slate-900 text-white px-6 md:px-10 py-4 md:py-5 rounded-[1.5rem] font-black text-[9px] md:text-[11px] uppercase shadow-2xl active:scale-95 transition-all">← ফিরে যান</button>
         
-        <div className="flex gap-4 flex-wrap items-center bg-slate-50 p-4 rounded-[2.5rem] border shadow-inner">
-          <div className="flex flex-col">
-            <label className="text-[8px] font-black uppercase text-slate-400 ml-4 mb-1 italic">পুরাতন মেমো আইডি (গ্লোবাল সার্চ)</label>
+        <div className="flex gap-2 md:gap-4 flex-wrap items-center bg-slate-50 p-3 rounded-[2rem] border shadow-inner w-full md:w-auto">
+          <div className="flex flex-col flex-1">
+            <label className="text-[7px] font-black uppercase text-slate-400 ml-3 mb-1 italic">পুরাতন মেমো আইডি</label>
             <input 
-              className="p-4 border-2 border-indigo-200 rounded-[1.8rem] text-[11px] font-black outline-none bg-white shadow-sm min-w-[200px] focus:border-indigo-600 transition-all" 
-              placeholder="যেমন: b8f4... (অটো সার্চ)" 
+              className="p-3 border-2 border-indigo-100 rounded-[1.2rem] text-[10px] font-black outline-none bg-white shadow-sm focus:border-indigo-600 transition-all" 
+              placeholder="Ref সার্চ..." 
               value={idSearch} 
               onChange={e => setIdSearch(e.target.value)} 
             />
           </div>
           {!isRepl && !isAgg && !idSearch && (
             <div className="flex flex-col">
-              <label className="text-[8px] font-black uppercase text-slate-400 ml-4 mb-1 italic">তারিখ অনুযায়ী (ফাঁকা রাখলে সব)</label>
-              <div className="flex items-center gap-2">
-                 <input type="date" className="p-4 border-2 border-white rounded-[1.8rem] text-[11px] font-black outline-none bg-white shadow-sm focus:border-blue-500 transition-all" value={selectedDate} onChange={e => setSelectedDate(e.target.value)} />
-                 {selectedDate && <button onClick={() => setSelectedDate("")} className="bg-slate-200 p-2 rounded-full text-xs">✕</button>}
+              <label className="text-[7px] font-black uppercase text-slate-400 ml-3 mb-1 italic">তারিখ</label>
+              <div className="flex items-center gap-1">
+                 <input type="date" className="p-3 border-2 border-white rounded-[1.2rem] text-[10px] font-black outline-none bg-white shadow-sm focus:border-blue-500 transition-all" value={selectedDate} onChange={e => setSelectedDate(e.target.value)} />
               </div>
             </div>
           )}
-          <div className="flex flex-col">
-            <label className="text-[8px] font-black uppercase text-slate-400 ml-4 mb-1 italic">সার্চ ({isRepl || isAgg ? 'প্রোডাক্ট' : 'দোকান'})</label>
-            <input className="p-4 border-2 border-white rounded-[1.8rem] text-[11px] font-black outline-none bg-white shadow-sm min-w-[200px] focus:border-blue-500 transition-all" placeholder="নাম বা ঠিকানা..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
+          <div className="flex flex-col flex-1">
+            <label className="text-[7px] font-black uppercase text-slate-400 ml-3 mb-1 italic">সার্চ ({isRepl || isAgg ? 'প্রোডাক্ট' : 'দোকান'})</label>
+            <input className="p-3 border-2 border-white rounded-[1.2rem] text-[10px] font-black outline-none bg-white shadow-sm focus:border-blue-500 transition-all" placeholder="খুঁজুন..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
           </div>
-          <div className="flex gap-2 self-end">
-            <button disabled={isDownloading || loading} onClick={() => handleDownloadPDF(reportRef, 'IFZA_Report')} className="bg-emerald-600 text-white px-8 py-5 rounded-[1.8rem] font-black text-[11px] uppercase shadow-lg active:scale-95 transition-all">
-              {isDownloading ? "ডাউনলোড..." : "PDF ডাউনলোড ⬇"}
-            </button>
-          </div>
+          <button disabled={isDownloading || loading} onClick={() => handleDownloadPDF(reportRef, 'IFZA_Report')} className="bg-emerald-600 text-white px-5 py-4 rounded-[1.2rem] font-black text-[9px] uppercase shadow-lg active:scale-95 transition-all self-end">
+             {isDownloading ? "..." : "PDF ⬇"}
+          </button>
         </div>
       </div>
 
-      <div className="max-w-[210mm] mx-auto border-2 border-slate-100 p-2 overflow-hidden bg-slate-50 rounded-2xl shadow-inner">
-         <div ref={reportRef} className="print-area printable-content p-10 bg-white text-black min-h-fit flex flex-col border-2 border-black">
+      <div className="w-full overflow-x-auto custom-scroll p-1 md:p-4 bg-slate-50 rounded-[2.5rem] shadow-inner">
+         <div ref={reportRef} className="print-area printable-content p-4 md:p-10 bg-white text-black min-h-fit flex flex-col border-2 border-black mx-auto" style={{ width: '100%', minWidth: '800px', maxWidth: '210mm' }}>
             <div className="text-center border-b-4 border-black pb-6 mb-8 relative">
-               <h1 className="text-5xl font-black uppercase italic mb-1 tracking-tighter text-black leading-none">IFZA ELECTRONICS</h1>
-               <p className="text-lg font-black uppercase tracking-[0.4em] mb-2 text-black">{isCombined ? 'ALL' : company} DIVISIONS</p>
-               <div className="inline-block px-10 py-2 bg-black text-white text-xs font-black uppercase rounded-full italic tracking-widest mt-2">
+               <h1 className="text-3xl md:text-5xl font-black uppercase italic mb-1 tracking-tighter text-black leading-none">IFZA ELECTRONICS</h1>
+               <p className="text-sm md:text-lg font-black uppercase tracking-[0.4em] mb-2 text-black">{isCombined ? 'ALL' : company} DIVISIONS</p>
+               <div className="inline-block px-8 py-1.5 bg-black text-white text-[9px] font-black uppercase rounded-full italic tracking-widest mt-2">
                   {isAgg ? 'PRODUCT DELIVERY AGGREGATE SUMMARY' : (idSearch ? 'GLOBAL SEARCH RESULTS' : activeReport.replace(/_/g, ' '))} ({selectedDate ? new Date(selectedDate).toLocaleDateString('bn-BD') : 'চলমান পেন্ডিং রিপোর্ট'})
                </div>
             </div>
 
-            {/* Aggregated Product Summary UI */}
             {isAgg ? (
                <table className="w-full border-collapse border-2 border-black flex-1">
                   <thead>
-                     <tr className="bg-slate-900 text-white text-[11px] font-black uppercase italic border-b-2 border-black">
-                        <th className="p-4 border-r border-black text-center w-10">#</th>
-                        <th className="p-4 border-r border-black text-left">পণ্যের নাম ও দর</th>
-                        <th className="p-4 border-r border-black text-center w-24">অর্ডার (Ord)</th>
-                        <th className="p-4 border-r border-black text-center w-24">গেছে (Dlv)</th>
-                        <th className="p-4 border-r border-black text-center w-24">বাকি (Rem)</th>
-                        <th className="p-4 border-black text-right w-32">বাকি মূল্য</th>
+                     <tr className="bg-slate-900 text-white text-[10px] font-black uppercase italic border-b-2 border-black">
+                        <th className="p-3 border-r border-black text-center w-10">#</th>
+                        <th className="p-3 border-r border-black text-left">পণ্যের নাম ও দর</th>
+                        <th className="p-3 border-r border-black text-center w-24">অর্ডার</th>
+                        <th className="p-3 border-r border-black text-center w-24">게ছে</th>
+                        <th className="p-3 border-r border-black text-center w-24">বাকি</th>
+                        <th className="p-3 border-black text-right w-32">বাকি মূল্য</th>
                      </tr>
                   </thead>
-                  <tbody className="text-[12px] font-black italic">
+                  <tbody className="text-[11px] font-black italic">
                      {filteredData.map((s, idx) => (
                         <tr key={idx} className="border-b border-black">
-                           <td className="p-4 border-r border-black text-center">{idx + 1}</td>
-                           <td className="p-4 border-r border-black uppercase truncate max-w-[200px]">
+                           <td className="p-3 border-r border-black text-center">{idx + 1}</td>
+                           <td className="p-3 border-r border-black uppercase truncate max-w-[200px]">
                               {s.name} <br/>
-                              <span className="text-[9px] text-slate-400">Rate: ৳{s.price}</span>
+                              <span className="text-[8px] text-slate-400">Rate: ৳{s.price}</span>
                            </td>
-                           <td className="p-4 border-r border-black text-center">{s.ordered}</td>
-                           <td className="p-4 border-r border-black text-center text-emerald-600">{s.delivered}</td>
-                           <td className="p-4 border-r border-black text-center text-rose-600">{s.remaining}</td>
-                           <td className="p-4 text-right">৳{(s.remaining * s.price).toLocaleString()}</td>
+                           <td className="p-3 border-r border-black text-center">{s.ordered}</td>
+                           <td className="p-3 border-r border-black text-center text-emerald-600">{s.delivered}</td>
+                           <td className={`p-3 border-r border-black text-center ${s.remaining > 0 ? 'text-rose-600 font-black scale-110' : 'text-slate-400'}`}>{s.remaining}</td>
+                           <td className="p-3 text-right">৳{(s.remaining * s.price).toLocaleString()}</td>
                         </tr>
                      ))}
                   </tbody>
@@ -451,7 +427,7 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName, user }) 
             ) : (
                <table className="w-full border-collapse border-2 border-black flex-1">
                   <thead>
-                     <tr className="bg-slate-50 text-[11px] font-black uppercase italic border-b-2 border-black text-black">
+                     <tr className="bg-slate-50 text-[10px] font-black uppercase italic border-b-2 border-black text-black">
                         <th className="p-3 border-r border-black text-center w-10">#</th>
                         <th className="p-3 border-r border-black text-left">{isRepl ? 'পণ্যের নাম' : 'বিবরণ ও ঠিকানা'}</th>
                         {isBooking ? (
@@ -471,7 +447,7 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName, user }) 
                         ) : (
                           <>
                            <th className="p-3 border-r border-black text-right w-32">টাকা</th>
-                           {!isLog && <th className="p-3 border-r border-black text-center w-24">{isDue ? 'বকেয়া' : 'পরিমাণ'}</th>}
+                           {!isLog && <th className="p-3 border-r border-black text-center w-24">{isDue ? '—' : 'পরিমাণ'}</th>}
                            {isLog && (
                              <>
                                <th className="p-3 border-r border-black text-center w-24">আদায়ের নোট</th>
@@ -488,7 +464,7 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName, user }) 
                      ) : filteredData.length === 0 ? (
                        <tr><td colSpan={6} className="p-20 text-center font-black uppercase text-xs italic">কোনো তথ্য পাওয়া যায়নি</td></tr>
                      ) : filteredData.map((item, idx) => {
-                        const amount = Number(item.amount || item.balance || item.total_amount || (item.stock * item.tp) || 0);
+                        const amount = Number(item.amount || item.balance || item.total_amount || 0);
                         const shopName = item.customers?.name || item.customer_name || item.name || item.product_name;
                         const shopAddress = item.customers?.address || item.address || '—';
                         const displayCompany = item.company ? `[${item.company}]` : '';
@@ -499,14 +475,25 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName, user }) 
                            <tr key={idx} className="border-b border-black text-black">
                               <td className="p-3 border-r border-black text-center">{idx + 1}</td>
                               <td className="p-3 border-r border-black">
-                                 <div className="flex flex-col">
-                                    <p className="font-black uppercase text-black text-[12px]">
-                                       {isCombined ? <span className="text-blue-700 mr-2">{displayCompany}</span> : ''}
-                                       {shopName}
-                                    </p>
-                                    <p className="text-[9px] font-bold italic opacity-80 leading-none mt-1">
-                                       REF: #{refId} | 📍 {shopAddress}
-                                    </p>
+                                 {/* বিবরণ কলামের বিন্যাস পরিবর্তন করা হয়েছে */}
+                                 <div className="flex flex-col md:flex-row md:justify-between md:items-start gap-4">
+                                    <div>
+                                       <p className="font-black uppercase text-black text-[11px]">
+                                          {isCombined ? <span className="text-blue-700 mr-2">{displayCompany}</span> : ''}
+                                          {shopName}
+                                       </p>
+                                       <p className="text-[8px] font-bold italic opacity-80 leading-none mt-1">
+                                          REF: #{refId} | 📍 {shopAddress}
+                                       </p>
+                                    </div>
+                                    
+                                    {/* বুকিং লগের ক্ষেত্রে মালের নাম ও রেট প্রদর্শন */}
+                                    {isBooking && (
+                                       <div className="md:text-right border-t md:border-t-0 md:border-l-2 border-black/10 pt-2 md:pt-0 md:pl-4 min-w-[120px]">
+                                          <p className="font-black uppercase text-indigo-600 text-[10px] leading-tight">{item.name}</p>
+                                          <p className="text-[9px] font-black text-slate-400 mt-1 italic leading-none">Rate: ৳{item.unitPrice}</p>
+                                       </div>
+                                    )}
                                  </div>
                               </td>
                               
@@ -514,7 +501,7 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName, user }) 
                                 <>
                                   <td className="p-3 border-r border-black text-center">{item.qty}</td>
                                   <td className="p-3 border-r border-black text-center text-blue-600">{item.delivered_qty}</td>
-                                  <td className="p-3 border-r border-black text-center text-red-600">{item.qty - item.delivered_qty}</td>
+                                  <td className={`p-3 border-r border-black text-center font-black ${item.remaining_qty > 0 ? 'text-rose-600' : 'text-slate-400'}`}>{item.remaining_qty}</td>
                                   <td className="p-2 text-center no-print-col">
                                      <button onClick={() => { setSelectedSlipData(item); setShowSlipModal(true); }} className="bg-slate-900 text-white px-3 py-1.5 rounded text-[8px] font-black uppercase">স্লিপ 🖨️</button>
                                   </td>
@@ -528,7 +515,7 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName, user }) 
                                 </>
                               ) : (
                                 <>
-                                  <td className={`p-3 border-r border-black text-right font-black italic text-[13px] ${isCollection ? 'text-emerald-600' : (amount < 0 ? 'text-red-600' : '')}`}>
+                                  <td className={`p-3 border-r border-black text-right font-black italic text-[12px] ${isCollection ? 'text-emerald-600' : (amount < 0 ? 'text-red-600' : '')}`}>
                                      {isCollection ? '-' : ''}৳{Math.abs(amount).toLocaleString()}
                                   </td>
                                   {!isLog && <td className="p-3 border-r border-black text-center">{isDue ? '—' : (item.stock || item.total_qty || 0)}</td>}
@@ -540,8 +527,7 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName, user }) 
                                      <td className="p-3 border-r border-black text-center no-print-col">
                                         <button 
                                           onClick={() => handleDeleteTransaction(item)}
-                                          className="w-10 h-10 bg-red-50 text-red-600 rounded-xl hover:bg-red-600 hover:text-white transition-all shadow-sm flex items-center justify-center text-sm"
-                                          title="Delete Transaction"
+                                          className="w-8 h-8 bg-red-50 text-red-600 rounded-lg hover:bg-red-600 hover:text-white transition-all shadow-sm flex items-center justify-center text-xs"
                                         >
                                            🗑️
                                         </button>
@@ -558,18 +544,18 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName, user }) 
             )}
 
             <div className="mt-12 border-t-4 border-black pt-6 flex justify-between items-end">
-               <div className="text-[10px] font-black uppercase italic space-y-1.5">
+               <div className="text-[9px] font-black uppercase italic space-y-1">
                   <p>* জেনারেট টাইম: {new Date().toLocaleString('bn-BD')}</p>
                   <p>* রিপোর্ট মেকার: {userName || 'SYSTEM'}</p>
                </div>
-               <div className="w-64 space-y-2 text-right">
-                  <div className="flex justify-between text-[11px] font-black border-b border-black/20 pb-1">
-                     <span>TOTAL QTY:</span>
+               <div className="w-64 space-y-1.5 text-right">
+                  <div className="flex justify-between text-[10px] font-black border-b border-black/20 pb-1">
+                     <span>{isAgg || isBooking ? 'REMAINING QTY:' : 'TOTAL QTY:'}</span>
                      <span>{totals.totalQty}</span>
                   </div>
                   {!isRepl && (
-                    <div className="flex justify-between text-2xl font-black text-black tracking-tighter">
-                      <span>G. TOTAL:</span>
+                    <div className="flex justify-between text-xl font-black text-black tracking-tighter">
+                      <span>{isAgg || isBooking ? 'PENDING VAL:' : 'G. TOTAL:'}</span>
                       <span>৳{(totals.sales || totals.totalDue || totals.stockValue).toLocaleString()}</span>
                     </div>
                   )}
@@ -583,58 +569,53 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName, user }) 
            <div className="w-full max-w-[148mm] flex justify-between gap-6 mb-8 sticky top-0 z-[5001] bg-slate-900/90 p-6 rounded-3xl border border-white/10 shadow-2xl items-center">
               <button onClick={() => setShowSlipModal(false)} className="text-white font-black uppercase text-[10px] px-6">← ফিরে যান</button>
               <button disabled={isDownloading} onClick={() => handleDownloadPDF(slipRef, 'Booking_Slip')} className="bg-emerald-600 text-white px-10 py-4 rounded-xl font-black text-[10px] uppercase shadow-xl active:scale-95 transition-all">
-                 {isDownloading ? "ডাউনলোড..." : "স্লিপ ডাউনলোড করুন ⬇"}
+                 {isDownloading ? "ডাউনলোড..." : "স্লিপ ⬇"}
               </button>
            </div>
 
-           <div ref={slipRef} className="bg-white w-[148mm] min-h-[210mm] p-10 flex flex-col font-sans text-black shadow-2xl border-[3px] border-black">
+           <div ref={slipRef} className="bg-white w-full max-w-[148mm] min-h-[210mm] p-10 flex flex-col font-sans text-black shadow-2xl border-[3px] border-black">
               <div className="text-center mb-10 border-b-4 border-black pb-6">
-                 <h1 className="text-[42px] font-black uppercase italic tracking-tighter leading-none mb-1">IFZA ELECTRONICS</h1>
-                 <p className="text-2xl font-black uppercase italic">{company} DIVISION</p>
-                 <div className="mt-4 inline-block px-8 py-1.5 bg-black text-white text-[10px] font-black uppercase rounded-full italic">DELIVERY CHALLAN (স্লিপ)</div>
+                 <h1 className="text-[32px] font-black uppercase italic tracking-tighter leading-none mb-1">IFZA ELECTRONICS</h1>
+                 <p className="text-xl font-black uppercase italic">{company} DIVISION</p>
+                 <div className="mt-4 inline-block px-8 py-1.5 bg-black text-white text-[9px] font-black uppercase rounded-full italic">DELIVERY CHALLAN</div>
               </div>
 
-              <div className="flex justify-between items-start mb-10 text-[12px] font-bold">
+              <div className="flex justify-between items-start mb-10 text-[11px] font-bold">
                  <div>
-                    <p className="text-[10px] font-black border-b border-black w-fit mb-2 uppercase opacity-60">ক্রেতা (Customer):</p>
-                    <p className="text-3xl font-black uppercase italic leading-none">{selectedSlipData.customer_name}</p>
-                    <p className="text-[13px] font-bold mt-2">📍 {selectedSlipData.address}</p>
-                    <p className="text-[13px] font-bold">📱 {selectedSlipData.phone || '—'}</p>
+                    <p className="text-[9px] font-black border-b border-black w-fit mb-2 uppercase opacity-60">Customer:</p>
+                    <p className="text-2xl font-black uppercase italic leading-none">{selectedSlipData.customer_name}</p>
+                    <p className="text-[12px] font-bold mt-2">📍 {selectedSlipData.address}</p>
                  </div>
                  <div className="text-right">
-                    <p className="text-[10px] font-black border-b border-black w-fit ml-auto mb-2 uppercase opacity-60">চালান তথ্য:</p>
-                    <p className="text-[14px] font-black">বুকিং আইডি: #{selectedSlipData.booking_id ? String(selectedSlipData.booking_id).slice(-6).toUpperCase() : 'N/A'}</p>
-                    <p className="text-[14px] font-black">তারিখ: {new Date().toLocaleDateString('bn-BD')}</p>
+                    <p className="text-[9px] font-black border-b border-black w-fit ml-auto mb-2 uppercase opacity-60">Info:</p>
+                    <p className="text-[12px] font-black">ID: #{selectedSlipData.booking_id ? String(selectedSlipData.booking_id).slice(-6).toUpperCase() : 'N/A'}</p>
+                    <p className="text-[12px] font-black">Date: {new Date().toLocaleDateString('bn-BD')}</p>
                  </div>
               </div>
 
               <div className="flex-1">
-                 <p className="text-[10px] font-black uppercase mb-4 italic text-slate-500">সরবরাহকৃত মালের বিবরণ:</p>
                  <table className="w-full border-collapse border-2 border-black">
                     <thead>
-                       <tr className="bg-black text-white text-[11px] font-black uppercase italic">
-                          <th className="p-3 text-left border border-black">পণ্যের নাম (Description)</th>
-                          <th className="p-3 text-center border border-black w-24">অর্ডার</th>
-                          <th className="p-3 text-center border border-black w-24">গেছে (Qty)</th>
+                       <tr className="bg-black text-white text-[10px] font-black uppercase italic">
+                          <th className="p-3 text-left border border-black">Description</th>
+                          <th className="p-3 text-center border border-black w-24">Order</th>
+                          <th className="p-3 text-center border border-black w-24">Delv</th>
                        </tr>
                     </thead>
                     <tbody>
-                       <tr className="border-b border-black text-[18px] font-black italic">
+                       <tr className="border-b border-black text-[16px] font-black italic">
                           <td className="p-4 uppercase border-r border-black">{selectedSlipData.name}</td>
                           <td className="p-4 text-center border-r border-black">{selectedSlipData.qty}</td>
                           <td className="p-4 text-center text-blue-600">{selectedSlipData.delivered_qty}</td>
                        </tr>
                     </tbody>
                  </table>
-                 <div className="mt-8 p-6 bg-slate-50 border-2 border-black rounded-2xl italic font-black text-[12px] leading-relaxed">
-                    দ্রষ্টব্য: এই স্লিপটি শুধুমাত্র বুকিংয়ের বিপরীতে পাঠানো মালের হিসাব নিশ্চিত করার জন্য। মালের কোনো ত্রুটি থাকলে তৎক্ষণাৎ কর্তৃপক্ষকে জানান।
-                 </div>
               </div>
 
               <div className="mt-20 flex justify-between items-end px-4 mb-4">
-                 <div className="text-center w-48 border-t-2 border-black pt-2 font-black italic text-[14px]">ক্রেতার স্বাক্ষর</div>
-                 <div className="text-center w-60 border-t-2 border-black pt-2 text-right">
-                    <p className="text-[18px] font-black uppercase italic tracking-tighter">কর্তৃপক্ষের স্বাক্ষর</p>
+                 <div className="text-center w-40 border-t-2 border-black pt-2 font-black italic text-[12px]">Buyer Sign</div>
+                 <div className="text-center w-40 border-t-2 border-black pt-2 text-right">
+                    <p className="text-[14px] font-black uppercase italic">Authority</p>
                  </div>
               </div>
            </div>
