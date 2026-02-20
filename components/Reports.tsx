@@ -155,14 +155,56 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName }) => {
     setIsDownloading(true);
     try {
       const element = ref.current;
-      const canvas = await html2canvas(element, { scale: 2, useCORS: true, backgroundColor: '#ffffff' });
+      const canvas = await html2canvas(element, { scale: 2, useCORS: true, backgroundColor: '#ffffff', logging: false });
       const imgData = canvas.toDataURL('image/jpeg', 0.95);
+      
+      // A4 dimensions in mm
+      const pageWidth = 210;
+      const pageHeight = 297;
+      const margin = 10;
+      const contentWidth = pageWidth - (2 * margin);
+      
+      // Calculate number of pages needed
+      const imgWidth = contentWidth;
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+      const pageHeightUsable = pageHeight - (2 * margin);
+      const numPages = Math.ceil(imgHeight / pageHeightUsable);
+      
+      // Create PDF with proper A4 size
       const pdf = new jsPDF('p', 'mm', 'a4');
-      const pageWidth = pdf.internal.pageSize.getWidth();
-      const imgHeight = (canvas.height * pageWidth) / canvas.width;
-      pdf.addImage(imgData, 'JPEG', 0, 0, pageWidth, imgHeight);
+      
+      // Add images for each page
+      let heightLeft = imgHeight;
+      let position = 0;
+      let pageCount = 1;
+      
+      for (let i = 0; i < numPages; i++) {
+        const sourceY = (i * pageHeightUsable * canvas.height) / imgHeight;
+        const sourceHeight = Math.min(pageHeightUsable * canvas.height / imgHeight, canvas.height - sourceY);
+        
+        const croppedCanvas = document.createElement('canvas');
+        croppedCanvas.width = canvas.width;
+        croppedCanvas.height = sourceHeight;
+        const ctx = croppedCanvas.getContext('2d');
+        if (ctx) {
+          ctx.drawImage(canvas, 0, sourceY, canvas.width, sourceHeight, 0, 0, canvas.width, sourceHeight);
+          const croppedImgData = croppedCanvas.toDataURL('image/jpeg', 0.95);
+          
+          pdf.addImage(croppedImgData, 'JPEG', margin, margin, imgWidth, (sourceHeight * imgWidth) / canvas.width);
+          
+          if (i < numPages - 1) {
+            pdf.addPage();
+          }
+        }
+      }
+      
       pdf.save(`${filename}_${new Date().getTime()}.pdf`);
-    } catch (err) { alert("PDF ডাউনলোড ব্যর্থ হয়েছে।"); } finally { setIsDownloading(false); }
+    } catch (err) { 
+      console.error("PDF Generation Error:", err);
+      alert("PDF ডাউনলোড ব্যর্থ হয়েছে: " + (err instanceof Error ? err.message : 'Unknown error'));
+    } finally { 
+      setIsDownloading(false); 
+    }
   };
 
   const filteredData = useMemo(() => {
