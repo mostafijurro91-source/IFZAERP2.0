@@ -150,7 +150,7 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName }) => {
     } catch (err) { console.error("Report Fetch Error:", err); } finally { setLoading(false); }
   };
 
-  const handleDownloadPDF = async (ref: React.RefObject<HTMLDivElement>, filename: string) => {
+  const handleDownloadPDF = async (ref: React.RefObject<HTMLDivElement | null>, filename: string) => {
     if (!ref.current || isDownloading) return;
     setIsDownloading(true);
     try {

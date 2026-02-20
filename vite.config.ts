@@ -5,6 +5,11 @@ import react from '@vitejs/plugin-react';
 export default defineConfig({
   plugins: [react()],
   base: './', // CRITICAL: Ensures paths are relative for cPanel/hosting
+  server: {
+    port: 5173,
+    host: true,
+    open: true
+  },
   build: {
     outDir: 'dist',
     emptyOutDir: true,
