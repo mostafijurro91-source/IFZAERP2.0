@@ -11,7 +11,7 @@ const Tracking: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [activeFilter, setActiveFilter] = useState<string>('ALL');
   const [connStatus, setConnStatus] = useState<'CONNECTED' | 'RECONNECTING' | 'OFFLINE'>('CONNECTED');
-  
+
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<any>(null);
   const staffLayerRef = useRef<any>(null);
@@ -38,17 +38,17 @@ const Tracking: React.FC = () => {
     if (typeof L === 'undefined') return;
 
     if (!mapInstanceRef.current && mapContainerRef.current) {
-      mapInstanceRef.current = L.map(mapContainerRef.current, { 
+      mapInstanceRef.current = L.map(mapContainerRef.current, {
         zoomControl: false,
-        attributionControl: false 
+        attributionControl: false
       }).setView([23.8103, 90.4125], 11);
-      
+
       L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png').addTo(mapInstanceRef.current);
-      
+
       staffLayerRef.current = L.layerGroup().addTo(mapInstanceRef.current);
       shopLayerRef.current = L.layerGroup().addTo(mapInstanceRef.current);
     }
-    
+
     if (mapInstanceRef.current) {
       updateMapUI();
     }
@@ -56,12 +56,12 @@ const Tracking: React.FC = () => {
 
   const fetchLiveLogistics = async () => {
     try {
-      const today = new Date(); today.setHours(0,0,0,0);
+      const today = new Date(); today.setHours(0, 0, 0, 0);
       const [staffRes, tasksRes] = await Promise.all([
         supabase.from('users').select('*').in('role', ['DELIVERY', 'STAFF', 'ADMIN']),
         supabase.from('delivery_tasks').select('*, customers(*)').gte('created_at', today.toISOString())
       ]);
-      
+
       setStaff(staffRes.data || []);
       setTasks(tasksRes.data || []);
     } catch (err) {
@@ -73,22 +73,25 @@ const Tracking: React.FC = () => {
 
   const updateMapUI = () => {
     if (!staffLayerRef.current || !shopLayerRef.current || typeof L === 'undefined') return;
-    
+
     staffLayerRef.current.clearLayers();
     shopLayerRef.current.clearLayers();
+
+    const bounds = L.latLngBounds();
+    let hasValidLocation = false;
 
     staff.forEach(s => {
       // Normalize comparison
       const dbCo = mapToDbCompany(s.company);
       if (activeFilter !== 'ALL' && dbCo !== activeFilter) return;
-      
+
       if (s.last_lat && s.last_lng) {
         const lastSeen = s.last_seen ? new Date(s.last_seen).getTime() : 0;
         const diffMinutes = (Date.now() - lastSeen) / 60000;
         const isLive = diffMinutes < 2;
 
         const color = dbCo === 'Transtec' ? '#fbbf24' : dbCo === 'SQ Light' ? '#06b6d4' : '#f43f5e';
-        
+
         const staffIcon = L.divIcon({
           className: 'custom-fleet-icon',
           html: `
@@ -103,33 +106,82 @@ const Tracking: React.FC = () => {
           iconAnchor: [20, 20]
         });
 
-        L.marker([s.last_lat, s.last_lng], { icon: staffIcon }).addTo(staffLayerRef.current);
+        const marker = L.marker([s.last_lat, s.last_lng], { icon: staffIcon }).addTo(staffLayerRef.current);
+        marker.bindPopup(`<div class="font-black text-xs uppercase italic">${s.name}</div><div class="text-[9px] text-blue-500">${isLive ? '🟢 LIVE NOW' : `Last seen ${Math.floor(diffMinutes)}m ago`}</div>`);
+        bounds.extend([s.last_lat, s.last_lng]);
+        hasValidLocation = true;
       }
     });
+
+    if (hasValidLocation && mapInstanceRef.current) {
+      mapInstanceRef.current.fitBounds(bounds, { padding: [50, 50], maxZoom: 16 });
+    }
   };
 
   return (
     <div className="relative w-full h-[75vh] md:h-[85vh] rounded-[4rem] overflow-hidden border-[8px] border-white shadow-2xl bg-slate-950 animate-reveal">
+      {loading && <div className="absolute inset-0 bg-slate-900 z-[1001] flex items-center justify-center text-white font-black uppercase tracking-[0.5em] animate-pulse">Establishing Satellite Link...</div>}
       <div ref={mapContainerRef} className="w-full h-full z-0"></div>
+
+      {/* Top Left Control Panel */}
       <div className="absolute top-8 left-8 z-[1000] w-full max-w-sm pointer-events-none">
-         <div className="bg-slate-900/80 backdrop-blur-3xl p-8 rounded-[3.5rem] border border-white/10 shadow-2xl space-y-6 pointer-events-auto">
-            <div className="flex items-center justify-between">
-               <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 bg-blue-600 rounded-2xl flex items-center justify-center text-2xl animate-pulse">🛰️</div>
-                  <div>
-                     <h3 className="text-white font-black uppercase italic tracking-tighter leading-none">Fleet Monitor</h3>
-                     <p className="text-[8px] text-blue-400 font-black uppercase mt-2 tracking-[0.3em]">Real-time Satellite Link</p>
-                  </div>
-               </div>
-               <div className={`w-2.5 h-2.5 rounded-full ${connStatus === 'CONNECTED' ? 'bg-emerald-500' : 'bg-red-500'}`}></div>
+        <div className="bg-slate-900/80 backdrop-blur-3xl p-8 rounded-[3.5rem] border border-white/10 shadow-2xl space-y-6 pointer-events-auto">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 bg-blue-600 rounded-2xl flex items-center justify-center text-2xl animate-pulse">🛰️</div>
+              <div>
+                <h3 className="text-white font-black uppercase italic tracking-tighter leading-none">Fleet Monitor</h3>
+                <p className="text-[8px] text-blue-400 font-black uppercase mt-2 tracking-[0.3em]">Real-time Satellite Link</p>
+              </div>
             </div>
-            <div className="flex gap-2 p-1.5 bg-black/40 rounded-2xl">
-               {['ALL', 'Transtec', 'SQ Light', 'SQ Cables'].map(co => (
-                 <button key={co} onClick={() => setActiveFilter(co)} className={`flex-1 py-3 rounded-xl text-[8px] font-black uppercase tracking-tighter transition-all ${activeFilter === co ? 'bg-white text-slate-900' : 'text-slate-500'}`}>{co}</button>
-               ))}
-            </div>
-         </div>
+            <div className={`w-2.5 h-2.5 rounded-full ${connStatus === 'CONNECTED' ? 'bg-emerald-500 shadow-[0_0_10px_#10b981]' : 'bg-red-500'}`}></div>
+          </div>
+          <div className="flex gap-2 p-1.5 bg-black/40 rounded-2xl">
+            {['ALL', 'Transtec', 'SQ Light', 'SQ Cables'].map(co => (
+              <button key={co} onClick={() => setActiveFilter(co)} className={`flex-1 py-3 rounded-xl text-[8px] font-black uppercase tracking-tighter transition-all ${activeFilter === co ? 'bg-white text-slate-900' : 'text-slate-500'}`}>{co}</button>
+            ))}
+          </div>
+        </div>
       </div>
+
+      {/* Bottom Right Staff List Panel */}
+      <div className="absolute bottom-8 right-8 z-[1000] w-[300px] pointer-events-none hidden md:block">
+        <div className="bg-slate-900/80 backdrop-blur-3xl p-6 rounded-[2.5rem] border border-white/10 shadow-2xl pointer-events-auto max-h-[300px] overflow-y-auto custom-scroll">
+          <h4 className="text-[9px] text-slate-400 font-black uppercase tracking-widest italic mb-4">Active Team Nodes</h4>
+          <div className="space-y-3">
+            {staff.filter(s => activeFilter === 'ALL' || mapToDbCompany(s.company) === activeFilter).map(s => {
+              const lastSeen = s.last_seen ? new Date(s.last_seen).getTime() : 0;
+              const diffMinutes = lastSeen > 0 ? (Date.now() - lastSeen) / 60000 : Infinity;
+              const isLive = diffMinutes < 2;
+              const hasLoc = s.last_lat && s.last_lng;
+
+              return (
+                <div key={s.id} className="flex justify-between items-center bg-white/5 p-3 rounded-2xl hover:bg-white/10 transition-colors cursor-pointer" onClick={() => {
+                  if (hasLoc && mapInstanceRef.current) {
+                    mapInstanceRef.current.setView([s.last_lat, s.last_lng], 16);
+                  }
+                }}>
+                  <div className="truncate pr-2">
+                    <p className="text-white font-black uppercase italic text-[11px] truncate">{s.name}</p>
+                    <p className="text-[7px] text-slate-400 font-black uppercase">{s.role}</p>
+                  </div>
+                  <div className="text-right shrink-0">
+                    {!hasLoc ? (
+                      <span className="text-[8px] text-rose-500 font-black uppercase italic bg-rose-500/10 px-2 py-1 rounded-md">No Signal</span>
+                    ) : isLive ? (
+                      <span className="text-[8px] text-emerald-400 font-black uppercase italic bg-emerald-400/10 px-2 py-1 rounded-md flex items-center gap-1"><span className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-pulse"></span> Live</span>
+                    ) : (
+                      <span className="text-[8px] text-slate-400 font-black uppercase italic bg-slate-800 px-2 py-1 rounded-md">{Math.floor(diffMinutes)}m ago</span>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+            {staff.length === 0 && <p className="text-[10px] text-slate-500 italic text-center py-4">No team nodes found</p>}
+          </div>
+        </div>
+      </div>
+      <style>{`.custom-fleet-icon { background: none !important; border: none !important; margin: 0 !important; } .leaflet-popup-content-wrapper { background: #0f172a; color: white; border-radius: 1rem; border: 1px solid rgba(255,255,255,0.1); } .leaflet-popup-tip { background: #0f172a; }`}</style>
     </div>
   );
 };
