@@ -414,8 +414,17 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName }) => {
                       </td>
                       <td className="p-3 border-r border-black text-center uppercase text-[9px] font-black">{item.company}</td>
                       <td className="p-3 border-r border-black text-right font-black italic text-emerald-600">৳{(Number(item.amount) || 0).toLocaleString()}</td>
-                      <td className="p-3 text-center uppercase text-[9px] font-black leading-tight">
-                        <span className="text-blue-700 bg-blue-50 px-2 py-1 rounded-md">{item.users?.name || item.submitted_by || 'Unknown'}</span>
+                      <td className="p-3 text-center leading-tight">
+                        <div className="flex flex-col items-center gap-1">
+                          <span className="text-blue-700 bg-blue-50 px-3 py-1 rounded-lg border border-blue-100 shadow-sm font-black uppercase text-[10px]">
+                            {item.submitted_by || 'জানা নেই'}
+                          </span>
+                          {item.meta?.approved_by && (
+                            <span className="text-[8px] font-bold text-slate-400 uppercase italic">
+                              Appr: {item.meta.approved_by}
+                            </span>
+                          )}
+                        </div>
                       </td>
                     </>
                   ) : activeReport === 'BOOKING_LOG' ? (
