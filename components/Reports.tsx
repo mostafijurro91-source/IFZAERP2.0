@@ -108,7 +108,7 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName }) => {
         const end = `${selectedDate}T23:59:59.999Z`;
         const { data } = await supabase
           .from('transactions')
-          .select('*, customers(name)')
+          .select('*, customers(name), users(name)')
           .eq('payment_type', 'COLLECTION')
           .eq('company', dbCompany)
           .gte('created_at', start)
@@ -414,7 +414,9 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName }) => {
                       </td>
                       <td className="p-3 border-r border-black text-center uppercase text-[9px] font-black">{item.company}</td>
                       <td className="p-3 border-r border-black text-right font-black italic text-emerald-600">৳{(Number(item.amount) || 0).toLocaleString()}</td>
-                      <td className="p-3 text-center uppercase text-[9px] font-black">{item.submitted_by}</td>
+                      <td className="p-3 text-center uppercase text-[9px] font-black leading-tight">
+                        <span className="text-blue-700 bg-blue-50 px-2 py-1 rounded-md">{item.users?.name || item.submitted_by || 'Unknown'}</span>
+                      </td>
                     </>
                   ) : activeReport === 'BOOKING_LOG' ? (
                     <>
