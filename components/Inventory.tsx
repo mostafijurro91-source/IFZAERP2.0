@@ -127,9 +127,12 @@ const Inventory: React.FC<InventoryProps> = ({ company, role }) => {
          })).filter(p => p.name);
 
          if (newProducts.length > 0) {
-            const { error } = await supabase.from('products').insert(newProducts);
+            // ইউজ করছি upsert যাতে একই নামের প্রোডাক্ট থাকলে ডুপ্লিকেট না হয়ে আপডেট হয়
+            const { error } = await supabase.from('products').upsert(newProducts, {
+               onConflict: 'name,company'
+            });
             if (error) throw error;
-            alert(`${newProducts.length} টি প্রোডাক্ট সফলভাবে ইম্পোর্ট হয়েছে!`);
+            alert(`${newProducts.length} টি প্রোডাক্টের ডাটা (প্রাইজ/স্টক) সফলভাবে সিঙ্ক হয়েছে! ✅`);
             fetchProducts();
          } else {
             alert("ফাইলে কোনো প্রোডাক্ট ডাটা পাওয়া যায়নি।");
