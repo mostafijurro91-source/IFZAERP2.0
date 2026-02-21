@@ -108,7 +108,7 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName }) => {
         const end = `${selectedDate}T23:59:59.999Z`;
         const { data } = await supabase
           .from('transactions')
-          .select('*, customers(name), users(name)')
+          .select('*, customers(name)')
           .eq('payment_type', 'COLLECTION')
           .eq('company', dbCompany)
           .gte('created_at', start)
