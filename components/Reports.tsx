@@ -78,7 +78,6 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName }) => {
           .from('transactions')
           .select('*, customers(name, address)')
           .eq('payment_type', 'DUE')
-          .eq('company', dbCompany)
           .gte('created_at', start)
           .lte('created_at', end)
           .order('created_at', { ascending: true });
