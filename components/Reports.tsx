@@ -36,11 +36,12 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName }) => {
     const dbCompany = mapToDbCompany(company);
     try {
       if (type === 'STOCK_REPORT') {
-        const [prodRes, ledgerRes, txRes, replRes] = await Promise.all([
+        const [prodRes, ledgerRes, txRes, replRes, bookRes] = await Promise.all([
           supabase.from('products').select('*').eq('company', dbCompany).order('name'),
           supabase.from('company_ledger').select('items_json').eq('company', dbCompany).eq('type', 'PURCHASE'),
           supabase.from('transactions').select('items, payment_type').eq('company', dbCompany),
-          supabase.from('replacements').select('product_id, product_name, qty').eq('company', dbCompany)
+          supabase.from('replacements').select('product_id, product_name, qty').eq('company', dbCompany),
+          supabase.from('bookings').select('items').eq('company', dbCompany)
         ]);
 
         const productsList = prodRes.data || [];
@@ -50,10 +51,12 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName }) => {
           statsMap[p.id] = { purchased: 0, sold: 0, replaced: 0, returned: 0 };
         });
 
+        // Track regular purchases strictly for cross-checking if needed
         ledgerRes.data?.forEach(l => l.items_json?.forEach((it: any) => {
           if (statsMap[it.id]) statsMap[it.id].purchased += Number(it.qty || 0);
         }));
 
+        // Track sales from Transactions (POS Sales)
         txRes.data?.forEach(tx => tx.items?.forEach((it: any) => {
           if (statsMap[it.id]) {
             if (it.action === 'SALE' || !it.action) statsMap[it.id].sold += Number(it.qty || 0);
@@ -61,15 +64,32 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName }) => {
           }
         }));
 
+        // Track sales from Bookings (Wholesale Deliveries)
+        bookRes.data?.forEach(b => b.items?.forEach((it: any) => {
+          if (statsMap[it.id]) {
+            statsMap[it.id].sold += Number(it.delivered_qty || 0);
+          }
+        }));
+
+        // Track warranty replacements
         replRes.data?.forEach(rp => {
           if (statsMap[rp.product_id]) statsMap[rp.product_id].replaced += Number(rp.qty || 0);
         });
 
-        setReportData(productsList.map(p => ({
-          ...p,
-          ...statsMap[p.id],
-          current_stock: (statsMap[p.id].purchased + statsMap[p.id].returned) - (statsMap[p.id].sold + statsMap[p.id].replaced)
-        })));
+        setReportData(productsList.map(p => {
+          const map = statsMap[p.id];
+          // Determine true historical "purchased" by reverse calculating from the true current DB stock
+          // Equation: stock = purchased - sold - replaced + returned
+          // Therfore: purchased = stock + sold + replaced - returned
+          const dynamicPurchased = Number(p.stock) + map.sold + map.replaced - map.returned;
+
+          return {
+            ...p,
+            ...map,
+            purchased: dynamicPurchased > 0 ? dynamicPurchased : map.purchased,
+            current_stock: p.stock
+          };
+        }));
       }
       else if (type === 'DELIVERY_LOG_A4') {
         const start = `${selectedDate}T00:00:00.000Z`;
