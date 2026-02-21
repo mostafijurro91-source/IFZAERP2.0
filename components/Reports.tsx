@@ -105,22 +105,41 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName }) => {
           .order('created_at', { ascending: false });
 
         const flattened: any[] = [];
-        data?.forEach(b => {
-          b.items?.forEach((it: any) => {
-            const rem = Number(it.qty || 0) - Number(it.delivered_qty || 0);
-            if (rem > 0) {
+        data?.forEach((b: any) => {
+          const totalOrd = b.items?.reduce((s: number, i: any) => s + (Number(i.qty) || 0), 0) || 0;
+          const totalDel = b.items?.reduce((s: number, i: any) => s + (Number(i.delivered_qty) || 0), 0) || 0;
+          const isActuallyDone = totalOrd > 0 && totalDel >= totalOrd;
+
+          if (!isActuallyDone) {
+            if (!b.items || b.items.length === 0) {
+              // If it's active but has no items, still show the customer name
               flattened.push({
                 ...b,
-                item_id: it.id,
-                item_name: it.name,
-                item_price: Number(it.unitPrice || 0),
-                item_ord: Number(it.qty || 0),
-                item_del: Number(it.delivered_qty || 0),
-                item_rem: rem,
-                item_rem_val: rem * Number(it.unitPrice || 0)
+                item_id: 'no-item',
+                item_name: 'No Pending Items',
+                item_price: 0,
+                item_ord: 0,
+                item_del: 0,
+                item_rem: 0,
+                item_rem_val: 0
+              });
+            } else {
+              b.items.forEach((it: any) => {
+                const rem = Number(it.qty || 0) - Number(it.delivered_qty || 0);
+                // Push all items to show the full order details of an active booking
+                flattened.push({
+                  ...b,
+                  item_id: it.id,
+                  item_name: it.name,
+                  item_price: Number(it.unitPrice || 0),
+                  item_ord: Number(it.qty || 0),
+                  item_del: Number(it.delivered_qty || 0),
+                  item_rem: rem,
+                  item_rem_val: rem * Number(it.unitPrice || 0)
+                });
               });
             }
-          });
+          }
         });
         setReportData(flattened);
       }
