@@ -102,7 +102,6 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName }) => {
           .from('bookings')
           .select('*, customers(name, address, phone)')
           .eq('company', dbCompany)
-          .neq('status', 'COMPLETED')
           .order('created_at', { ascending: false });
 
         const flattened: any[] = [];
