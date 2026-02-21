@@ -66,10 +66,14 @@ const Inventory: React.FC<InventoryProps> = ({ company, role }) => {
          const enrichedProducts = productsList.map(p => {
             const map = statsMap[p.id];
             const dynamicPurchased = Number(p.stock) + map.sold + map.replaced - map.returned;
+            const finalPurchased = dynamicPurchased > 0 ? dynamicPurchased : map.purchased;
             return {
                ...p,
-               stat_purchased: dynamicPurchased > 0 ? dynamicPurchased : map.purchased,
-               stat_sold: map.sold
+               stat_purchased: finalPurchased,
+               stat_sold: map.sold,
+               stat_replaced: map.replaced,
+               stat_returned: map.returned,
+               stat_value: p.stock * p.tp
             };
          });
 
@@ -187,29 +191,33 @@ const Inventory: React.FC<InventoryProps> = ({ company, role }) => {
          ) : (
             <div className={isCompact ? "bg-white rounded-[4rem] border border-slate-100 shadow-xl overflow-hidden" : "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8"}>
                {isCompact && (
-                  <div className="grid grid-cols-12 bg-slate-900 text-white/50 p-6 text-[8px] font-black uppercase tracking-widest italic">
-                     <div className="col-span-4 lg:col-span-5">Product SKU Identity</div>
-                     <div className="col-span-2 hidden lg:block text-right">TP Rate</div>
-                     <div className="col-span-2 text-right text-blue-400">Purchased</div>
-                     <div className="col-span-2 text-right text-orange-400">Sold</div>
-                     <div className="col-span-2 text-right text-emerald-400">Stock</div>
+                  <div className="grid grid-cols-12 bg-slate-900 text-white/50 p-6 text-[8px] font-black uppercase tracking-widest italic items-center">
+                     <div className="col-span-3">Product Model</div>
+                     <div className="col-span-1 text-right title-col">TP Rate</div>
+                     <div className="col-span-1 text-right text-blue-400">Purchased</div>
+                     <div className="col-span-1 text-right text-orange-400">Sold</div>
+                     <div className="col-span-1 text-right text-cyan-400">Replaced</div>
+                     <div className="col-span-1 text-right text-rose-400">Returned</div>
+                     <div className="col-span-2 text-right text-emerald-400">Total Value</div>
                      <div className="col-span-2 text-right">Manage</div>
                   </div>
                )}
                {filtered.map((p, idx) => (
                   isCompact ? (
-                     <div key={p.id} className="grid grid-cols-12 p-6 border-b border-slate-50 hover:bg-indigo-50/50 transition-all items-center group animate-reveal" style={{ animationDelay: `${idx * 0.02}s` }}>
-                        <div className="col-span-4 lg:col-span-5 truncate pr-8 font-black uppercase italic text-slate-800 group-hover:text-indigo-600 transition-colors text-[13px]">
+                     <div key={p.id} className="grid grid-cols-12 p-4 md:p-6 border-b border-slate-50 hover:bg-indigo-50/50 transition-all items-center group animate-reveal" style={{ animationDelay: `${idx * 0.02}s` }}>
+                        <div className="col-span-3 truncate pr-4 font-black uppercase italic text-slate-800 group-hover:text-indigo-600 transition-colors text-[11px] md:text-[13px]">
                            {p.name}
-                           <span className="lg:hidden block text-[9px] text-slate-400 mt-1">৳{p.tp}</span>
                         </div>
-                        <div className="col-span-2 hidden lg:block text-right font-black italic text-slate-400">৳{p.tp}</div>
-                        <div className="col-span-2 text-right font-black italic text-[16px] text-blue-600">{(p as any).stat_purchased || 0}</div>
-                        <div className="col-span-2 text-right font-black italic text-[16px] text-orange-600">{(p as any).stat_sold || 0}</div>
-                        <div className={`col-span-2 text-right font-black italic text-[18px] tracking-tighter ${p.stock < 10 ? 'text-rose-600 animate-pulse' : 'text-emerald-600'}`}>{p.stock}</div>
+                        <div className="col-span-1 text-right font-black italic text-slate-400 text-[10px] md:text-sm">৳{p.tp}</div>
+                        <div className="col-span-1 text-right font-black italic text-[12px] md:text-[16px] text-blue-600">{(p as any).stat_purchased || 0}</div>
+                        <div className="col-span-1 text-right font-black italic text-[12px] md:text-[16px] text-orange-600">{(p as any).stat_sold || 0}</div>
+                        <div className="col-span-1 text-right font-black italic text-[12px] md:text-[16px] text-cyan-600">{(p as any).stat_replaced || 0}</div>
+                        <div className="col-span-1 text-right font-black italic text-[12px] md:text-[16px] text-rose-600">{(p as any).stat_returned || 0}</div>
+                        <div className="col-span-2 text-right font-black italic text-[12px] md:text-[16px] text-emerald-600">৳{(p as any).stat_value.toLocaleString()}</div>
+
                         <div className="col-span-2 flex justify-end gap-2">
-                           <button onClick={() => handleOpenEdit(p)} className="w-10 h-10 bg-indigo-600 text-white rounded-xl flex items-center justify-center text-xs shadow-xl active:scale-90 transition-all">📝</button>
-                           {isAdmin && <button onClick={async () => { if (confirm("ডিলিট?")) { await supabase.from('products').delete().eq('id', p.id); fetchProducts(); } }} className="w-10 h-10 bg-rose-50 text-rose-500 rounded-xl flex items-center justify-center text-xs hover:bg-rose-500 hover:text-white transition-all shadow-sm">🗑️</button>}
+                           <button onClick={() => handleOpenEdit(p)} className="w-8 h-8 md:w-10 md:h-10 bg-indigo-600 text-white rounded-xl flex items-center justify-center text-xs shadow-xl active:scale-90 transition-all">📝</button>
+                           {isAdmin && <button onClick={async () => { if (confirm("ডিলিট?")) { await supabase.from('products').delete().eq('id', p.id); fetchProducts(); } }} className="w-8 h-8 md:w-10 md:h-10 bg-rose-50 text-rose-500 rounded-xl flex items-center justify-center text-xs hover:bg-rose-500 hover:text-white transition-all shadow-sm">🗑️</button>}
                         </div>
                      </div>
                   ) : (
@@ -224,25 +232,33 @@ const Inventory: React.FC<InventoryProps> = ({ company, role }) => {
                                  <button onClick={() => handleOpenEdit(p)} className="w-10 h-10 bg-white border rounded-xl flex items-center justify-center text-indigo-600 shadow-sm hover:bg-indigo-600 hover:text-white transition-all">📝</button>
                               </div>
                            </div>
-                           <h4 className="text-[15px] font-black uppercase italic text-slate-800 leading-tight mb-10 h-12 line-clamp-2">{p.name}</h4>
-                           <div className="border-t border-b py-4 my-6 flex justify-between text-center">
-                              <div className="flex-1 border-r border-slate-100">
-                                 <p className="text-[9px] font-black text-blue-400 uppercase tracking-widest italic mb-1">Purchased</p>
-                                 <p className="text-xl font-black italic text-blue-600">{(p as any).stat_purchased || 0}</p>
+                           <h4 className="text-[15px] font-black uppercase italic text-slate-800 leading-tight mb-8 h-12 line-clamp-2">{p.name}</h4>
+                           <div className="grid grid-cols-4 gap-2 border-t border-b py-4 my-6 text-center">
+                              <div className="border-r border-slate-100">
+                                 <p className="text-[8px] font-black text-blue-400 uppercase tracking-widest italic mb-1">Buy</p>
+                                 <p className="font-black italic text-blue-600">{(p as any).stat_purchased || 0}</p>
                               </div>
-                              <div className="flex-1">
-                                 <p className="text-[9px] font-black text-orange-400 uppercase tracking-widest italic mb-1">Sold</p>
-                                 <p className="text-xl font-black italic text-orange-600">{(p as any).stat_sold || 0}</p>
+                              <div className="border-r border-slate-100">
+                                 <p className="text-[8px] font-black text-orange-400 uppercase tracking-widest italic mb-1">Sell</p>
+                                 <p className="font-black italic text-orange-600">{(p as any).stat_sold || 0}</p>
+                              </div>
+                              <div className="border-r border-slate-100">
+                                 <p className="text-[8px] font-black text-cyan-500 uppercase tracking-widest italic mb-1">Rpl</p>
+                                 <p className="font-black italic text-cyan-600">{(p as any).stat_replaced || 0}</p>
+                              </div>
+                              <div>
+                                 <p className="text-[8px] font-black text-rose-400 uppercase tracking-widest italic mb-1">Rtn</p>
+                                 <p className="font-black italic text-rose-600">{(p as any).stat_returned || 0}</p>
                               </div>
                            </div>
                            <div className="flex justify-between items-end">
                               <div>
-                                 <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 italic">Trade Price</p>
+                                 <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 italic">TP Rate</p>
                                  <p className="font-black text-2xl text-slate-900 italic tracking-tighter">৳{p.tp}</p>
                               </div>
                               <div className="text-right">
-                                 <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 italic">MRP</p>
-                                 <p className="font-black text-lg text-indigo-400 italic tracking-tighter">৳{p.mrp}</p>
+                                 <p className="text-[8px] font-black text-emerald-500 uppercase tracking-widest mb-1 italic">Total Value</p>
+                                 <p className="font-black text-lg text-emerald-600 italic tracking-tighter">৳{(p as any).stat_value.toLocaleString()}</p>
                               </div>
                            </div>
                         </div>
