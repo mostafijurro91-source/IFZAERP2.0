@@ -202,44 +202,44 @@ const Collections: React.FC<CollectionsProps> = ({ company, user }) => {
                <p className="text-3xl font-black italic tracking-tighter">৳{safeFormat(isStaff ? globalStats[mapToDbCompany(user.company).toLowerCase().replace(' ', '')] : globalStats.todayTotal)}</p>
             </div>
 
-            <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-md group hover:shadow-xl transition-all">
-               <div className="flex items-center gap-3 mb-3">
+            <div className="bg-white p-6 rounded-[2.5rem] border border-slate-100 shadow-md group hover:shadow-xl transition-all">
+               <div className="flex items-center gap-3 mb-2">
                   <div className="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></div>
                   <p className="text-[10px] font-black uppercase text-amber-500 tracking-widest italic">TRANSTEC</p>
                </div>
                <div className="flex flex-col">
-                  <p className="text-2xl font-black italic text-slate-900 tracking-tighter">আদায়: ৳{safeFormat(globalStats.transtec)}</p>
-                  <p className="text-sm font-bold text-slate-400 italic">মাল যাচ্ছে: ৳{safeFormat(globalStats.salesTranstec)}</p>
+                  <p className="text-xl font-black italic text-slate-900 tracking-tighter">আদায়: ৳{safeFormat(globalStats.transtec)}</p>
+                  <p className="text-[11px] font-bold text-slate-400 italic">মাল যাচ্ছে: ৳{safeFormat(globalStats.salesTranstec)}</p>
                </div>
             </div>
 
-            <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-md group hover:shadow-xl transition-all">
-               <div className="flex items-center gap-3 mb-3">
+            <div className="bg-white p-6 rounded-[2.5rem] border border-slate-100 shadow-md group hover:shadow-xl transition-all">
+               <div className="flex items-center gap-3 mb-2">
                   <div className="w-2 h-2 rounded-full bg-cyan-500 animate-pulse"></div>
                   <p className="text-[10px] font-black uppercase text-cyan-500 tracking-widest italic">SQ LIGHT</p>
                </div>
                <div className="flex flex-col">
-                  <p className="text-2xl font-black italic text-slate-900 tracking-tighter">আদায়: ৳{safeFormat(globalStats.sqLight)}</p>
-                  <p className="text-sm font-bold text-slate-400 italic">মাল যাচ্ছে: ৳{safeFormat(globalStats.salesSqLight)}</p>
+                  <p className="text-xl font-black italic text-slate-900 tracking-tighter">আদায়: ৳{safeFormat(globalStats.sqLight)}</p>
+                  <p className="text-[11px] font-bold text-slate-400 italic">মাল যাচ্ছে: ৳{safeFormat(globalStats.salesSqLight)}</p>
                </div>
             </div>
 
-            <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-md group hover:shadow-xl transition-all">
-               <div className="flex items-center gap-3 mb-3">
+            <div className="bg-white p-6 rounded-[2.5rem] border border-slate-100 shadow-md group hover:shadow-xl transition-all">
+               <div className="flex items-center gap-3 mb-2">
                   <div className="w-2 h-2 rounded-full bg-rose-500 animate-pulse"></div>
                   <p className="text-[10px] font-black uppercase text-rose-500 tracking-widest italic">SQ CABLES</p>
                </div>
                <div className="flex flex-col">
-                  <p className="text-2xl font-black italic text-slate-900 tracking-tighter">আদায়: ৳{safeFormat(globalStats.sqCables)}</p>
-                  <p className="text-sm font-bold text-slate-400 italic">মাল যাচ্ছে: ৳{safeFormat(globalStats.salesSqCables)}</p>
+                  <p className="text-xl font-black italic text-slate-900 tracking-tighter">আদায়: ৳{safeFormat(globalStats.sqCables)}</p>
+                  <p className="text-[11px] font-bold text-slate-400 italic">মাল যাচ্ছে: ৳{safeFormat(globalStats.salesSqCables)}</p>
                </div>
             </div>
 
-            <div className="bg-orange-50 p-8 rounded-[2.5rem] border border-orange-100 shadow-md">
-               <p className="text-[10px] font-black uppercase text-orange-500 tracking-widest mb-3 italic">আজকের সারাংশ</p>
-               <div className="flex flex-col">
-                  <p className="text-xl font-black italic text-slate-900 tracking-tighter">মোট মাল: ৳{safeFormat(globalStats.salesTotal)}</p>
-                  <p className="text-xl font-black italic text-orange-600 tracking-tighter">বাকি পেন্ডিং: ৳{safeFormat(globalStats.pendingTotal)}</p>
+            <div className="bg-orange-50 p-6 rounded-[2.5rem] border border-orange-100 shadow-md">
+               <p className="text-[10px] font-black uppercase text-orange-500 tracking-widest mb-2 italic">আজকের সারাংশ</p>
+               <div className="flex flex-col gap-1">
+                  <p className="text-sm font-black italic text-slate-900 tracking-tighter">মোট মাল: ৳{safeFormat(globalStats.salesTotal)}</p>
+                  <p className="text-sm font-black italic text-orange-600 tracking-tighter">বাকি পেন্ডিং: ৳{safeFormat(globalStats.pendingTotal)}</p>
                </div>
             </div>
          </div>
