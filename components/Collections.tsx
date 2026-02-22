@@ -393,3 +393,28 @@ const Collections: React.FC<CollectionsProps> = ({ company, user }) => {
                                        >
                                           🗑️
                                        </button>
+                                    )}
+                                 </div>
+                              </div>
+                           );
+                        })}
+                        {confirmedToday.length === 0 && (
+                           <p className="text-center py-10 text-[11px] font-black text-slate-300 uppercase italic tracking-widest">আজ কোনো আদায় নেই</p>
+                        )}
+                     </div>
+                  </div>
+               </div>
+            </div>
+         </div>
+
+         {loading && (
+            <div className="fixed inset-0 bg-white/60 backdrop-blur-sm z-[9999] flex flex-col items-center justify-center font-black uppercase italic text-blue-600 animate-pulse tracking-[0.4em]">
+               <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mb-4"></div>
+               Syncing Collection Nodes...
+            </div>
+         )}
+      </div>
+   );
+};
+
+export default Collections;
