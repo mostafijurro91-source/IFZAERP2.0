@@ -32,7 +32,11 @@ const Collections: React.FC<CollectionsProps> = ({ company, user }) => {
       'SQ Cables': { reg: 0, book: 0 }
    });
 
-   const [globalStats, setGlobalStats] = useState({ todayTotal: 0, transtec: 0, sqLight: 0, sqCables: 0, pendingTotal: 0 });
+   const [globalStats, setGlobalStats] = useState({
+      todayTotal: 0, transtec: 0, sqLight: 0, sqCables: 0,
+      salesTotal: 0, salesTranstec: 0, salesSqLight: 0, salesSqCables: 0,
+      pendingTotal: 0
+   });
 
    const isAdmin = user.role === 'ADMIN';
    const isStaff = user.role === 'STAFF';
@@ -68,17 +72,26 @@ const Collections: React.FC<CollectionsProps> = ({ company, user }) => {
          setConfirmedToday(confirmed);
 
          let t_tr = 0, t_sl = 0, t_sc = 0;
+         let s_tr = 0, s_sl = 0, s_sc = 0;
+
          txRes.data?.forEach(tx => {
             const amt = Number(tx.amount) || 0;
             const co = mapToDbCompany(tx.company);
+
             if (tx.payment_type === 'COLLECTION') {
                if (co === 'Transtec') t_tr += amt;
                else if (co === 'SQ Light') t_sl += amt;
                else if (co === 'SQ Cables') t_sc += amt;
+            } else if (tx.payment_type === 'DUE') {
+               if (co === 'Transtec') s_tr += amt;
+               else if (co === 'SQ Light') s_sl += amt;
+               else if (co === 'SQ Cables') s_sc += amt;
             }
          });
+
          setGlobalStats({
             todayTotal: t_tr + t_sl + t_sc, transtec: t_tr, sqLight: t_sl, sqCables: t_sc,
+            salesTotal: s_tr + s_sl + s_sc, salesTranstec: s_tr, salesSqLight: s_sl, salesSqCables: s_sc,
             pendingTotal: filteredRequests.reduce((sum: number, r: any) => sum + Number(r.amount), 0)
          });
       } finally { setLoading(false); }
@@ -194,7 +207,10 @@ const Collections: React.FC<CollectionsProps> = ({ company, user }) => {
                   <div className="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></div>
                   <p className="text-[10px] font-black uppercase text-amber-500 tracking-widest italic">TRANSTEC</p>
                </div>
-               <p className="text-3xl font-black italic text-slate-900 tracking-tighter">৳{safeFormat(globalStats.transtec)}</p>
+               <div className="flex flex-col">
+                  <p className="text-2xl font-black italic text-slate-900 tracking-tighter">আদায়: ৳{safeFormat(globalStats.transtec)}</p>
+                  <p className="text-sm font-bold text-slate-400 italic">মাল যাচ্ছে: ৳{safeFormat(globalStats.salesTranstec)}</p>
+               </div>
             </div>
 
             <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-md group hover:shadow-xl transition-all">
@@ -202,7 +218,10 @@ const Collections: React.FC<CollectionsProps> = ({ company, user }) => {
                   <div className="w-2 h-2 rounded-full bg-cyan-500 animate-pulse"></div>
                   <p className="text-[10px] font-black uppercase text-cyan-500 tracking-widest italic">SQ LIGHT</p>
                </div>
-               <p className="text-3xl font-black italic text-slate-900 tracking-tighter">৳{safeFormat(globalStats.sqLight)}</p>
+               <div className="flex flex-col">
+                  <p className="text-2xl font-black italic text-slate-900 tracking-tighter">আদায়: ৳{safeFormat(globalStats.sqLight)}</p>
+                  <p className="text-sm font-bold text-slate-400 italic">মাল যাচ্ছে: ৳{safeFormat(globalStats.salesSqLight)}</p>
+               </div>
             </div>
 
             <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-md group hover:shadow-xl transition-all">
@@ -210,12 +229,18 @@ const Collections: React.FC<CollectionsProps> = ({ company, user }) => {
                   <div className="w-2 h-2 rounded-full bg-rose-500 animate-pulse"></div>
                   <p className="text-[10px] font-black uppercase text-rose-500 tracking-widest italic">SQ CABLES</p>
                </div>
-               <p className="text-3xl font-black italic text-slate-900 tracking-tighter">৳{safeFormat(globalStats.sqCables)}</p>
+               <div className="flex flex-col">
+                  <p className="text-2xl font-black italic text-slate-900 tracking-tighter">আদায়: ৳{safeFormat(globalStats.sqCables)}</p>
+                  <p className="text-sm font-bold text-slate-400 italic">মাল যাচ্ছে: ৳{safeFormat(globalStats.salesSqCables)}</p>
+               </div>
             </div>
 
             <div className="bg-orange-50 p-8 rounded-[2.5rem] border border-orange-100 shadow-md">
-               <p className="text-[10px] font-black uppercase text-orange-500 tracking-widest mb-3 italic">পেন্ডিং এন্ট্রি</p>
-               <p className="text-3xl font-black italic text-orange-600 tracking-tighter">৳{safeFormat(globalStats.pendingTotal)}</p>
+               <p className="text-[10px] font-black uppercase text-orange-500 tracking-widest mb-3 italic">আজকের সারাংশ</p>
+               <div className="flex flex-col">
+                  <p className="text-xl font-black italic text-slate-900 tracking-tighter">মোট মাল: ৳{safeFormat(globalStats.salesTotal)}</p>
+                  <p className="text-xl font-black italic text-orange-600 tracking-tighter">বাকি পেন্ডিং: ৳{safeFormat(globalStats.pendingTotal)}</p>
+               </div>
             </div>
          </div>
 
@@ -368,28 +393,3 @@ const Collections: React.FC<CollectionsProps> = ({ company, user }) => {
                                        >
                                           🗑️
                                        </button>
-                                    )}
-                                 </div>
-                              </div>
-                           );
-                        })}
-                        {confirmedToday.length === 0 && (
-                           <p className="text-center py-10 text-[11px] font-black text-slate-300 uppercase italic tracking-widest">আজ কোনো আদায় নেই</p>
-                        )}
-                     </div>
-                  </div>
-               </div>
-            </div>
-         </div>
-
-         {loading && (
-            <div className="fixed inset-0 bg-white/60 backdrop-blur-sm z-[9999] flex flex-col items-center justify-center font-black uppercase italic text-blue-600 animate-pulse tracking-[0.4em]">
-               <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mb-4"></div>
-               Syncing Collection Nodes...
-            </div>
-         )}
-      </div>
-   );
-};
-
-export default Collections;
