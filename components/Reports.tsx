@@ -383,7 +383,6 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName }) => {
                     <th className="p-3 border-r border-white/20 text-center w-24">কোম্পানি</th>
                     <th className="p-3 border-r border-white/20 text-right w-28">মেমো বিল</th>
                     <th className="p-3 border-r border-white/20 text-center w-32">সংগ্রহ (Manual)</th>
-                    <th className="p-3 border-r border-white/20 text-center w-24 no-print">প্রিন্ট</th>
                     <th className="p-3 text-center w-32">স্বাক্ষর</th>
                   </>
                 ) : activeReport === 'COLLECTION_REPORT' ? (
@@ -434,15 +433,17 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName }) => {
                   {activeReport === 'DELIVERY_LOG_A4' ? (
                     <>
                       <td className="p-3 border-r border-black">
-                        <p className="font-black uppercase">{item.customers?.name}</p>
-                        <p className="text-[9px] italic opacity-60">📍 {item.customers?.address}</p>
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <p className="font-black uppercase">{item.customers?.name}</p>
+                            <p className="text-[9px] italic opacity-60">📍 {item.customers?.address}</p>
+                          </div>
+                          <button onClick={() => { setSelectedMemo(item); setShowMemoModal(true); }} className="no-print opacity-30 hover:opacity-100 transition-opacity" title="মেমো প্রিন্ট">⎙</button>
+                        </div>
                       </td>
                       <td className="p-3 border-r border-black text-center uppercase text-[9px] font-black">{item.company}</td>
                       <td className="p-3 border-r border-black text-right font-black italic">৳{(Number(item.amount) || 0).toLocaleString()}</td>
                       <td className="p-3 border-r border-black"></td>
-                      <td className="p-3 border-r border-black text-center no-print">
-                        <button onClick={() => { setSelectedMemo(item); setShowMemoModal(true); }} className="px-3 py-1 bg-slate-900 text-white rounded text-[9px] font-black uppercase italic shadow-sm active:scale-95">Re-Print ⎙</button>
-                      </td>
                       <td className="p-3"></td>
                     </>
                   ) : activeReport === 'COLLECTION_REPORT' ? (
