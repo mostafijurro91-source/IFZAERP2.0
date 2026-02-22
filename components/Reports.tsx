@@ -22,8 +22,11 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName }) => {
   const [reportData, setReportData] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+  const [selectedMemo, setSelectedMemo] = useState<any>(null);
+  const [showMemoModal, setShowMemoModal] = useState(false);
 
   const reportRef = useRef<HTMLDivElement>(null);
+  const memoRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (activeReport !== 'MAIN') {
@@ -251,6 +254,37 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName }) => {
     }
   };
 
+  const downloadMemoPDF = async () => {
+    if (!memoRef.current || isDownloading) return;
+    setIsDownloading(true);
+    try {
+      const canvas = await html2canvas(memoRef.current, { scale: 3, useCORS: true, backgroundColor: '#ffffff' });
+      const imgData = canvas.toDataURL('image/jpeg', 1.0);
+      const pdf = new jsPDF('p', 'mm', 'a5');
+
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pdfHeight = pdf.internal.pageSize.getHeight();
+      const imgHeight = (canvas.height * pdfWidth) / canvas.width;
+
+      let heightLeft = imgHeight;
+      let position = 0;
+
+      // Add the first page
+      pdf.addImage(imgData, 'JPEG', 0, position, pdfWidth, imgHeight);
+      heightLeft -= pdfHeight;
+
+      // Add subsequent pages if content exceeds A5 height
+      while (heightLeft > 0) {
+        position -= pdfHeight;
+        pdf.addPage();
+        pdf.addImage(imgData, 'JPEG', 0, position, pdfWidth, imgHeight);
+        heightLeft -= pdfHeight;
+      }
+
+      pdf.save(`Old_Memo_${selectedMemo?.customers?.name || 'Unknown'}.pdf`);
+    } catch (e) { alert("PDF তৈরি করা যায়নি।"); } finally { setIsDownloading(false); }
+  };
+
   const filteredData = useMemo(() => {
     const q = searchQuery.toLowerCase().trim();
     return reportData.filter(item => {
@@ -349,6 +383,7 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName }) => {
                     <th className="p-3 border-r border-white/20 text-center w-24">কোম্পানি</th>
                     <th className="p-3 border-r border-white/20 text-right w-28">মেমো বিল</th>
                     <th className="p-3 border-r border-white/20 text-center w-32">সংগ্রহ (Manual)</th>
+                    <th className="p-3 border-r border-white/20 text-center w-24 no-print">প্রিন্ট</th>
                     <th className="p-3 text-center w-32">স্বাক্ষর</th>
                   </>
                 ) : activeReport === 'COLLECTION_REPORT' ? (
@@ -405,6 +440,9 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName }) => {
                       <td className="p-3 border-r border-black text-center uppercase text-[9px] font-black">{item.company}</td>
                       <td className="p-3 border-r border-black text-right font-black italic">৳{(Number(item.amount) || 0).toLocaleString()}</td>
                       <td className="p-3 border-r border-black"></td>
+                      <td className="p-3 border-r border-black text-center no-print">
+                        <button onClick={() => { setSelectedMemo(item); setShowMemoModal(true); }} className="px-3 py-1 bg-slate-900 text-white rounded text-[9px] font-black uppercase italic shadow-sm active:scale-95">Re-Print ⎙</button>
+                      </td>
                       <td className="p-3"></td>
                     </>
                   ) : activeReport === 'COLLECTION_REPORT' ? (
@@ -505,6 +543,78 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName }) => {
           </div>
         </div>
       </div>
+
+      {/* 🧾 OLD MEMO REPRINT MODAL */}
+      {showMemoModal && selectedMemo && (
+        <div className="fixed inset-0 bg-black/98 backdrop-blur-3xl z-[5000] flex flex-col items-center p-4 overflow-y-auto no-print">
+          <div className="w-full max-w-[148mm] flex justify-between items-center mb-8 sticky top-0 z-[5001] bg-slate-900/90 p-6 rounded-[2.5rem] border border-white/10">
+            <button onClick={() => setShowMemoModal(false)} className="text-white font-black uppercase text-[10px] px-6 transition-colors hover:text-blue-400">← ফিরে যান</button>
+            <button disabled={isDownloading} onClick={downloadMemoPDF} className="bg-white text-slate-900 px-8 py-4 rounded-xl font-black text-[10px] uppercase shadow-xl active:scale-95">PDF ডাউনলোড ⎙</button>
+          </div>
+
+          <div ref={memoRef} className="bg-white w-[148mm] min-h-fit p-10 flex flex-col font-sans text-black relative overflow-hidden">
+            <p className="text-center font-bold text-[11px] mb-2 italic leading-tight text-black">বিসমিল্লাহির রাহমানির রাহিম</p>
+
+            <div className="text-center border-b border-black pb-4 mb-4">
+              <h1 className="text-[26px] font-black uppercase italic tracking-tighter leading-none mb-1 text-blue-600">IFZA ELECTRONICS</h1>
+              <p className="text-[10px] font-black uppercase tracking-[0.2em] mb-1 text-black">{selectedMemo.company} DIVISION</p>
+            </div>
+
+            <div className="flex justify-between items-start mb-6">
+              <div className="space-y-1 flex-1">
+                <p className="text-[18px] font-black uppercase italic leading-tight text-blue-600">{selectedMemo.customers?.name}</p>
+                <p className="text-[10px] font-bold text-black">📍 ঠিকানা: {selectedMemo.customers?.address}</p>
+                <p className="text-[11px] text-black font-black mt-2">মেমো আইডি: #{String(selectedMemo.id).slice(-6).toUpperCase()}</p>
+              </div>
+
+              <div className="text-right space-y-1 w-44">
+                <p className="text-[9px] font-black uppercase text-black mb-2">তারিখ: {new Date(selectedMemo.created_at).toLocaleDateString('bn-BD')}</p>
+                <p className="flex justify-between font-black text-[14px] border-t border-black pt-1 text-black"><span>মেমো বিল:</span> <span className="text-red-600">৳{(Number(selectedMemo.amount) || 0).toLocaleString()}</span></p>
+              </div>
+            </div>
+
+            <div className="flex-1 mt-4">
+              <table className="w-full border-collapse">
+                <thead>
+                  <tr className="text-[10px] font-black uppercase italic border-b-2 border-black text-left text-black">
+                    <th className="py-2 w-8">Sl</th>
+                    <th className="py-2">বিবরণ (Description)</th>
+                    <th className="py-2 text-center w-16">দর</th>
+                    <th className="py-2 text-center w-12">Qty</th>
+                    <th className="py-2 text-right w-20">মোট</th>
+                  </tr>
+                </thead>
+                <tbody className={`${(selectedMemo.items?.length || 0) > 35 ? "text-[8px]" : "text-[10px]"} text-black`}>
+                  {selectedMemo.items?.map((it: any, idx: number) => (
+                    <tr key={idx} className={`font-bold italic border-b border-black ${it.action === 'RETURN' ? 'text-red-600' : it.action === 'REPLACE' ? 'text-blue-600' : 'text-black'}`}>
+                      <td className="py-2">{idx + 1}</td>
+                      <td className="py-2 uppercase">
+                        <span>{it.name}</span>
+                        {it.mrp && <span className="ml-2 text-[7px] font-black">MRP: ৳{it.mrp}</span>}
+                        {it.action && it.action !== 'SALE' && <span className="ml-2 text-[7px] border border-black px-1 rounded uppercase">[{it.action}]</span>}
+                      </td>
+                      <td className="py-2 text-center">৳{it.price || 0}</td>
+                      <td className="py-2 text-center">{it.qty}</td>
+                      <td className="py-2 text-right">৳{(Number(it.total) || 0).toLocaleString()}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="mt-8 border-t-2 border-black pt-4 flex justify-between items-end">
+              <div className="text-[8px] font-black uppercase italic space-y-1">
+                <p className="text-blue-600 font-extrabold">* IFZA ELECTRONICS GR.</p>
+                <p>মেমো তৈরী: {selectedMemo.submitted_by}</p>
+                <p>প্রিন্ট সময়: {new Date().toLocaleString('bn-BD')}</p>
+              </div>
+              <div className="text-right">
+                <p className="text-[15px] font-black italic tracking-tighter text-black">TOTAL: ৳{(Number(selectedMemo.amount) || 0).toLocaleString()}</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
