@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Company, User, Customer, formatCurrency } from '../types';
 import { supabase, mapToDbCompany, db } from '../lib/supabase';
 
@@ -25,6 +25,11 @@ const Collections: React.FC<CollectionsProps> = ({ company, user }) => {
    const [targetCompany, setTargetCompany] = useState<Company>(user.role === 'STAFF' ? user.company : 'SQ Cables');
    const [amount, setAmount] = useState<string>("");
    const [collectionType, setCollectionType] = useState<'REGULAR' | 'BOOKING'>('REGULAR');
+   const [showAreaDropdown, setShowAreaDropdown] = useState(false);
+   const [areaSearch, setAreaSearch] = useState("");
+   const [showCustDropdown, setShowCustDropdown] = useState(false);
+   const [custSearch, setCustSearch] = useState("");
+   const dropdownRef = useRef<HTMLDivElement>(null);
 
    const [custBalances, setCustBalances] = useState<Record<string, MultiBalance>>({
       'Transtec': { reg: 0, book: 0 },
@@ -50,6 +55,17 @@ const Collections: React.FC<CollectionsProps> = ({ company, user }) => {
          'SQ Cables': { reg: 0, book: 0 }
       });
    }, [selectedCust]);
+
+   useEffect(() => {
+      const handleClickOutside = (event: MouseEvent) => {
+         if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+            setShowAreaDropdown(false);
+            setShowCustDropdown(false);
+         }
+      };
+      document.addEventListener("mousedown", handleClickOutside);
+      return () => document.removeEventListener("mousedown", handleClickOutside);
+   }, []);
 
    const fetchData = async () => {
       setLoading(true);
@@ -106,7 +122,7 @@ const Collections: React.FC<CollectionsProps> = ({ company, user }) => {
             'SQ Cables': { reg: 0, book: 0 }
          };
 
-         txs?.forEach(tx => {
+         txs?.forEach((tx: any) => {
             const amt = Number(tx.amount);
             const dbCo = mapToDbCompany(tx.company);
             const isBooking = tx.meta?.is_booking === true || tx.items?.[0]?.note?.includes('বুকিং');
@@ -189,7 +205,11 @@ const Collections: React.FC<CollectionsProps> = ({ company, user }) => {
    }, [targetCompany, custBalances]);
 
    const uniqueAreas = useMemo(() => Array.from(new Set(customers.map(c => c.address?.trim()).filter(Boolean))).sort(), [customers]);
-   const filteredCustomers = customers.filter(c => !selectedArea || c.address === selectedArea);
+   const filteredAreas = useMemo(() => uniqueAreas.filter((a: any) => a.toLowerCase().includes(areaSearch.toLowerCase())), [uniqueAreas, areaSearch]);
+   const filteredCustomers = useMemo(() => customers.filter(c => !selectedArea || c.address === selectedArea), [customers, selectedArea]);
+   const searchedCustomers = useMemo(() => filteredCustomers.filter((c: Customer) =>
+      c.name.toLowerCase().includes(custSearch.toLowerCase()) || (c.phone && c.phone.includes(custSearch))
+   ), [filteredCustomers, custSearch]);
 
    return (
       <div className="space-y-8 pb-40 animate-reveal text-slate-900 font-sans">
@@ -258,20 +278,44 @@ const Collections: React.FC<CollectionsProps> = ({ company, user }) => {
                </div>
 
                <div className="space-y-8 relative z-10">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                     <div className="space-y-2">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 relative" ref={dropdownRef}>
+                     <div className="space-y-2 relative">
                         <label className="text-[9px] font-black uppercase text-slate-400 ml-4 italic">এরিয়া বাছাই</label>
-                        <select className="w-full p-5 bg-slate-50 border-2 border-slate-100 rounded-3xl outline-none font-bold text-sm shadow-inner focus:border-blue-500 transition-all" value={selectedArea} onChange={e => { setSelectedArea(e.target.value); setSelectedCust(null); }}>
-                           <option value="">সকল এরিয়া</option>
-                           {uniqueAreas.map(a => <option key={String(a)} value={String(a)}>{a}</option>)}
-                        </select>
+                        <button onClick={() => setShowAreaDropdown(!showAreaDropdown)} className={`w-full p-5 bg-slate-50 border-2 border-slate-100 rounded-3xl text-left outline-none font-bold text-sm shadow-inner transition-all flex items-center justify-between ${selectedArea ? 'border-blue-500' : ''}`}>
+                           {selectedArea ? <span className="font-black text-blue-700 text-xs uppercase">{selectedArea}</span> : <span className="text-xs font-bold text-slate-400 uppercase">সকল এরিয়া...</span>}
+                           <span>▼</span>
+                        </button>
+                        {showAreaDropdown && (
+                           <div className="absolute top-[85px] left-0 right-0 z-[600] bg-white border-2 border-slate-100 rounded-3xl shadow-2xl overflow-hidden animate-reveal">
+                              <input className="w-full p-4 border-b-2 border-slate-100 font-bold text-xs outline-none bg-slate-50" placeholder="এরিয়া সার্চ..." value={areaSearch} onChange={(e: any) => setAreaSearch(e.target.value)} />
+                              <div className="max-h-60 overflow-y-auto">
+                                 <div onClick={() => { setSelectedArea(""); setShowAreaDropdown(false); setAreaSearch(""); setSelectedCust(null); }} className="p-4 hover:bg-blue-50 border-b border-slate-50 cursor-pointer font-bold text-xs uppercase text-slate-400 italic">সকল এরিয়া</div>
+                                 {filteredAreas.map((a: string) => <div key={a} onClick={() => { setSelectedArea(a); setShowAreaDropdown(false); setAreaSearch(""); setSelectedCust(null); setShowCustDropdown(true); }} className="p-4 hover:bg-blue-50 border-b border-slate-50 cursor-pointer font-black text-xs uppercase">{a}</div>)}
+                              </div>
+                           </div>
+                        )}
                      </div>
-                     <div className="space-y-2">
+
+                     <div className="space-y-2 relative">
                         <label className="text-[9px] font-black uppercase text-slate-400 ml-4 italic">দোকান বাছাই</label>
-                        <select className="w-full p-5 bg-slate-50 border-2 border-slate-100 rounded-3xl outline-none font-black uppercase text-xs shadow-inner focus:border-blue-500 transition-all" value={selectedCust?.id || ""} onChange={e => setSelectedCust(customers.find(c => c.id === e.target.value))}>
-                           <option value="">দোকান সিলেক্ট করুন...</option>
-                           {filteredCustomers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                        </select>
+                        <button onClick={() => setShowCustDropdown(!showCustDropdown)} className={`w-full p-5 bg-slate-50 border-2 border-slate-100 rounded-3xl text-left outline-none font-black text-xs shadow-inner transition-all flex items-center justify-between ${selectedCust ? 'border-blue-500' : ''}`}>
+                           {selectedCust ? <span className="font-black text-blue-700 text-xs uppercase">{selectedCust.name}</span> : <span className="text-xs font-bold text-slate-400 uppercase">দোকান সিলেক্ট করুন...</span>}
+                           <span>▼</span>
+                        </button>
+                        {showCustDropdown && (
+                           <div className="absolute top-[85px] left-0 right-0 z-[500] bg-white border-2 border-slate-100 rounded-3xl shadow-2xl overflow-hidden animate-reveal">
+                              <input className="w-full p-4 border-b-2 border-slate-100 font-bold text-xs outline-none bg-slate-50" placeholder="দোকান সার্চ..." value={custSearch} onChange={(e: any) => setCustSearch(e.target.value)} />
+                              <div className="max-h-60 overflow-y-auto">
+                                 {searchedCustomers.map((c: Customer) => (
+                                    <div key={c.id} onClick={() => { setSelectedCust(c); setShowCustDropdown(false); setCustSearch(""); }} className="p-4 hover:bg-blue-50 border-b border-slate-50 cursor-pointer font-black text-xs uppercase flex justify-between">
+                                       <span>{c.name}</span>
+                                       <span className="text-[9px] text-slate-400 font-bold italic">{c.address}</span>
+                                    </div>
+                                 ))}
+                                 {searchedCustomers.length === 0 && <div className="p-6 text-center text-[10px] font-bold text-slate-400 uppercase italic">কোনো দোকান পাওয়া যায়নি</div>}
+                              </div>
+                           </div>
+                        )}
                      </div>
                   </div>
 
