@@ -22,6 +22,14 @@ export interface User {
   customer_id?: string;
 }
 
+export interface Customer {
+  id: string;
+  name: string;
+  address: string;
+  phone?: string;
+  area?: string;
+}
+
 export interface Product {
   id: string;
   name: string;
@@ -68,7 +76,7 @@ export interface Advertisement {
   created_at: string;
 }
 
-export const formatCurrency = (amount: any) => {
+export const formatCurrency = (amount: number | string) => {
   const value = typeof amount === 'number' ? amount : parseFloat(amount) || 0;
   return new Intl.NumberFormat('bn-BD', {
     style: 'currency',
