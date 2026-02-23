@@ -115,7 +115,14 @@ const Collections: React.FC<CollectionsProps> = ({ company, user }) => {
 
    const fetchCustomerBalances = async (customerId: string) => {
       try {
-         const { data: txs } = await supabase.from('transactions').select('amount, company, payment_type, meta, items').eq('customer_id', customerId);
+         const dbUserCompany = mapToDbCompany(user.company);
+         let query = supabase.from('transactions').select('amount, company, payment_type, meta, items').eq('customer_id', customerId);
+
+         if (isStaff) {
+            query = query.eq('company', dbUserCompany);
+         }
+
+         const { data: txs } = await query;
          const newBalances: Record<string, MultiBalance> = {
             'Transtec': { reg: 0, book: 0 },
             'SQ Light': { reg: 0, book: 0 },
@@ -216,52 +223,62 @@ const Collections: React.FC<CollectionsProps> = ({ company, user }) => {
 
          {/* 📊 LARGE TOP STATS GRID */}
          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-            <div className="lg:col-span-1 bg-slate-900 p-8 rounded-[2.5rem] text-white shadow-2xl relative overflow-hidden group">
-               <div className="absolute -right-4 -bottom-4 text-7xl opacity-10 group-hover:scale-110 transition-transform">💰</div>
-               <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-3 italic">আজকের মোট আদায়</p>
-               <p className="text-3xl font-black italic tracking-tighter">৳{safeFormat(isStaff ? globalStats[mapToDbCompany(user.company).toLowerCase().replace(' ', '')] : globalStats.todayTotal)}</p>
-            </div>
+            {isAdmin && (
+               <div className="lg:col-span-1 bg-slate-900 p-8 rounded-[2.5rem] text-white shadow-2xl relative overflow-hidden group">
+                  <div className="absolute -right-4 -bottom-4 text-7xl opacity-10 group-hover:scale-110 transition-transform">💰</div>
+                  <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-3 italic">আজকের মোট আদায়</p>
+                  <p className="text-3xl font-black italic tracking-tighter">৳{safeFormat(globalStats.todayTotal)}</p>
+               </div>
+            )}
 
-            <div className="bg-white p-6 rounded-[2.5rem] border border-slate-100 shadow-md group hover:shadow-xl transition-all">
-               <div className="flex items-center gap-3 mb-2">
-                  <div className="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></div>
-                  <p className="text-[10px] font-black uppercase text-amber-500 tracking-widest italic">TRANSTEC</p>
+            {(isAdmin || (isStaff && mapToDbCompany(user.company) === 'Transtec')) && (
+               <div className="bg-white p-6 rounded-[2.5rem] border border-slate-100 shadow-md group hover:shadow-xl transition-all">
+                  <div className="flex items-center gap-3 mb-2">
+                     <div className="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></div>
+                     <p className="text-[10px] font-black uppercase text-amber-500 tracking-widest italic">TRANSTEC</p>
+                  </div>
+                  <div className="flex flex-col">
+                     <p className="text-xl font-black italic text-slate-900 tracking-tighter">আদায়: ৳{safeFormat(globalStats.transtec)}</p>
+                     <p className="text-[11px] font-bold text-slate-400 italic">মাল যাচ্ছে: ৳{safeFormat(globalStats.salesTranstec)}</p>
+                  </div>
                </div>
-               <div className="flex flex-col">
-                  <p className="text-xl font-black italic text-slate-900 tracking-tighter">আদায়: ৳{safeFormat(globalStats.transtec)}</p>
-                  <p className="text-[11px] font-bold text-slate-400 italic">মাল যাচ্ছে: ৳{safeFormat(globalStats.salesTranstec)}</p>
-               </div>
-            </div>
+            )}
 
-            <div className="bg-white p-6 rounded-[2.5rem] border border-slate-100 shadow-md group hover:shadow-xl transition-all">
-               <div className="flex items-center gap-3 mb-2">
-                  <div className="w-2 h-2 rounded-full bg-cyan-500 animate-pulse"></div>
-                  <p className="text-[10px] font-black uppercase text-cyan-500 tracking-widest italic">SQ LIGHT</p>
+            {(isAdmin || (isStaff && mapToDbCompany(user.company) === 'SQ Light')) && (
+               <div className="bg-white p-6 rounded-[2.5rem] border border-slate-100 shadow-md group hover:shadow-xl transition-all">
+                  <div className="flex items-center gap-3 mb-2">
+                     <div className="w-2 h-2 rounded-full bg-cyan-500 animate-pulse"></div>
+                     <p className="text-[10px] font-black uppercase text-cyan-500 tracking-widest italic">SQ LIGHT</p>
+                  </div>
+                  <div className="flex flex-col">
+                     <p className="text-xl font-black italic text-slate-900 tracking-tighter">আদায়: ৳{safeFormat(globalStats.sqLight)}</p>
+                     <p className="text-[11px] font-bold text-slate-400 italic">মাল যাচ্ছে: ৳{safeFormat(globalStats.salesSqLight)}</p>
+                  </div>
                </div>
-               <div className="flex flex-col">
-                  <p className="text-xl font-black italic text-slate-900 tracking-tighter">আদায়: ৳{safeFormat(globalStats.sqLight)}</p>
-                  <p className="text-[11px] font-bold text-slate-400 italic">মাল যাচ্ছে: ৳{safeFormat(globalStats.salesSqLight)}</p>
-               </div>
-            </div>
+            )}
 
-            <div className="bg-white p-6 rounded-[2.5rem] border border-slate-100 shadow-md group hover:shadow-xl transition-all">
-               <div className="flex items-center gap-3 mb-2">
-                  <div className="w-2 h-2 rounded-full bg-rose-500 animate-pulse"></div>
-                  <p className="text-[10px] font-black uppercase text-rose-500 tracking-widest italic">SQ CABLES</p>
+            {(isAdmin || (isStaff && mapToDbCompany(user.company) === 'SQ Cables')) && (
+               <div className="bg-white p-6 rounded-[2.5rem] border border-slate-100 shadow-md group hover:shadow-xl transition-all">
+                  <div className="flex items-center gap-3 mb-2">
+                     <div className="w-2 h-2 rounded-full bg-rose-500 animate-pulse"></div>
+                     <p className="text-[10px] font-black uppercase text-rose-500 tracking-widest italic">SQ CABLES</p>
+                  </div>
+                  <div className="flex flex-col">
+                     <p className="text-xl font-black italic text-slate-900 tracking-tighter">আদায়: ৳{safeFormat(globalStats.sqCables)}</p>
+                     <p className="text-[11px] font-bold text-slate-400 italic">মাল যাচ্ছে: ৳{safeFormat(globalStats.salesSqCables)}</p>
+                  </div>
                </div>
-               <div className="flex flex-col">
-                  <p className="text-xl font-black italic text-slate-900 tracking-tighter">আদায়: ৳{safeFormat(globalStats.sqCables)}</p>
-                  <p className="text-[11px] font-bold text-slate-400 italic">মাল যাচ্ছে: ৳{safeFormat(globalStats.salesSqCables)}</p>
-               </div>
-            </div>
+            )}
 
-            <div className="bg-orange-50 p-6 rounded-[2.5rem] border border-orange-100 shadow-md">
-               <p className="text-[10px] font-black uppercase text-orange-500 tracking-widest mb-2 italic">আজকের সারাংশ</p>
-               <div className="flex flex-col gap-1">
-                  <p className="text-sm font-black italic text-slate-900 tracking-tighter">মোট মাল: ৳{safeFormat(globalStats.salesTotal)}</p>
-                  <p className="text-sm font-black italic text-orange-600 tracking-tighter">বাকি পেন্ডিং: ৳{safeFormat(globalStats.pendingTotal)}</p>
+            {isAdmin && (
+               <div className="bg-orange-50 p-6 rounded-[2.5rem] border border-orange-100 shadow-md">
+                  <p className="text-[10px] font-black uppercase text-orange-500 tracking-widest mb-2 italic">আজকের সারাংশ</p>
+                  <div className="flex flex-col gap-1">
+                     <p className="text-sm font-black italic text-slate-900 tracking-tighter">মোট মাল: ৳{safeFormat(globalStats.salesTotal)}</p>
+                     <p className="text-sm font-black italic text-orange-600 tracking-tighter">বাকি পেন্ডিং: ৳{safeFormat(globalStats.pendingTotal)}</p>
+                  </div>
                </div>
-            </div>
+            )}
          </div>
 
          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
