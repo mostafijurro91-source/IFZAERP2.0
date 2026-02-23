@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { Company, User, formatCurrency } from '../types';
+import { Company, User, Customer, formatCurrency } from '../types';
 import { supabase, mapToDbCompany, db } from '../lib/supabase';
 
 interface CollectionsProps {
@@ -16,12 +16,12 @@ interface MultiBalance {
 const Collections: React.FC<CollectionsProps> = ({ company, user }) => {
    const [pendingRequests, setPendingRequests] = useState<any[]>([]);
    const [confirmedToday, setConfirmedToday] = useState<any[]>([]);
-   const [customers, setCustomers] = useState<any[]>([]);
+   const [customers, setCustomers] = useState<Customer[]>([]);
    const [loading, setLoading] = useState(true);
    const [isSaving, setIsSaving] = useState(false);
 
    const [selectedArea, setSelectedArea] = useState("");
-   const [selectedCust, setSelectedCust] = useState<any>(null);
+   const [selectedCust, setSelectedCust] = useState<Customer | null>(null);
    const [targetCompany, setTargetCompany] = useState<Company>(user.role === 'STAFF' ? user.company : 'SQ Cables');
    const [amount, setAmount] = useState<string>("");
    const [collectionType, setCollectionType] = useState<'REGULAR' | 'BOOKING'>('REGULAR');
@@ -64,17 +64,17 @@ const Collections: React.FC<CollectionsProps> = ({ company, user }) => {
 
          setCustomers(custRes || []);
          let filteredRequests = reqRes.data || [];
-         if (isStaff) filteredRequests = filteredRequests.filter(r => r.company === dbUserCompany);
+         if (isStaff) filteredRequests = filteredRequests.filter((r: any) => r.company === dbUserCompany);
          setPendingRequests(filteredRequests);
 
-         let confirmed = (txRes.data || []).filter(tx => tx.payment_type === 'COLLECTION');
-         if (isStaff) confirmed = confirmed.filter(tx => tx.company === dbUserCompany);
+         let confirmed = (txRes.data || []).filter((tx: any) => tx.payment_type === 'COLLECTION');
+         if (isStaff) confirmed = confirmed.filter((tx: any) => tx.company === dbUserCompany);
          setConfirmedToday(confirmed);
 
          let t_tr = 0, t_sl = 0, t_sc = 0;
          let s_tr = 0, s_sl = 0, s_sc = 0;
 
-         txRes.data?.forEach(tx => {
+         txRes.data?.forEach((tx: any) => {
             const amt = Number(tx.amount) || 0;
             const co = mapToDbCompany(tx.company);
 
