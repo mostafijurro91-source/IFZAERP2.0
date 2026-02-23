@@ -32,6 +32,8 @@ const Sales: React.FC<SalesProps> = ({ company, role, user }) => {
   const [areaFilter, setAreaFilter] = useState("");
   const [prodSearch, setProdSearch] = useState("");
   const [showCustDropdown, setShowCustDropdown] = useState(false);
+  const [showAreaDropdown, setShowAreaDropdown] = useState(false);
+  const [areaSearch, setAreaSearch] = useState("");
 
   const [globalDiscount, setGlobalDiscount] = useState<number>(0);
   const [cashReceived, setCashReceived] = useState<number>(0);
@@ -61,6 +63,17 @@ const Sales: React.FC<SalesProps> = ({ company, role, user }) => {
       setLastPaymentFromDb(0);
     }
   }, [selectedCust, company]);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setShowAreaDropdown(false);
+        setShowCustDropdown(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
   const loadData = async () => {
     setLoading(true);
@@ -334,6 +347,8 @@ const Sales: React.FC<SalesProps> = ({ company, role, user }) => {
     });
   }, [customers, custSearch, areaFilter]);
 
+  const uniqueAreas = useMemo(() => Array.from(new Set(customers.map((c: Customer) => c.address?.trim()).filter(Boolean))).sort(), [customers]);
+  const filteredAreas = useMemo(() => uniqueAreas.filter((a: any) => a.toLowerCase().includes(areaSearch.toLowerCase())), [uniqueAreas, areaSearch]);
   const filteredProducts = useMemo(() => products.filter((p: Product) => p.name.toLowerCase().includes(prodSearch.toLowerCase())), [products, prodSearch]);
 
   return (
@@ -343,23 +358,37 @@ const Sales: React.FC<SalesProps> = ({ company, role, user }) => {
         {/* LEFT: Product Selection */}
         <div className="flex-1 space-y-6 no-print">
           <div className="bg-white p-6 rounded-[2rem] border shadow-sm" ref={dropdownRef}>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <select className="w-full p-4 bg-slate-50 border rounded-2xl outline-none font-bold text-xs appearance-none" value={areaFilter} onChange={e => { setAreaFilter(e.target.value); setShowCustDropdown(true); }}>
-                <option value="">সকল এরিয়া</option>
-                {Array.from(new Set(customers.map(c => c.address?.trim()).filter(Boolean))).sort().map(a => <option key={a} value={a}>{a}</option>)}
-              </select>
-              <button onClick={() => setShowCustDropdown(!showCustDropdown)} className={`w-full p-4 rounded-2xl border flex items-center justify-between text-left ${selectedCust ? 'bg-blue-50 border-blue-200' : 'bg-slate-50'}`}>
-                {selectedCust ? <span className="font-black text-blue-700 text-xs uppercase">{selectedCust.name}</span> : <span className="text-xs font-bold text-slate-400 uppercase">দোকান বাছাই করুন...</span>}
-                <span>▼</span>
-              </button>
-              {showCustDropdown && (
-                <div className="absolute top-[280px] left-8 right-8 md:w-[400px] z-[500] bg-white border rounded-2xl shadow-2xl overflow-hidden animate-reveal">
-                  <input className="w-full p-4 border-b font-bold text-xs" placeholder="খুঁজুন..." value={custSearch} onChange={(e: any) => setCustSearch(e.target.value)} />
-                  <div className="max-h-60 overflow-y-auto">
-                    {filteredCustomers.map((c: Customer) => <div key={c.id} onClick={() => { setSelectedCust(c); setShowCustDropdown(false); }} className="p-4 hover:bg-blue-50 border-b cursor-pointer font-bold text-xs uppercase">{c.name} - {c.address}</div>)}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 relative">
+              <div className="relative">
+                <button onClick={() => setShowAreaDropdown(!showAreaDropdown)} className={`w-full p-4 rounded-2xl border flex items-center justify-between text-left ${areaFilter ? 'bg-blue-50 border-blue-200' : 'bg-slate-50'}`}>
+                  {areaFilter ? <span className="font-black text-blue-700 text-xs uppercase">{areaFilter}</span> : <span className="text-xs font-bold text-slate-400 uppercase">সকল এরিয়া</span>}
+                  <span>▼</span>
+                </button>
+                {showAreaDropdown && (
+                  <div className="absolute top-[60px] left-0 right-0 z-[600] bg-white border rounded-2xl shadow-2xl overflow-hidden animate-reveal">
+                    <input className="w-full p-4 border-b font-bold text-xs" placeholder="এরিয়া সার্চ..." value={areaSearch} onChange={(e: any) => setAreaSearch(e.target.value)} />
+                    <div className="max-h-60 overflow-y-auto">
+                      <div onClick={() => { setAreaFilter(""); setShowAreaDropdown(false); setAreaSearch(""); setSelectedCust(null); }} className="p-4 hover:bg-blue-50 border-b cursor-pointer font-bold text-xs uppercase">সকল এরিয়া</div>
+                      {filteredAreas.map((a: any) => <div key={a} onClick={() => { setAreaFilter(a); setShowAreaDropdown(false); setAreaSearch(""); setSelectedCust(null); setShowCustDropdown(true); }} className="p-4 hover:bg-blue-50 border-b cursor-pointer font-bold text-xs uppercase">{a}</div>)}
+                    </div>
                   </div>
-                </div>
-              )}
+                )}
+              </div>
+
+              <div className="relative">
+                <button onClick={() => setShowCustDropdown(!showCustDropdown)} className={`w-full p-4 rounded-2xl border flex items-center justify-between text-left ${selectedCust ? 'bg-blue-50 border-blue-200' : 'bg-slate-50'}`}>
+                  {selectedCust ? <span className="font-black text-blue-700 text-xs uppercase">{selectedCust.name}</span> : <span className="text-xs font-bold text-slate-400 uppercase">দোকান বাছাই করুন...</span>}
+                  <span>▼</span>
+                </button>
+                {showCustDropdown && (
+                  <div className="absolute top-[60px] left-0 right-0 z-[500] bg-white border rounded-2xl shadow-2xl overflow-hidden animate-reveal">
+                    <input className="w-full p-4 border-b font-bold text-xs" placeholder="খুঁজুন..." value={custSearch} onChange={(e: any) => setCustSearch(e.target.value)} />
+                    <div className="max-h-60 overflow-y-auto">
+                      {filteredCustomers.map((c: Customer) => <div key={c.id} onClick={() => { setSelectedCust(c); setShowCustDropdown(false); }} className="p-4 hover:bg-blue-50 border-b cursor-pointer font-bold text-xs uppercase">{c.name} - {c.address}</div>)}
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
 
@@ -492,7 +521,7 @@ const Sales: React.FC<SalesProps> = ({ company, role, user }) => {
             <tbody className="divide-y text-[12px] font-bold">
               {recentMemos.length === 0 ? (
                 <tr><td colSpan={5} className="p-20 text-center opacity-20 font-black uppercase italic italic text-sm">এই তারিখে কোনো মেমো পাওয়া যায়নি</td></tr>
-              ) : recentMemos.map((memo, idx) => (
+              ) : recentMemos.map((memo: any, idx: number) => (
                 <tr key={memo.id} className="hover:bg-blue-50/50 transition-colors animate-reveal" style={{ animationDelay: `${idx * 0.05}s` }}>
                   <td className="px-8 py-6 text-slate-400 font-black italic">
                     {new Date(memo.created_at).toLocaleTimeString('bn-BD', { hour: '2-digit', minute: '2-digit' })}
@@ -507,7 +536,7 @@ const Sales: React.FC<SalesProps> = ({ company, role, user }) => {
                     </span>
                   </td>
                   <td className="px-8 py-6 text-right font-black italic text-base text-slate-900 tracking-tighter">
-                    {formatCurrency(memo.amount)}
+                    {formatCurrency(Number(memo.amount))}
                   </td>
                   <td className="px-8 py-6 text-center">
                     <button
@@ -585,7 +614,7 @@ const Sales: React.FC<SalesProps> = ({ company, role, user }) => {
                   </tr>
                 </thead>
                 <tbody className={`${cart.length > 40 ? "text-[7.5px]" : cart.length > 25 ? "text-[8.5px]" : "text-[10px]"} text-black`}>
-                  {cart.map((it, idx) => (
+                  {cart.map((it: CartItem, idx: number) => (
                     <tr key={idx} className={`font-bold italic border-b border-black/10 ${it.action === 'RETURN' ? 'text-red-600' : it.action === 'REPLACE' ? 'text-blue-600' : 'text-black'}`}>
                       <td className={`${cart.length > 30 ? 'py-0.5' : 'py-1.5'}`}>{idx + 1}</td>
                       <td className={`${cart.length > 30 ? 'py-0.5' : 'py-1.5'} uppercase`}>
