@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { Company, formatCurrency, UserRole } from '../types';
+import { Company, formatCurrency, UserRole, Product, Customer } from '../types';
 import { supabase, mapToDbCompany } from '../lib/supabase';
 import { jsPDF } from 'jspdf';
 import * as html2canvasModule from 'html2canvas';
@@ -50,17 +50,17 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName }) => {
         const productsList = prodRes.data || [];
         const statsMap: Record<string, any> = {};
 
-        productsList.forEach(p => {
+        productsList.forEach((p: Product) => {
           statsMap[p.id] = { purchased: 0, sold: 0, replaced: 0, returned: 0 };
         });
 
         // Track regular purchases strictly for cross-checking if needed
-        ledgerRes.data?.forEach(l => l.items_json?.forEach((it: any) => {
+        ledgerRes.data?.forEach((l: any) => l.items_json?.forEach((it: any) => {
           if (statsMap[it.id]) statsMap[it.id].purchased += Number(it.qty || 0);
         }));
 
         // Track sales from Transactions (POS Sales)
-        txRes.data?.forEach(tx => tx.items?.forEach((it: any) => {
+        txRes.data?.forEach((tx: any) => tx.items?.forEach((it: any) => {
           if (statsMap[it.id]) {
             if (it.action === 'SALE' || !it.action) statsMap[it.id].sold += Number(it.qty || 0);
             if (it.action === 'RETURN') statsMap[it.id].returned += Number(it.qty || 0);
@@ -68,18 +68,18 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName }) => {
         }));
 
         // Track sales from Bookings (Wholesale Deliveries)
-        bookRes.data?.forEach(b => b.items?.forEach((it: any) => {
+        bookRes.data?.forEach((b: any) => b.items?.forEach((it: any) => {
           if (statsMap[it.id]) {
             statsMap[it.id].sold += Number(it.delivered_qty || 0);
           }
         }));
 
         // Track warranty replacements
-        replRes.data?.forEach(rp => {
+        replRes.data?.forEach((rp: any) => {
           if (statsMap[rp.product_id]) statsMap[rp.product_id].replaced += Number(rp.qty || 0);
         });
 
-        setReportData(productsList.map(p => {
+        setReportData(productsList.map((p: Product) => {
           const map = statsMap[p.id];
           // Determine true historical "purchased" by reverse calculating from the true current DB stock
           // Equation: stock = purchased - sold - replaced + returned
@@ -180,12 +180,12 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName }) => {
           supabase.from('transactions').select('customer_id, amount, payment_type, company').eq('company', dbCompany)
         ]);
         const dues: Record<string, number> = {};
-        txs?.forEach(tx => {
+        txs?.forEach((tx: any) => {
           const cid = tx.customer_id;
           if (!dues[cid]) dues[cid] = 0;
           dues[cid] += (tx.payment_type === 'COLLECTION' ? -Number(tx.amount || 0) : Number(tx.amount || 0));
         });
-        setReportData(custs?.map(c => ({ ...c, balance: dues[c.id] || 0 })).filter(c => Math.abs(c.balance) > 1) || []);
+        setReportData(custs?.map((c: any) => ({ ...c, balance: dues[c.id] || 0 })).filter((c: any) => Math.abs(c.balance) > 1) || []);
       }
     } catch (err) { console.error("Report Fetch Error:", err); } finally { setLoading(false); }
   };
@@ -266,19 +266,24 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName }) => {
       const pdfHeight = pdf.internal.pageSize.getHeight();
       const imgHeight = (canvas.height * pdfWidth) / canvas.width;
 
-      let heightLeft = imgHeight;
-      let position = 0;
+      const itemCount = selectedMemo?.items?.length || 0;
+      const shouldScaleStore = itemCount > 25 && imgHeight > pdfHeight && imgHeight < pdfHeight * 1.5;
 
-      // Add the first page
-      pdf.addImage(imgData, 'JPEG', 0, position, pdfWidth, imgHeight);
-      heightLeft -= pdfHeight;
+      if (shouldScaleStore) {
+        pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, pdfHeight);
+      } else {
+        let heightLeft = imgHeight;
+        let position = 0;
 
-      // Add subsequent pages if content exceeds A5 height
-      while (heightLeft > 0) {
-        position -= pdfHeight;
-        pdf.addPage();
         pdf.addImage(imgData, 'JPEG', 0, position, pdfWidth, imgHeight);
         heightLeft -= pdfHeight;
+
+        while (heightLeft > 0) {
+          position -= pdfHeight;
+          pdf.addPage();
+          pdf.addImage(imgData, 'JPEG', 0, position, pdfWidth, imgHeight);
+          heightLeft -= pdfHeight;
+        }
       }
 
       pdf.save(`Old_Memo_${selectedMemo?.customers?.name || 'Unknown'}.pdf`);
@@ -287,7 +292,7 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName }) => {
 
   const filteredData = useMemo(() => {
     const q = searchQuery.toLowerCase().trim();
-    return reportData.filter(item => {
+    return reportData.filter((item: any) => {
       const name = (item.name || item.customers?.name || item.item_name || "").toLowerCase();
       return !q || name.includes(q);
     });
@@ -296,22 +301,22 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName }) => {
   const summary = useMemo(() => {
     if (activeReport === 'BOOKING_LOG') {
       return {
-        totalRemQty: filteredData.reduce((s, i) => s + Number(i.item_rem || 0), 0),
-        totalRemVal: filteredData.reduce((s, i) => s + Number(i.item_rem_val || 0), 0)
+        totalRemQty: filteredData.reduce((s: number, i: any) => s + Number(i.item_rem || 0), 0),
+        totalRemVal: filteredData.reduce((s: number, i: any) => s + Number(i.item_rem_val || 0), 0)
       };
     }
     if (activeReport === 'STOCK_REPORT') {
       return {
-        totalRemQty: filteredData.reduce((s, i) => s + Number(i.current_stock || 0), 0),
-        totalRemVal: filteredData.reduce((s, i) => s + (Number(i.current_stock || 0) * Number(i.tp || 0)), 0)
+        totalRemQty: filteredData.reduce((s: number, i: any) => s + Number(i.current_stock || 0), 0),
+        totalRemVal: filteredData.reduce((s: number, i: any) => s + (Number(i.current_stock || 0) * Number(i.tp || 0)), 0)
       };
     }
     if (activeReport === 'CUSTOMER_DUES') {
-      return { totalRemQty: 0, totalRemVal: filteredData.reduce((s, i) => s + Number(i.balance || 0), 0) };
+      return { totalRemQty: 0, totalRemVal: filteredData.reduce((s: number, i: any) => s + Number(i.balance || 0), 0) };
     }
     return {
       totalRemQty: 0,
-      totalRemVal: filteredData.reduce((s, i) => s + Number(i.amount || 0), 0)
+      totalRemVal: filteredData.reduce((s: number, i: any) => s + Number(i.amount || 0), 0)
     };
   }, [filteredData, activeReport]);
 
@@ -327,7 +332,7 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName }) => {
 
     return (
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 pb-32">
-        {reportOptions.map((item) => (
+        {reportOptions.map((item: { id: string; title: string; icon: string; desc: string }) => (
           <div key={item.id} onClick={() => setActiveReport(item.id as ReportType)} className="bg-white p-10 rounded-[3.5rem] shadow-sm hover:shadow-2xl cursor-pointer border-2 border-slate-50 flex flex-col items-center group transition-all animate-reveal">
             <div className={`w-20 h-20 rounded-[2rem] bg-slate-900 flex items-center justify-center text-4xl mb-8 shadow-xl text-white`}>{item.icon}</div>
             <h3 className="text-lg font-black uppercase italic text-slate-800 leading-none">{item.title}</h3>
@@ -343,8 +348,8 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName }) => {
       <div className="flex justify-between items-center mb-8 no-print flex-wrap gap-4">
         <button onClick={() => setActiveReport('MAIN')} className="bg-slate-900 text-white px-8 py-5 rounded-[1.5rem] font-black text-[11px] uppercase">← ফিরে যান</button>
         <div className="flex gap-4 items-center bg-slate-50 p-3 rounded-[2rem] border">
-          {(activeReport === 'DELIVERY_LOG_A4' || activeReport === 'COLLECTION_REPORT') && <input type="date" className="p-3 border rounded-[1.2rem] text-[10px] font-black" value={selectedDate} onChange={e => setSelectedDate(e.target.value)} />}
-          <input className="p-3 border rounded-[1.2rem] text-[10px] font-black outline-none bg-white" placeholder="সার্চ..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
+          {(activeReport === 'DELIVERY_LOG_A4' || activeReport === 'COLLECTION_REPORT') && <input type="date" className="p-3 border rounded-[1.2rem] text-[10px] font-black" value={selectedDate} onChange={(e: any) => setSelectedDate(e.target.value)} />}
+          <input className="p-3 border rounded-[1.2rem] text-[10px] font-black outline-none bg-white" placeholder="সার্চ..." value={searchQuery} onChange={(e: any) => setSearchQuery(e.target.value)} />
           <button disabled={isDownloading || loading} onClick={() => handleDownloadPDF(reportRef, `IFZA_${activeReport}`)} className="bg-emerald-600 text-white px-5 py-4 rounded-[1.2rem] font-black text-[9px] uppercase shadow-lg">PDF ডাউনলোড</button>
         </div>
       </div>
@@ -427,7 +432,7 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName }) => {
                 <tr><td colSpan={10} className="p-24 text-center animate-pulse text-slate-300 font-black uppercase tracking-[0.4em]">Node Data Synchronizing...</td></tr>
               ) : filteredData.length === 0 ? (
                 <tr><td colSpan={10} className="p-24 text-center opacity-30 uppercase font-black tracking-widest italic">কোনো তথ্য পাওয়া যায়নি</td></tr>
-              ) : filteredData.map((item, idx) => (
+              ) : filteredData.map((item: any, idx: number) => (
                 <tr key={idx} className="border-b-2 border-black text-black hover:bg-slate-50 transition-all">
                   <td className="p-3 border-r border-black text-center font-black">{(idx + 1).toString().padStart(2, '0')}</td>
                   {activeReport === 'DELIVERY_LOG_A4' ? (
@@ -553,64 +558,64 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName }) => {
             <button disabled={isDownloading} onClick={downloadMemoPDF} className="bg-white text-slate-900 px-8 py-4 rounded-xl font-black text-[10px] uppercase shadow-xl active:scale-95">PDF ডাউনলোড ⎙</button>
           </div>
 
-          <div ref={memoRef} className="bg-white w-[148mm] min-h-fit p-10 flex flex-col font-sans text-black relative overflow-hidden">
-            <p className="text-center font-bold text-[11px] mb-2 italic leading-tight text-black">বিসমিল্লাহির রাহমানির রাহিম</p>
+          <div ref={memoRef} className={`bg-white w-[148mm] min-h-fit ${(selectedMemo.items?.length || 0) > 30 ? 'p-6' : 'p-10'} flex flex-col font-sans text-black relative overflow-hidden`}>
+            <p className="text-center font-bold text-[11px] mb-1 italic leading-tight text-black">বিসমিল্লাহির রাহমানির রাহিম</p>
 
-            <div className="text-center border-b border-black pb-4 mb-4">
-              <h1 className="text-[26px] font-black uppercase italic tracking-tighter leading-none mb-1 text-blue-600">IFZA ELECTRONICS</h1>
+            <div className={`text-center border-b border-black ${(selectedMemo.items?.length || 0) > 30 ? 'pb-2 mb-2' : 'pb-4 mb-4'}`}>
+              <h1 className={`${(selectedMemo.items?.length || 0) > 30 ? 'text-[22px]' : 'text-[26px]'} font-black uppercase italic tracking-tighter leading-none mb-1 text-blue-600`}>IFZA ELECTRONICS</h1>
               <p className="text-[10px] font-black uppercase tracking-[0.2em] mb-1 text-black">{selectedMemo.company} DIVISION</p>
             </div>
 
-            <div className="flex justify-between items-start mb-6">
+            <div className={`flex justify-between items-start ${(selectedMemo.items?.length || 0) > 30 ? 'mb-2' : 'mb-6'}`}>
               <div className="space-y-1 flex-1">
-                <p className="text-[18px] font-black uppercase italic leading-tight text-blue-600">{selectedMemo.customers?.name}</p>
+                <p className={`${(selectedMemo.items?.length || 0) > 30 ? 'text-[15px]' : 'text-[18px]'} font-black uppercase italic leading-tight text-blue-600`}>{selectedMemo.customers?.name}</p>
                 <p className="text-[10px] font-bold text-black">📍 ঠিকানা: {selectedMemo.customers?.address}</p>
-                <p className="text-[11px] text-black font-black mt-2">মেমো আইডি: #{String(selectedMemo.id).slice(-6).toUpperCase()}</p>
+                <p className="text-[11px] text-black font-black mt-1">মেমো আইডি: #{String(selectedMemo.id).slice(-6).toUpperCase()}</p>
               </div>
 
-              <div className="text-right space-y-1 w-44">
-                <p className="text-[9px] font-black uppercase text-black mb-2">তারিখ: {new Date(selectedMemo.created_at).toLocaleDateString('bn-BD')}</p>
-                <p className="flex justify-between font-black text-[14px] border-t border-black pt-1 text-black"><span>মেমো বিল:</span> <span className="text-red-600">৳{(Number(selectedMemo.amount) || 0).toLocaleString()}</span></p>
+              <div className="text-right space-y-0.5 w-44">
+                <p className="text-[9px] font-black uppercase text-black mb-1">তারিখ: {new Date(selectedMemo.created_at).toLocaleDateString('bn-BD')}</p>
+                <p className="flex justify-between font-black text-[13px] border-t border-black pt-0.5 text-black"><span>মেমো বিল:</span> <span className="text-red-600">৳{(Number(selectedMemo.amount) || 0).toLocaleString()}</span></p>
               </div>
             </div>
 
-            <div className="flex-1 mt-4">
+            <div className="flex-1 mt-2">
               <table className="w-full border-collapse">
                 <thead>
-                  <tr className="text-[10px] font-black uppercase italic border-b-2 border-black text-left text-black">
-                    <th className="py-2 w-8">Sl</th>
-                    <th className="py-2">বিবরণ (Description)</th>
-                    <th className="py-2 text-center w-16">দর</th>
-                    <th className="py-2 text-center w-12">Qty</th>
-                    <th className="py-2 text-right w-20">মোট</th>
+                  <tr className="text-[9px] font-black uppercase italic border-b-2 border-black text-left text-black">
+                    <th className="py-1 w-8">Sl</th>
+                    <th className="py-1">বিবরণ (Description)</th>
+                    <th className="py-1 text-center w-16">দর</th>
+                    <th className="py-1 text-center w-12">Qty</th>
+                    <th className="py-1 text-right w-20">মোট</th>
                   </tr>
                 </thead>
-                <tbody className={`${(selectedMemo.items?.length || 0) > 35 ? "text-[8px]" : "text-[10px]"} text-black`}>
+                <tbody className={`${(selectedMemo.items?.length || 0) > 40 ? "text-[7.5px]" : (selectedMemo.items?.length || 0) > 25 ? "text-[8.5px]" : "text-[10px]"} text-black`}>
                   {selectedMemo.items?.map((it: any, idx: number) => (
-                    <tr key={idx} className={`font-bold italic border-b border-black ${it.action === 'RETURN' ? 'text-red-600' : it.action === 'REPLACE' ? 'text-blue-600' : 'text-black'}`}>
-                      <td className="py-2">{idx + 1}</td>
-                      <td className="py-2 uppercase">
+                    <tr key={idx} className={`font-bold italic border-b border-black/10 ${it.action === 'RETURN' ? 'text-red-600' : it.action === 'REPLACE' ? 'text-blue-600' : 'text-black'}`}>
+                      <td className={`${(selectedMemo.items?.length || 0) > 30 ? 'py-0.5' : 'py-1.5'}`}>{idx + 1}</td>
+                      <td className={`${(selectedMemo.items?.length || 0) > 30 ? 'py-0.5' : 'py-1.5'} uppercase`}>
                         <span>{it.name}</span>
-                        {it.mrp && <span className="ml-2 text-[7px] font-black">MRP: ৳{it.mrp}</span>}
+                        {it.mrp && <span className="ml-2 text-[7px] font-black opacity-40">MRP: ৳{it.mrp}</span>}
                         {it.action && it.action !== 'SALE' && <span className="ml-2 text-[7px] border border-black px-1 rounded uppercase">[{it.action}]</span>}
                       </td>
-                      <td className="py-2 text-center">৳{it.price || 0}</td>
-                      <td className="py-2 text-center">{it.qty}</td>
-                      <td className="py-2 text-right">৳{(Number(it.total) || 0).toLocaleString()}</td>
+                      <td className={`${(selectedMemo.items?.length || 0) > 30 ? 'py-0.5' : 'py-1.5'} text-center`}>৳{it.price || 0}</td>
+                      <td className={`${(selectedMemo.items?.length || 0) > 30 ? 'py-0.5' : 'py-1.5'} text-center`}>{it.qty}</td>
+                      <td className={`${(selectedMemo.items?.length || 0) > 30 ? 'py-0.5' : 'py-1.5'} text-right`}>৳{(Number(it.total) || 0).toLocaleString()}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
 
-            <div className="mt-8 border-t-2 border-black pt-4 flex justify-between items-end">
-              <div className="text-[8px] font-black uppercase italic space-y-1">
+            <div className={`${(selectedMemo.items?.length || 0) > 30 ? 'mt-4' : 'mt-8'} border-t-2 border-black pt-2 flex justify-between items-end`}>
+              <div className="text-[8px] font-black uppercase italic space-y-0.5">
                 <p className="text-blue-600 font-extrabold">* IFZA ELECTRONICS GR.</p>
                 <p>মেমো তৈরী: {selectedMemo.submitted_by}</p>
                 <p>প্রিন্ট সময়: {new Date().toLocaleString('bn-BD')}</p>
               </div>
               <div className="text-right">
-                <p className="text-[15px] font-black italic tracking-tighter text-black">TOTAL: ৳{(Number(selectedMemo.amount) || 0).toLocaleString()}</p>
+                <p className={`${(selectedMemo.items?.length || 0) > 30 ? 'text-[12px]' : 'text-[15px]'} font-black italic tracking-tighter text-black`}>TOTAL: ৳{(Number(selectedMemo.amount) || 0).toLocaleString()}</p>
               </div>
             </div>
           </div>
