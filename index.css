@@ -38,3 +38,11 @@ body {
   scrollbar-width: thin;
   scrollbar-color: rgba(0, 0, 0, 0.1) transparent;
 }
+
+.no-scroll-bar::-webkit-scrollbar {
+  display: none;
+}
+.no-scroll-bar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
