@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Company, UserRole, User, Product, formatCurrency } from '../types';
+import { Company, UserRole, User, Product, Customer, formatCurrency } from '../types';
 import { supabase, db, mapToDbCompany } from '../lib/supabase';
 import { jsPDF } from 'jspdf';
 import * as html2canvasModule from 'html2canvas';
@@ -24,10 +24,10 @@ interface SalesProps {
 
 const Sales: React.FC<SalesProps> = ({ company, role, user }) => {
   const [products, setProducts] = useState<Product[]>([]);
-  const [customers, setCustomers] = useState<any[]>([]);
+  const [customers, setCustomers] = useState<Customer[]>([]);
   const [cart, setCart] = useState<CartItem[]>([]);
 
-  const [selectedCust, setSelectedCust] = useState<any>(null);
+  const [selectedCust, setSelectedCust] = useState<Customer | null>(null);
   const [custSearch, setCustSearch] = useState("");
   const [areaFilter, setAreaFilter] = useState("");
   const [prodSearch, setProdSearch] = useState("");
@@ -103,7 +103,7 @@ const Sales: React.FC<SalesProps> = ({ company, role, user }) => {
       let lastColl = 0;
       let foundLastColl = false;
 
-      data?.forEach(tx => {
+      data?.forEach((tx: { amount: number | string; payment_type: string }) => {
         const amt = Number(tx.amount);
         if (tx.payment_type === 'COLLECTION') {
           due -= amt;
@@ -130,9 +130,9 @@ const Sales: React.FC<SalesProps> = ({ company, role, user }) => {
   };
 
   const addToCart = (p: Product) => {
-    const existing = cart.find(i => i.id === p.id && i.action === 'SALE');
+    const existing = cart.find((i: CartItem) => i.id === p.id && i.action === 'SALE');
     if (existing) {
-      setCart(cart.map(i => (i.id === p.id && i.action === 'SALE') ? { ...i, qty: i.qty + 1 } : i));
+      setCart(cart.map((i: CartItem) => (i.id === p.id && i.action === 'SALE') ? { ...i, qty: i.qty + 1 } : i));
     } else {
       setCart([...cart, { ...p, qty: 1, editedPrice: p.tp, discountPercent: 0, action: 'SALE' }]);
     }
@@ -140,19 +140,19 @@ const Sales: React.FC<SalesProps> = ({ company, role, user }) => {
   };
 
   const updateCartItem = (idx: number, updates: Partial<CartItem>) => {
-    setCart(prev => {
+    setCart((prev: CartItem[]) => {
       const next = [...prev];
       next[idx] = { ...next[idx], ...updates };
-      return next.filter(i => i.qty > 0 || (i.qty === 0 && updates.qty === undefined));
+      return next.filter((i: CartItem) => i.qty > 0 || (i.qty === 0 && updates.qty === undefined));
     });
   };
 
   const removeItem = (idx: number) => {
-    setCart(prev => prev.filter((_, i) => i !== idx));
+    setCart((prev: CartItem[]) => prev.filter((_: CartItem, i: number) => i !== idx));
   };
 
   const totals = useMemo(() => {
-    const subtotal = cart.reduce((sum, i) => {
+    const subtotal = cart.reduce((sum: number, i: CartItem) => {
       if (i.action === 'REPLACE') return sum;
       const itemPrice = Number(i.editedPrice);
       const itemDisc = (itemPrice * Number(i.discountPercent)) / 100;
@@ -173,7 +173,7 @@ const Sales: React.FC<SalesProps> = ({ company, role, user }) => {
 
     setIsSaving(true);
     try {
-      const itemsToSave = cart.map(i => {
+      const itemsToSave = cart.map((i: CartItem) => {
         const isReplace = i.action === 'REPLACE';
         const price = isReplace ? 0 : Number(i.editedPrice);
         const discount = isReplace ? 0 : Number(i.discountPercent);
@@ -328,13 +328,13 @@ const Sales: React.FC<SalesProps> = ({ company, role, user }) => {
   };
 
   const filteredCustomers = useMemo(() => {
-    return customers.filter(c => {
+    return customers.filter((c: Customer) => {
       const q = custSearch.toLowerCase().trim();
-      return (c.name.toLowerCase().includes(q) || c.phone.includes(q)) && (!areaFilter || c.address === areaFilter);
+      return (c.name.toLowerCase().includes(q) || (c.phone && c.phone.includes(q))) && (!areaFilter || c.address === areaFilter);
     });
   }, [customers, custSearch, areaFilter]);
 
-  const filteredProducts = useMemo(() => products.filter(p => p.name.toLowerCase().includes(prodSearch.toLowerCase())), [products, prodSearch]);
+  const filteredProducts = useMemo(() => products.filter((p: Product) => p.name.toLowerCase().includes(prodSearch.toLowerCase())), [products, prodSearch]);
 
   return (
     <div className="flex flex-col gap-6 pb-32 animate-reveal text-black font-sans">
@@ -354,9 +354,9 @@ const Sales: React.FC<SalesProps> = ({ company, role, user }) => {
               </button>
               {showCustDropdown && (
                 <div className="absolute top-[280px] left-8 right-8 md:w-[400px] z-[500] bg-white border rounded-2xl shadow-2xl overflow-hidden animate-reveal">
-                  <input className="w-full p-4 border-b font-bold text-xs" placeholder="খুঁজুন..." value={custSearch} onChange={e => setCustSearch(e.target.value)} />
+                  <input className="w-full p-4 border-b font-bold text-xs" placeholder="খুঁজুন..." value={custSearch} onChange={(e: any) => setCustSearch(e.target.value)} />
                   <div className="max-h-60 overflow-y-auto">
-                    {filteredCustomers.map(c => <div key={c.id} onClick={() => { setSelectedCust(c); setShowCustDropdown(false); }} className="p-4 hover:bg-blue-50 border-b cursor-pointer font-bold text-xs uppercase">{c.name} - {c.address}</div>)}
+                    {filteredCustomers.map((c: Customer) => <div key={c.id} onClick={() => { setSelectedCust(c); setShowCustDropdown(false); }} className="p-4 hover:bg-blue-50 border-b cursor-pointer font-bold text-xs uppercase">{c.name} - {c.address}</div>)}
                   </div>
                 </div>
               )}
