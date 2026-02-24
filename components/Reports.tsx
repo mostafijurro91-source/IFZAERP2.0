@@ -130,37 +130,38 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName }) => {
         data?.forEach((b: any) => {
           const totalOrd = b.items?.reduce((s: number, i: any) => s + (Number(i.qty) || 0), 0) || 0;
           const totalDel = b.items?.reduce((s: number, i: any) => s + (Number(i.delivered_qty) || 0), 0) || 0;
-          const isActuallyDone = totalOrd > 0 && totalDel >= totalOrd;
 
-          if (!isActuallyDone) {
-            if (!b.items || b.items.length === 0) {
-              // If it's active but has no items, still show the customer name
+          if (!b.items || b.items.length === 0) {
+            flattened.push({
+              ...b,
+              is_first_of_booking: true,
+              item_id: 'no-item',
+              item_name: 'No Items Found',
+              item_price: 0,
+              item_ord: 0,
+              item_del: 0,
+              item_rem: 0,
+              item_rem_val: 0,
+              booking_total: Number(b.total_amount || 0),
+              booking_advance: Number(b.advance_amount || 0)
+            });
+          } else {
+            b.items.forEach((it: any, idx: number) => {
+              const rem = Math.max(0, Number(it.qty || 0) - Number(it.delivered_qty || 0));
               flattened.push({
                 ...b,
-                item_id: 'no-item',
-                item_name: 'No Pending Items',
-                item_price: 0,
-                item_ord: 0,
-                item_del: 0,
-                item_rem: 0,
-                item_rem_val: 0
+                is_first_of_booking: idx === 0,
+                item_id: it.id,
+                item_name: it.name,
+                item_price: Number(it.unitPrice || 0),
+                item_ord: Number(it.qty || 0),
+                item_del: Number(it.delivered_qty || 0),
+                item_rem: rem,
+                item_rem_val: rem * Number(it.unitPrice || 0),
+                booking_total: Number(b.total_amount || 0),
+                booking_advance: Number(b.advance_amount || 0)
               });
-            } else {
-              b.items.forEach((it: any) => {
-                const rem = Number(it.qty || 0) - Number(it.delivered_qty || 0);
-                // Push all items to show the full order details of an active booking
-                flattened.push({
-                  ...b,
-                  item_id: it.id,
-                  item_name: it.name,
-                  item_price: Number(it.unitPrice || 0),
-                  item_ord: Number(it.qty || 0),
-                  item_del: Number(it.delivered_qty || 0),
-                  item_rem: rem,
-                  item_rem_val: rem * Number(it.unitPrice || 0)
-                });
-              });
-            }
+            });
           }
         });
         setReportData(flattened);
@@ -473,18 +474,30 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName }) => {
                     </>
                   ) : activeReport === 'BOOKING_LOG' ? (
                     <>
-                      <td className="p-3 border-r border-black">
-                        <p className="font-black uppercase italic leading-none mb-1">{item.customers?.name}</p>
+                      <td className={`p-3 border-r border-black ${item.is_first_of_booking ? 'bg-slate-50' : ''}`}>
+                        {item.is_first_of_booking && (
+                          <div className="mb-2 pb-2 border-b border-black/10">
+                            <p className="font-black uppercase italic leading-none text-indigo-700">{item.customers?.name}</p>
+                            <div className="flex justify-between mt-1 text-[8px] font-bold text-slate-500 uppercase">
+                              <span>Bill: ৳{Math.round(item.booking_total).toLocaleString()}</span>
+                              <span>Paid: ৳{Math.round(item.booking_advance).toLocaleString()}</span>
+                            </div>
+                          </div>
+                        )}
                         <div className="flex items-center gap-2">
-                          <span className="w-1 h-1 bg-blue-600 rounded-full"></span>
-                          <p className="text-[13px] font-black text-blue-600 uppercase italic tracking-tighter leading-none">{item.item_name}</p>
+                          <span className={`w-1.5 h-1.5 rounded-full ${item.item_rem > 0 ? 'bg-rose-500 animate-pulse' : 'bg-emerald-500'}`}></span>
+                          <p className={`text-[12px] font-black uppercase italic tracking-tighter leading-none ${item.item_rem > 0 ? 'text-blue-900' : 'text-slate-400'}`}>{item.item_name}</p>
                         </div>
-                        <p className="text-[8px] font-black text-slate-400 mt-1 uppercase">Unit Price: ৳{(item.item_price || 0).toLocaleString()}</p>
+                        {item.item_rem > 0 && <p className="text-[8px] font-black text-slate-400 mt-1 uppercase">Unit: ৳{(item.item_price || 0).toLocaleString()}</p>}
                       </td>
-                      <td className="p-3 border-r border-black text-center">{(item.item_ord || 0)}</td>
-                      <td className="p-3 border-r border-black text-center text-emerald-600">{(item.item_del || 0)}</td>
-                      <td className="p-3 border-r border-black text-center text-rose-700 bg-rose-50 font-black text-lg italic">{(item.item_rem || 0)}</td>
-                      <td className="p-3 text-right italic font-black text-rose-600 text-sm">৳{(item.item_rem_val || 0).toLocaleString()}</td>
+                      <td className="p-3 border-r border-black text-center font-bold text-slate-400">{(item.item_ord || 0)}</td>
+                      <td className="p-3 border-r border-black text-center font-bold text-emerald-600">{(item.item_del || 0)}</td>
+                      <td className={`p-3 border-r border-black text-center font-black text-lg italic ${item.item_rem > 0 ? 'text-rose-700 bg-rose-50' : 'text-emerald-600 bg-emerald-50'}`}>
+                        {(item.item_rem || 0)}
+                      </td>
+                      <td className={`p-3 text-right italic font-black text-sm ${item.item_rem > 0 ? 'text-rose-600' : 'text-emerald-600 opacity-40'}`}>
+                        ৳{(item.item_rem_val || 0).toLocaleString()}
+                      </td>
                     </>
                   ) : activeReport === 'PURCHASE_HISTORY' ? (
                     <>
