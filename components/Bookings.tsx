@@ -574,10 +574,10 @@ const Bookings: React.FC<BookingsProps> = ({ company, role, user }) => {
                                              setSelectedSlipData({
                                                 ...it,
                                                 customer_name: selectedBooking.customer_name,
-                                                address: selectedBooking.customer_address,
-                                                phone: selectedBooking.customer_phone,
                                                 booking_id: selectedBooking.id,
-                                                today_delivery: todayDelv
+                                                today_delivery_map: deliveryUpdates,
+                                                total_amount: selectedBooking.total_amount,
+                                                advance_amount: selectedBooking.advance_amount
                                              });
                                              setShowSlipModal(true);
                                           }} className="bg-slate-900 text-white px-3 py-1.5 rounded text-[8px] font-black uppercase hover:bg-slate-700 transition-colors">স্লিপ 🖨️</button>
@@ -654,23 +654,23 @@ const Bookings: React.FC<BookingsProps> = ({ company, role, user }) => {
                   </button>
                </div>
 
-               <div ref={slipRef} className="bg-white mx-auto w-[148mm] min-h-[210mm] p-10 flex flex-col font-sans text-black shadow-2xl border-[3px] border-black">
-                  <div className="text-center mb-10 border-b-4 border-black pb-6">
-                     <h1 className="text-[32px] font-black uppercase italic tracking-tighter leading-none mb-1">IFZA ELECTRONICS</h1>
-                     <p className="text-xl font-black uppercase italic">{company} DIVISION</p>
-                     <div className="mt-4 inline-block px-8 py-1.5 bg-black text-white text-[9px] font-black uppercase rounded-full italic">DELIVERY CHALLAN</div>
+               <div ref={slipRef} className="bg-white mx-auto w-[140mm] min-h-[200mm] p-6 flex flex-col font-sans text-black shadow-2xl border-[3px] border-black">
+                  <div className="text-center mb-6 border-b-4 border-black pb-4">
+                     <h1 className="text-[28px] font-black uppercase italic tracking-tighter leading-none mb-1">IFZA ELECTRONICS</h1>
+                     <p className="text-lg font-black uppercase italic">{company} DIVISION</p>
+                     <div className="mt-2 inline-block px-6 py-1 bg-black text-white text-[8px] font-black uppercase rounded-full italic">DELIVERY CHALLAN</div>
                   </div>
 
-                  <div className="flex justify-between items-start mb-10 text-[11px] font-bold">
+                  <div className="flex justify-between items-start mb-6 text-[10px] font-bold">
                      <div>
-                        <p className="text-[9px] font-black border-b border-black w-fit mb-2 uppercase opacity-60">Customer:</p>
-                        <p className="text-2xl font-black uppercase italic leading-none">{selectedSlipData.customer_name}</p>
-                        <p className="text-[12px] font-bold mt-2">📍 {selectedSlipData.address || selectedSlipData.customer_address}</p>
+                        <p className="text-[8px] font-black border-b border-black w-fit mb-1 uppercase opacity-60">Customer:</p>
+                        <p className="text-xl font-black uppercase italic leading-none">{selectedSlipData.customer_name}</p>
+                        <p className="text-[11px] font-bold mt-1">📍 {selectedSlipData.address || selectedBooking.customer_address}</p>
                      </div>
                      <div className="text-right">
-                        <p className="text-[9px] font-black border-b border-black w-fit ml-auto mb-2 uppercase opacity-60">Info:</p>
-                        <p className="text-[12px] font-black">ID: #{selectedSlipData.booking_id ? String(selectedSlipData.booking_id).slice(-6).toUpperCase() : (selectedSlipData.id ? String(selectedSlipData.id).slice(-6).toUpperCase() : 'N/A')}</p>
-                        <p className="text-[12px] font-black">Date: {new Date().toLocaleDateString('bn-BD')}</p>
+                        <p className="text-[8px] font-black border-b border-black w-fit ml-auto mb-1 uppercase opacity-60">Info:</p>
+                        <p className="text-[11px] font-black">ID: #{selectedSlipData.booking_id ? String(selectedSlipData.booking_id).slice(-6).toUpperCase() : (selectedSlipData.id ? String(selectedSlipData.id).slice(-6).toUpperCase() : 'N/A')}</p>
+                        <p className="text-[11px] font-black">Date: {new Date().toLocaleDateString('bn-BD')}</p>
                      </div>
                   </div>
 
@@ -687,22 +687,25 @@ const Bookings: React.FC<BookingsProps> = ({ company, role, user }) => {
                         </thead>
                         <tbody>
                            {selectedSlipData.items && Array.isArray(selectedSlipData.items) ? (
-                              selectedSlipData.items.map((item: any, idx: number) => (
-                                 <tr key={idx} className="border-b border-black text-[14px] font-black italic">
-                                    <td className="p-4 uppercase border-r border-black">{item.name}</td>
-                                    <td className="p-4 text-right border-r border-black font-black">{item.qty}</td>
-                                    <td className="p-4 text-right border-r border-black font-black">{item.delivered_qty}</td>
-                                    <td className="p-4 text-right border-r border-black bg-blue-50 font-black text-blue-600">{(selectedSlipData.today_delivery || 0)}</td>
-                                    <td className="p-4 text-right font-black text-rose-600">{item.qty - (item.delivered_qty || 0)}</td>
-                                 </tr>
-                              ))
+                              selectedSlipData.items.map((item: any, idx: number) => {
+                                 const todayDelivery = (selectedSlipData.today_delivery_map && selectedSlipData.today_delivery_map[item.id]) || 0;
+                                 return (
+                                    <tr key={idx} className="border-b border-black text-[13px] font-black italic">
+                                       <td className="p-3 uppercase border-r border-black">{item.name}</td>
+                                       <td className="p-3 text-right border-r border-black font-black">{item.qty}</td>
+                                       <td className="p-3 text-right border-r border-black font-black">{item.delivered_qty}</td>
+                                       <td className="p-3 text-right border-r border-black bg-blue-50 font-black text-blue-600">{todayDelivery}</td>
+                                       <td className="p-3 text-right font-black text-rose-600">{item.qty - (item.delivered_qty || 0) - todayDelivery}</td>
+                                    </tr>
+                                 );
+                              })
                            ) : (
-                              <tr className="border-b border-black text-[14px] font-black italic">
-                                 <td className="p-4 uppercase border-r border-black">{selectedSlipData.name}</td>
-                                 <td className="p-4 text-right border-r border-black font-black">{selectedSlipData.qty}</td>
-                                 <td className="p-4 text-right border-r border-black font-black">{selectedSlipData.delivered_qty || 0}</td>
-                                 <td className="p-4 text-right border-r border-black bg-blue-50 font-black text-blue-600">{(selectedSlipData.today_delivery || 0)}</td>
-                                 <td className="p-4 text-right font-black text-rose-600">{(selectedSlipData.qty || 0) - (selectedSlipData.delivered_qty || 0)}</td>
+                              <tr className="border-b border-black text-[13px] font-black italic">
+                                 <td className="p-3 uppercase border-r border-black">{selectedSlipData.name}</td>
+                                 <td className="p-3 text-right border-r border-black font-black">{selectedSlipData.qty}</td>
+                                 <td className="p-3 text-right border-r border-black font-black">{selectedSlipData.delivered_qty || 0}</td>
+                                 <td className="p-3 text-right border-r border-black bg-blue-50 font-black text-blue-600">{(selectedSlipData.today_delivery_map && selectedSlipData.today_delivery_map[selectedSlipData.id]) || 0}</td>
+                                 <td className="p-3 text-right font-black text-rose-600">{(selectedSlipData.qty || 0) - (selectedSlipData.delivered_qty || 0) - ((selectedSlipData.today_delivery_map && selectedSlipData.today_delivery_map[selectedSlipData.id]) || 0)}</td>
                               </tr>
                            )}
                         </tbody>
