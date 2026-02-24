@@ -357,7 +357,7 @@ const Bookings: React.FC<BookingsProps> = ({ company, role, user }) => {
                                  🏦
                               </button>
                               <button
-                                 onClick={(e) => { e.stopPropagation(); setSelectedSlipData({ ...b, items: b.items, customer_name: b.customer_name, address: b.customer_address, phone: b.customer_phone, booking_id: b.id }); setShowSlipModal(true); }}
+                                 onClick={(e) => { e.stopPropagation(); setSelectedSlipData({ ...b, items: b.items, customer_name: b.customer_name, address: b.customer_address, phone: b.customer_phone, booking_id: b.id, total_amount: b.total_amount, advance_amount: b.advance_amount }); setShowSlipModal(true); }}
                                  title="মেমো প্রিন্ট করুন"
                                  className="w-9 h-9 bg-slate-100 text-slate-600 rounded-xl flex items-center justify-center text-lg shadow-sm hover:bg-slate-900 hover:text-white transition-all active:scale-90"
                               >
@@ -707,6 +707,25 @@ const Bookings: React.FC<BookingsProps> = ({ company, role, user }) => {
                            )}
                         </tbody>
                      </table>
+
+                     <div className="mt-10 flex justify-end">
+                        <div className="w-1/2 space-y-2 border-2 border-black p-4">
+                           <div className="flex justify-between text-[12px] font-black border-b border-black pb-1">
+                              <span>TOTAL BILL:</span>
+                              <span>৳{Math.round(selectedSlipData.total_amount || 0).toLocaleString()}</span>
+                           </div>
+                           <div className="flex justify-between text-[12px] font-black border-b border-black pb-1">
+                              <span>TOTAL PAID:</span>
+                              <span>৳{Math.round(selectedSlipData.advance_amount || 0).toLocaleString()}</span>
+                           </div>
+                           <div className="flex justify-between text-[16px] font-black">
+                              <span>{(selectedSlipData.total_amount - selectedSlipData.advance_amount) >= 0 ? "NET PENDING:" : "EXTRA DEPOSIT:"}</span>
+                              <span className={(selectedSlipData.total_amount - selectedSlipData.advance_amount) >= 0 ? "text-rose-600" : "text-emerald-600"}>
+                                 ৳{Math.abs(Math.round((selectedSlipData.total_amount || 0) - (selectedSlipData.advance_amount || 0))).toLocaleString()}
+                              </span>
+                           </div>
+                        </div>
+                     </div>
                   </div>
 
                   <div className="mt-20 flex justify-between items-end px-4 mb-4">
