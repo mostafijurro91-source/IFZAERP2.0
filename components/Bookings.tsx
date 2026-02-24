@@ -368,21 +368,6 @@ const Bookings: React.FC<BookingsProps> = ({ company, role, user }) => {
                         </div>
                         <h4 onClick={() => { setSelectedBooking(b); setShowDetailModal(true); }} className="font-black text-slate-800 text-lg uppercase italic leading-tight truncate mb-2 group-hover:text-indigo-600 transition-colors cursor-pointer">{b.customer_name}</h4>
 
-                        {/* 📦 QUANTITY STATS */}
-                        <div className="grid grid-cols-3 gap-2 mt-4 bg-slate-50 p-3 rounded-2xl border border-slate-100 shadow-inner">
-                           <div className="text-center">
-                              <p className="text-[7px] font-black text-slate-400 uppercase italic">অর্ডার</p>
-                              <p className="text-[13px] font-black italic">{totalOrdered}</p>
-                           </div>
-                           <div className="text-center border-x border-slate-200">
-                              <p className="text-[7px] font-black text-emerald-500 uppercase italic">গেছে</p>
-                              <p className="text-[13px] font-black italic text-emerald-600">{totalDelivered}</p>
-                           </div>
-                           <div className="text-center">
-                              <p className="text-[7px] font-black text-rose-500 uppercase italic">বাকি</p>
-                              <p className={`text-[13px] font-black italic ${remainingQty > 0 ? 'text-rose-600' : 'text-slate-400'}`}>{remainingQty}</p>
-                           </div>
-                        </div>
                      </div>
 
                      <div className="mb-8 space-y-2 px-1">
@@ -553,41 +538,66 @@ const Bookings: React.FC<BookingsProps> = ({ company, role, user }) => {
                         </div>
                      </div>
 
-                     <table className="w-full border-collapse border-2 border-black">
-                        <thead>
-                           <tr className="bg-slate-100 text-[11px] font-black uppercase italic border-b-2 border-black">
-                              <th className="p-4 text-left border-r border-black">পণ্যের নাম</th>
-                              <th className="p-4 text-center border-r border-black w-32">অর্ডার পিস</th>
-                              <th className="p-4 text-center border-r border-black w-24">দর (Rate)</th>
-                              <th className="p-4 text-center border-r border-black w-24 text-blue-600">ডেলিভারি (গেছে)</th>
-                              <th className="p-4 text-right border-r border-black w-28">মোট বিল</th>
-                              <th className="p-4 text-center border-black w-20 no-print-col">মেমো</th>
-                           </tr>
-                        </thead>
-                        <tbody className="text-[14px] font-bold italic">
-                           {selectedBooking.items.map((it) => {
-                              const currentQty = orderQtyUpdates[it.id] !== undefined ? orderQtyUpdates[it.id] : it.qty;
-                              return (
-                                 <tr key={it.id} className="border-b border-black/30">
-                                    <td className="p-4 border-r border-black/30 uppercase">{it.name}</td>
-                                    <td className="p-4 border-r border-black/30 text-center">
-                                       <div className="flex items-center justify-center gap-3">
-                                          <button onClick={() => setOrderQtyUpdates({ ...orderQtyUpdates, [it.id]: Math.max(it.delivered_qty || 0, currentQty - 1) })} className="w-8 h-8 bg-slate-100 rounded-lg font-black text-slate-400">-</button>
-                                          <span className="min-w-[30px] font-black text-lg">{currentQty}</span>
-                                          <button onClick={() => setOrderQtyUpdates({ ...orderQtyUpdates, [it.id]: currentQty + 1 })} className="w-8 h-8 bg-slate-100 rounded-lg font-black text-slate-400">+</button>
-                                       </div>
-                                    </td>
-                                    <td className="p-4 text-center border-r border-black/30">৳{it.unitPrice}</td>
-                                    <td className="p-4 text-center border-r border-black/30 text-blue-600 font-black text-lg">{it.delivered_qty}</td>
-                                    <td className="p-4 text-right border-r border-black/30">৳{(currentQty * it.unitPrice).toLocaleString()}</td>
-                                    <td className="p-2 text-center no-print-col border-black/30">
-                                       <button onClick={() => { setSelectedSlipData({ ...it, customer_name: selectedBooking.customer_name, address: selectedBooking.customer_address, phone: selectedBooking.customer_phone, booking_id: selectedBooking.id }); setShowSlipModal(true); }} className="bg-slate-900 text-white px-3 py-1.5 rounded text-[8px] font-black uppercase hover:bg-slate-700 transition-colors">স্লিপ 🖨️</button>
-                                    </td>
-                                 </tr>
-                              );
-                           })}
-                        </tbody>
-                     </table>
+                     <div className="flex-1 overflow-x-auto">
+                        <table className="w-full border-collapse border-2 border-black">
+                           <thead>
+                              <tr className="bg-slate-100 text-[11px] font-black uppercase italic border-b-2 border-black">
+                                 <th className="p-4 text-left border-r border-black">পণ্যের নাম</th>
+                                 <th className="p-4 text-center border-r border-black w-24">মোট অর্ডার</th>
+                                 <th className="p-4 text-center border-r border-black w-20">দর (Rate)</th>
+                                 <th className="p-4 text-center border-r border-black w-20 text-blue-600">গেছে (Delv)</th>
+                                 <th className="p-4 text-center border-r border-black w-20 text-rose-600">বাকি (Bal)</th>
+                                 <th className="p-4 text-right border-r border-black w-28">মোট বিল</th>
+                                 <th className="p-4 text-center border-black w-20 no-print-col">মেমো</th>
+                              </tr>
+                           </thead>
+                           <tbody className="text-[14px] font-bold italic">
+                              {selectedBooking.items.map((it) => {
+                                 const currentQty = orderQtyUpdates[it.id] !== undefined ? orderQtyUpdates[it.id] : it.qty;
+                                 return (
+                                    <tr key={it.id} className="border-b border-black/30">
+                                       <td className="p-4 border-r border-black/30 uppercase">{it.name}</td>
+                                       <td className="p-4 border-r border-black/30 text-center">
+                                          <div className="flex items-center justify-center gap-3">
+                                             <button onClick={() => setOrderQtyUpdates({ ...orderQtyUpdates, [it.id]: Math.max(it.delivered_qty || 0, currentQty - 1) })} className="w-8 h-8 bg-slate-100 rounded-lg font-black text-slate-400">-</button>
+                                             <span className="min-w-[30px] font-black text-lg">{currentQty}</span>
+                                             <button onClick={() => setOrderQtyUpdates({ ...orderQtyUpdates, [it.id]: currentQty + 1 })} className="w-8 h-8 bg-slate-100 rounded-lg font-black text-slate-400">+</button>
+                                          </div>
+                                       </td>
+                                       <td className="p-4 text-center border-r border-black/30">৳{it.unitPrice}</td>
+                                       <td className="p-4 text-center border-r border-black/30 text-blue-600 font-black text-lg">{it.delivered_qty}</td>
+                                       <td className="p-4 text-center border-r border-black/30 text-rose-600 font-black text-lg">{currentQty - (it.delivered_qty || 0)}</td>
+                                       <td className="p-4 text-right border-r border-black/30">৳{(currentQty * it.unitPrice).toLocaleString()}</td>
+                                       <td className="p-2 text-center no-print-col border-black/30">
+                                          <button onClick={() => {
+                                             const todayDelv = deliveryUpdates[it.id] || 0;
+                                             setSelectedSlipData({
+                                                ...it,
+                                                customer_name: selectedBooking.customer_name,
+                                                address: selectedBooking.customer_address,
+                                                phone: selectedBooking.customer_phone,
+                                                booking_id: selectedBooking.id,
+                                                today_delivery: todayDelv
+                                             });
+                                             setShowSlipModal(true);
+                                          }} className="bg-slate-900 text-white px-3 py-1.5 rounded text-[8px] font-black uppercase hover:bg-slate-700 transition-colors">স্লিপ 🖨️</button>
+                                       </td>
+                                    </tr>
+                                 );
+                              })}
+                           </tbody>
+                        </table>
+                     </div>
+
+                     <div className="mt-14 border-t-2 border-black pt-8 flex justify-between items-end">
+                        <div className="space-y-1">
+                           <p className="text-[10px] font-black uppercase italic text-slate-400">Isolated Banking Note:</p>
+                           <p className="text-[12px] font-bold text-slate-600">বুকিং সেক্টরের অর্থ লেনদেন প্রধান লেজার থেকে আলাদা রাখা হয়েছে।</p>
+                        </div>
+                        <div className="text-center">
+                           <div className="w-48 border-t-2 border-black pt-2 font-black italic text-[14px]">IFZA Authorized</div>
+                        </div>
+                     </div>
                   </div>
 
                   <div className="bg-slate-900 p-8 border-t-2 border-white/10 no-print">
@@ -599,7 +609,10 @@ const Bookings: React.FC<BookingsProps> = ({ company, role, user }) => {
                               const currentDelivery = deliveryUpdates[it.id] || 0;
                               return (
                                  <div key={it.id} className="bg-white/5 p-3 rounded-xl flex justify-between items-center border border-white/5">
-                                    <span className="text-[9px] font-bold text-white uppercase truncate pr-4">{it.name}</span>
+                                    <div className="flex flex-col truncate pr-4">
+                                       <span className="text-[9px] font-bold text-white uppercase truncate">{it.name}</span>
+                                       <span className="text-[7px] font-black text-rose-400 uppercase italic">বাকি: {currentQty - (it.delivered_qty || 0)}</span>
+                                    </div>
                                     <div className="flex items-center gap-3 bg-black/40 p-1 rounded-lg">
                                        <button onClick={() => setDeliveryUpdates({ ...deliveryUpdates, [it.id]: Math.max(0, currentDelivery - 1) })} className="w-7 h-7 text-white">-</button>
                                        <span className="text-white text-xs font-black w-5 text-center">{currentDelivery}</span>
@@ -665,25 +678,31 @@ const Bookings: React.FC<BookingsProps> = ({ company, role, user }) => {
                      <table className="w-full border-collapse border-2 border-black">
                         <thead>
                            <tr className="bg-black text-white text-[10px] font-black uppercase italic">
-                              <th className="p-3 text-left border border-black">Description</th>
-                              <th className="p-3 text-center border border-black w-24">Order</th>
-                              <th className="p-3 text-center border border-black w-24">Delv</th>
+                              <th className="p-3 text-left border border-black text-xs">Description</th>
+                              <th className="p-3 text-center border border-black w-20 text-xs">Order</th>
+                              <th className="p-3 text-center border border-black w-20 text-xs">Prev</th>
+                              <th className="p-3 text-center border border-black w-20 bg-blue-600 text-white text-xs">Today</th>
+                              <th className="p-3 text-center border border-black w-20 text-xs">Bal</th>
                            </tr>
                         </thead>
                         <tbody>
                            {selectedSlipData.items && Array.isArray(selectedSlipData.items) ? (
                               selectedSlipData.items.map((item: any, idx: number) => (
-                                 <tr key={idx} className="border-b border-black text-[16px] font-black italic">
+                                 <tr key={idx} className="border-b border-black text-[14px] font-black italic">
                                     <td className="p-4 uppercase border-r border-black">{item.name}</td>
-                                    <td className="p-4 text-center border-r border-black">{item.qty}</td>
-                                    <td className="p-4 text-center text-blue-600">{item.delivered_qty}</td>
+                                    <td className="p-4 text-right border-r border-black font-black">{item.qty}</td>
+                                    <td className="p-4 text-right border-r border-black font-black">{item.delivered_qty}</td>
+                                    <td className="p-4 text-right border-r border-black bg-blue-50 font-black text-blue-600">{(selectedSlipData.today_delivery || 0)}</td>
+                                    <td className="p-4 text-right font-black text-rose-600">{item.qty - (item.delivered_qty || 0)}</td>
                                  </tr>
                               ))
                            ) : (
-                              <tr className="border-b border-black text-[16px] font-black italic">
+                              <tr className="border-b border-black text-[14px] font-black italic">
                                  <td className="p-4 uppercase border-r border-black">{selectedSlipData.name}</td>
-                                 <td className="p-4 text-center border-r border-black">{selectedSlipData.qty}</td>
-                                 <td className="p-4 text-center text-blue-600">{selectedSlipData.delivered_qty}</td>
+                                 <td className="p-4 text-right border-r border-black font-black">{selectedSlipData.qty}</td>
+                                 <td className="p-4 text-right border-r border-black font-black">{selectedSlipData.delivered_qty || 0}</td>
+                                 <td className="p-4 text-right border-r border-black bg-blue-50 font-black text-blue-600">{(selectedSlipData.today_delivery || 0)}</td>
+                                 <td className="p-4 text-right font-black text-rose-600">{(selectedSlipData.qty || 0) - (selectedSlipData.delivered_qty || 0)}</td>
                               </tr>
                            )}
                         </tbody>
