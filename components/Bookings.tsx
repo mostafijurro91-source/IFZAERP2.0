@@ -538,6 +538,40 @@ const Bookings: React.FC<BookingsProps> = ({ company, role, user }) => {
                         </div>
                      </div>
 
+                     <div className="grid grid-cols-3 gap-4 mb-8">
+                        <div className="bg-slate-50 p-6 rounded-[2rem] border-2 border-black/5 text-center">
+                           <span className="block text-[10px] font-black text-slate-400 uppercase italic mb-1">Items Ordered</span>
+                           <span className="text-3xl font-black text-black leading-none">{selectedBooking.items?.reduce((s: any, i: any) => s + i.qty, 0) || 0}</span>
+                        </div>
+                        <div className="bg-blue-50 p-6 rounded-[2rem] border-2 border-blue-100 text-center">
+                           <span className="block text-[10px] font-black text-blue-400 uppercase italic mb-1">Delivered So Far</span>
+                           <span className="text-3xl font-black text-blue-600 leading-none">{selectedBooking.items?.reduce((s: any, i: any) => s + (i.delivered_qty || 0), 0) || 0}</span>
+                        </div>
+                        <div className="bg-rose-50 p-6 rounded-[2rem] border-2 border-rose-100 text-center">
+                           <span className="block text-[10px] font-black text-rose-400 uppercase italic mb-1">Remaining Items</span>
+                           <span className="text-3xl font-black text-rose-600 leading-none">{(selectedBooking.items?.reduce((s: any, i: any) => s + i.qty, 0) || 0) - (selectedBooking.items?.reduce((s: any, i: any) => s + (i.delivered_qty || 0), 0) || 0)}</span>
+                        </div>
+                     </div>
+
+                     <div className="mt-4 mb-10 border-[3px] border-black p-6 rounded-[2rem] bg-indigo-50 flex flex-col md:flex-row justify-between items-center gap-6 shadow-sm no-print">
+                        <div className="flex flex-col text-center md:text-left">
+                           <h3 className="text-[14px] font-black uppercase italic tracking-wider text-indigo-900 border-b-2 border-indigo-200 w-fit">পুরো স্লিপ (Unified Delivery Slip)</h3>
+                           <p className="text-[9px] font-bold text-indigo-400 uppercase mt-2">সবগুলো আইটেম এবং আর্থিক হিসেব একসাথে প্রিন্ট করতে এখানে ক্লিক করুন</p>
+                        </div>
+                        <button
+                           onClick={() => {
+                              setSelectedSlipData({
+                                 ...selectedBooking,
+                                 today_delivery_map: deliveryUpdates
+                              });
+                              setShowSlipModal(true);
+                           }}
+                           className="w-full md:w-auto bg-slate-900 text-white px-12 py-5 rounded-2xl font-black uppercase text-[12px] tracking-widest hover:bg-slate-700 transition-all shadow-2xl active:scale-95 border-b-4 border-black"
+                        >
+                           পুরো স্লিপ প্রিন্ট 🖨️
+                        </button>
+                     </div>
+
                      <div className="flex-1 overflow-x-auto">
                         <table className="w-full border-collapse border-2 border-black">
                            <thead>
