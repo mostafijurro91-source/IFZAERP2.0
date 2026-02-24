@@ -212,21 +212,19 @@ const Bookings: React.FC<BookingsProps> = ({ company, role, user }) => {
          const pageWidth = pdf.internal.pageSize.getWidth();
          const pageHeight = pdf.internal.pageSize.getHeight();
 
-         const imgWidth = pageWidth;
-         const imgHeight = (canvas.height * imgWidth) / canvas.width;
+         // Forced scaling for A5 slips to ensure single page
+         let finalWidth = pageWidth;
+         let finalHeight = (canvas.height * pageWidth) / canvas.width;
 
-         let heightLeft = imgHeight;
-         let position = 0;
-
-         pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight);
-         heightLeft -= pageHeight;
-
-         while (heightLeft > 1) {
-            position -= pageHeight;
-            pdf.addPage();
-            pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight);
-            heightLeft -= pageHeight;
+         if (isSlip && finalHeight > pageHeight) {
+            const scale = pageHeight / finalHeight;
+            finalHeight = pageHeight;
+            finalWidth = finalWidth * scale;
          }
+
+         const xPos = (pageWidth - finalWidth) / 2;
+         pdf.addImage(imgData, 'JPEG', xPos, 0, finalWidth, finalHeight);
+
          pdf.save(`${filename}_${new Date().getTime()}.pdf`);
       } catch (err) {
          console.error(err);
@@ -688,11 +686,11 @@ const Bookings: React.FC<BookingsProps> = ({ company, role, user }) => {
                   </button>
                </div>
 
-               <div ref={slipRef} className="bg-white mx-auto w-[140mm] min-h-[200mm] p-6 flex flex-col font-sans text-black shadow-2xl border-[3px] border-black">
-                  <div className="text-center mb-6 border-b-4 border-black pb-4">
+               <div ref={slipRef} className="bg-white mx-auto w-[140mm] p-6 flex flex-col font-sans text-black shadow-2xl border-[3px] border-black">
+                  <div className="text-center mb-4 border-b-4 border-black pb-3">
                      <h1 className="text-[28px] font-black uppercase italic tracking-tighter leading-none mb-1">IFZA ELECTRONICS</h1>
                      <p className="text-lg font-black uppercase italic">{company} DIVISION</p>
-                     <div className="mt-2 inline-block px-6 py-1 bg-black text-white text-[8px] font-black uppercase rounded-full italic">DELIVERY CHALLAN</div>
+                     <div className="mt-1 inline-block px-6 py-0.5 bg-black text-white text-[8px] font-black uppercase rounded-full italic">DELIVERY CHALLAN</div>
                   </div>
 
                   <div className="flex justify-between items-start mb-6 text-[10px] font-bold">
@@ -712,11 +710,11 @@ const Bookings: React.FC<BookingsProps> = ({ company, role, user }) => {
                      <table className="w-full border-collapse border-2 border-black">
                         <thead>
                            <tr className="bg-black text-white text-[10px] font-black uppercase italic">
-                              <th className="p-3 text-left border border-black text-xs">Description</th>
-                              <th className="p-3 text-center border border-black w-20 text-xs">Order</th>
-                              <th className="p-3 text-center border border-black w-20 text-xs">Prev</th>
-                              <th className="p-3 text-center border border-black w-20 bg-blue-600 text-white text-xs">Today</th>
-                              <th className="p-3 text-center border border-black w-20 text-xs">Bal</th>
+                              <th className="p-2 text-left border border-black text-xs">Description</th>
+                              <th className="p-2 text-center border border-black w-20 text-xs">Order</th>
+                              <th className="p-2 text-center border border-black w-20 text-xs">Prev</th>
+                              <th className="p-2 text-center border border-black w-20 bg-blue-600 text-white text-xs">Today</th>
+                              <th className="p-2 text-center border border-black w-20 text-xs">Bal</th>
                            </tr>
                         </thead>
                         <tbody>
@@ -725,27 +723,27 @@ const Bookings: React.FC<BookingsProps> = ({ company, role, user }) => {
                                  const todayDelivery = (selectedSlipData.today_delivery_map && selectedSlipData.today_delivery_map[item.id]) || 0;
                                  return (
                                     <tr key={idx} className="border-b border-black text-[13px] font-black italic">
-                                       <td className="p-3 uppercase border-r border-black">{item.name}</td>
-                                       <td className="p-3 text-right border-r border-black font-black">{item.qty}</td>
-                                       <td className="p-3 text-right border-r border-black font-black">{item.delivered_qty}</td>
-                                       <td className="p-3 text-right border-r border-black bg-blue-50 font-black text-blue-600">{todayDelivery}</td>
-                                       <td className="p-3 text-right font-black text-rose-600">{item.qty - (item.delivered_qty || 0) - todayDelivery}</td>
+                                       <td className="p-2 uppercase border-r border-black">{item.name}</td>
+                                       <td className="p-2 text-right border-r border-black font-black">{item.qty}</td>
+                                       <td className="p-2 text-right border-r border-black font-black">{item.delivered_qty}</td>
+                                       <td className="p-2 text-right border-r border-black bg-blue-50 font-black text-blue-600">{todayDelivery}</td>
+                                       <td className="p-2 text-right font-black text-rose-600">{item.qty - (item.delivered_qty || 0) - todayDelivery}</td>
                                     </tr>
                                  );
                               })
                            ) : (
                               <tr className="border-b border-black text-[13px] font-black italic">
-                                 <td className="p-3 uppercase border-r border-black">{selectedSlipData.name}</td>
-                                 <td className="p-3 text-right border-r border-black font-black">{selectedSlipData.qty}</td>
-                                 <td className="p-3 text-right border-r border-black font-black">{selectedSlipData.delivered_qty || 0}</td>
-                                 <td className="p-3 text-right border-r border-black bg-blue-50 font-black text-blue-600">{(selectedSlipData.today_delivery_map && selectedSlipData.today_delivery_map[selectedSlipData.id]) || 0}</td>
-                                 <td className="p-3 text-right font-black text-rose-600">{(selectedSlipData.qty || 0) - (selectedSlipData.delivered_qty || 0) - ((selectedSlipData.today_delivery_map && selectedSlipData.today_delivery_map[selectedSlipData.id]) || 0)}</td>
+                                 <td className="p-2 uppercase border-r border-black">{selectedSlipData.name}</td>
+                                 <td className="p-2 text-right border-r border-black font-black">{selectedSlipData.qty}</td>
+                                 <td className="p-2 text-right border-r border-black font-black">{selectedSlipData.delivered_qty || 0}</td>
+                                 <td className="p-2 text-right border-r border-black bg-blue-50 font-black text-blue-600">{(selectedSlipData.today_delivery_map && selectedSlipData.today_delivery_map[selectedSlipData.id]) || 0}</td>
+                                 <td className="p-2 text-right font-black text-rose-600">{(selectedSlipData.qty || 0) - (selectedSlipData.delivered_qty || 0) - ((selectedSlipData.today_delivery_map && selectedSlipData.today_delivery_map[selectedSlipData.id]) || 0)}</td>
                               </tr>
                            )}
                         </tbody>
                      </table>
 
-                     <div className="mt-10 flex justify-end">
+                     <div className="mt-8 flex justify-end">
                         <div className="w-1/2 space-y-2 border-2 border-black p-4">
                            <div className="flex justify-between text-[12px] font-black border-b border-black pb-1">
                               <span>TOTAL BILL:</span>
