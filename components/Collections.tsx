@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Company, User, Customer, formatCurrency } from '../types';
 import { supabase, mapToDbCompany, db } from '../lib/supabase';
@@ -189,6 +188,18 @@ const Collections: React.FC<CollectionsProps> = ({ company, user }) => {
       } catch (err: any) { alert("ত্রুটি: " + err.message); } finally { setIsSaving(false); }
    };
 
+   // রিকোয়েস্ট ডিলিট করার নতুন ফাংশন
+   const handleDeleteRequest = async (reqId: string) => {
+      if (!confirm("আপনি কি এই কালেকশন রিকোয়েস্টটি মুছে ফেলতে চান?")) return;
+      setIsSaving(true);
+      try {
+         const { error } = await supabase.from('collection_requests').delete().eq('id', reqId);
+         if (error) throw error;
+         alert("রিকোয়েস্টটি সফলভাবে মুছে ফেলা হয়েছে!");
+         fetchData();
+      } catch (err: any) { alert("ত্রুটি: " + err.message); } finally { setIsSaving(false); }
+   };
+
    const handleDeleteTransaction = async (tx: any) => {
       if (!isAdmin && !isStaff) return;
       const txIdShort = String(tx.id).slice(-6).toUpperCase();
@@ -206,6 +217,17 @@ const Collections: React.FC<CollectionsProps> = ({ company, user }) => {
 
    const safeFormat = (val: any) => Number(val || 0).toLocaleString();
 
+   // স্টাফের ব্যক্তিগত জমার হিসাব
+   const personalTodayTotal = useMemo(() => {
+      const pendingSum = pendingRequests
+         .filter(r => r.submitted_by?.includes(user.name))
+         .reduce((sum, r) => sum + Number(r.amount), 0);
+      const confirmedSum = confirmedToday
+         .filter(tx => tx.submitted_by === user.name)
+         .reduce((sum, tx) => sum + Number(tx.amount), 0);
+      return pendingSum + confirmedSum;
+   }, [pendingRequests, confirmedToday, user.name]);
+
    const currentBalances = useMemo(() => {
       const dbCo = mapToDbCompany(targetCompany);
       return custBalances[dbCo] || { reg: 0, book: 0 };
@@ -221,13 +243,22 @@ const Collections: React.FC<CollectionsProps> = ({ company, user }) => {
    return (
       <div className="space-y-8 pb-40 animate-reveal text-slate-900 font-sans">
 
-         {/* 📊 LARGE TOP STATS GRID */}
+         {/* 📊 STATS GRID */}
          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
             {isAdmin && (
                <div className="lg:col-span-1 bg-slate-900 p-8 rounded-[2.5rem] text-white shadow-2xl relative overflow-hidden group">
                   <div className="absolute -right-4 -bottom-4 text-7xl opacity-10 group-hover:scale-110 transition-transform">💰</div>
                   <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-3 italic">আজকের মোট আদায়</p>
                   <p className="text-3xl font-black italic tracking-tighter">৳{safeFormat(globalStats.todayTotal)}</p>
+               </div>
+            )}
+
+            {/* 👤 STAFF PERSONAL TOTAL CARD - NEW */}
+            {isStaff && (
+               <div className="lg:col-span-1 bg-gradient-to-br from-blue-600 to-indigo-700 p-8 rounded-[2.5rem] text-white shadow-2xl relative overflow-hidden group">
+                  <div className="absolute -right-4 -bottom-4 text-7xl opacity-10 group-hover:scale-110 transition-transform">💸</div>
+                  <p className="text-[10px] font-black uppercase text-blue-100 tracking-widest mb-3 italic">আপনার আজকের মোট জমা</p>
+                  <p className="text-3xl font-black italic tracking-tighter">৳{safeFormat(personalTodayTotal)}</p>
                </div>
             )}
 
@@ -269,20 +300,10 @@ const Collections: React.FC<CollectionsProps> = ({ company, user }) => {
                   </div>
                </div>
             )}
-
-            {isAdmin && (
-               <div className="bg-orange-50 p-6 rounded-[2.5rem] border border-orange-100 shadow-md">
-                  <p className="text-[10px] font-black uppercase text-orange-500 tracking-widest mb-2 italic">আজকের সারাংশ</p>
-                  <div className="flex flex-col gap-1">
-                     <p className="text-sm font-black italic text-slate-900 tracking-tighter">মোট মাল: ৳{safeFormat(globalStats.salesTotal)}</p>
-                     <p className="text-sm font-black italic text-orange-600 tracking-tighter">বাকি পেন্ডিং: ৳{safeFormat(globalStats.pendingTotal)}</p>
-                  </div>
-               </div>
-            )}
          </div>
 
          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            {/* 💰 PREMIUM COLLECTION FORM */}
+            {/* 💰 COLLECTION FORM */}
             <div className="bg-white p-10 md:p-14 rounded-[4rem] border border-slate-100 shadow-2xl space-y-10 relative overflow-hidden h-fit">
                <div className="absolute top-0 right-0 w-32 h-32 bg-blue-50/50 rounded-bl-full -z-0"></div>
 
@@ -296,6 +317,7 @@ const Collections: React.FC<CollectionsProps> = ({ company, user }) => {
 
                <div className="space-y-8 relative z-10">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4 relative" ref={dropdownRef}>
+                     {/* Area & Customer Selectors (Keep existing logic) */}
                      <div className="space-y-2 relative">
                         <label className="text-[9px] font-black uppercase text-slate-400 ml-4 italic">এরিয়া বাছাই</label>
                         <button onClick={() => setShowAreaDropdown(!showAreaDropdown)} className={`w-full p-5 bg-slate-50 border-2 border-slate-100 rounded-3xl text-left outline-none font-bold text-sm shadow-inner transition-all flex items-center justify-between ${selectedArea ? 'border-blue-500' : ''}`}>
@@ -329,139 +351,107 @@ const Collections: React.FC<CollectionsProps> = ({ company, user }) => {
                                        <span className="text-[9px] text-slate-400 font-bold italic">{c.address}</span>
                                     </div>
                                  ))}
-                                 {searchedCustomers.length === 0 && <div className="p-6 text-center text-[10px] font-bold text-slate-400 uppercase italic">কোনো দোকান পাওয়া যায়নি</div>}
                               </div>
                            </div>
                         )}
                      </div>
                   </div>
 
+                  {/* Booking Type Toggle */}
                   <div className="bg-slate-100 p-2 rounded-[2rem] flex gap-2 border shadow-inner">
                      <button onClick={() => setCollectionType('REGULAR')} className={`flex-1 py-4 rounded-2xl font-black uppercase text-[10px] transition-all tracking-widest ${collectionType === 'REGULAR' ? 'bg-white text-blue-600 shadow-xl scale-[1.02]' : 'text-slate-400 hover:text-slate-600'}`}>💰 সাধারণ জমা</button>
                      <button onClick={() => setCollectionType('BOOKING')} className={`flex-1 py-4 rounded-2xl font-black uppercase text-[10px] transition-all tracking-widest ${collectionType === 'BOOKING' ? 'bg-indigo-600 text-white shadow-xl scale-[1.02]' : 'text-slate-400 hover:text-slate-600'}`}>📅 বুকিং অগ্রিম</button>
                   </div>
 
-                  {/* Split Balance Display */}
+                  {/* Balance Display */}
                   <div className="bg-slate-900 p-8 rounded-[3rem] border border-white/5 shadow-2xl space-y-6">
                      <div className="flex flex-col items-center border-b border-white/10 pb-6">
-                        <p className="text-[10px] font-black text-rose-400 uppercase tracking-[0.4em] mb-3 italic">মালের বকেয়া (Regular Due)</p>
-                        <p className={`text-4xl font-black italic tracking-tighter ${currentBalances.reg > 1 ? 'text-rose-400' : 'text-emerald-400'}`}>
-                           ৳{safeFormat(currentBalances.reg)}
-                        </p>
+                        <p className="text-[10px] font-black text-rose-400 uppercase tracking-[0.4em] mb-3 italic">মালের বকেয়া</p>
+                        <p className={`text-4xl font-black italic tracking-tighter ${currentBalances.reg > 1 ? 'text-rose-400' : 'text-emerald-400'}`}>৳{safeFormat(currentBalances.reg)}</p>
                      </div>
                      <div className="flex flex-col items-center">
-                        <p className="text-[10px] font-black text-indigo-400 uppercase tracking-[0.4em] mb-3 italic">বুকিং জমা (Booking Advance)</p>
-                        <p className="text-4xl font-black italic tracking-tighter text-indigo-400">
-                           ৳{safeFormat(currentBalances.book)}
-                        </p>
+                        <p className="text-[10px] font-black text-indigo-400 uppercase tracking-[0.4em] mb-3 italic">বুকিং জমা</p>
+                        <p className="text-4xl font-black italic tracking-tighter text-indigo-400">৳{safeFormat(currentBalances.book)}</p>
                      </div>
-
                      <div className="flex gap-2 mt-4 w-full">
                         {['Transtec', 'SQ Light', 'SQ Cables'].map(co => (
-                           <button
-                              key={co}
-                              disabled={isStaff && user.company !== co}
-                              onClick={() => setTargetCompany(co as Company)}
-                              className={`flex-1 py-3.5 rounded-2xl font-black uppercase text-[9px] transition-all border ${targetCompany === co ? 'bg-blue-600 border-blue-500 text-white shadow-lg' : 'bg-white/5 border-white/5 text-slate-500 hover:bg-white/10'} ${isStaff && user.company !== co ? 'hidden' : ''}`}
-                           >
-                              {co}
-                           </button>
+                           <button key={co} disabled={isStaff && user.company !== co} onClick={() => setTargetCompany(co as Company)} className={`flex-1 py-3.5 rounded-2xl font-black uppercase text-[9px] transition-all border ${targetCompany === co ? 'bg-blue-600 border-blue-500 text-white shadow-lg' : 'bg-white/5 border-white/5 text-slate-500 hover:bg-white/10'} ${isStaff && user.company !== co ? 'hidden' : ''}`}>{co}</button>
                         ))}
                      </div>
                   </div>
 
                   <div className="space-y-4">
-                     <label className="text-[10px] font-black uppercase text-slate-400 ml-6 italic block">জমার পরিমাণ (টাকা)</label>
                      <div className="relative">
-                        <input
-                           type="number"
-                           className="w-full p-10 bg-blue-50 border-none rounded-[3.5rem] text-center text-6xl font-black italic text-blue-600 outline-none shadow-inner focus:ring-8 ring-blue-100 transition-all"
-                           placeholder="0.00"
-                           value={amount}
-                           onChange={e => setAmount(e.target.value)}
-                        />
+                        <input type="number" className="w-full p-10 bg-blue-50 border-none rounded-[3.5rem] text-center text-6xl font-black italic text-blue-600 outline-none shadow-inner focus:ring-8 ring-blue-100 transition-all" placeholder="0.00" value={amount} onChange={e => setAmount(e.target.value)} />
                         <div className="absolute left-10 top-1/2 -translate-y-1/2 text-4xl font-black text-blue-200">৳</div>
                      </div>
                   </div>
 
-                  <button
-                     disabled={isSaving || !amount || !selectedCust}
-                     onClick={handleManualSubmit}
-                     className={`w-full ${collectionType === 'REGULAR' ? 'bg-blue-600' : 'bg-indigo-600'} text-white py-8 rounded-[3rem] font-black uppercase text-xs tracking-[0.4em] shadow-2xl active:scale-95 transition-all disabled:opacity-20 mt-4`}
-                  >
+                  <button disabled={isSaving || !amount || !selectedCust} onClick={handleManualSubmit} className={`w-full ${collectionType === 'REGULAR' ? 'bg-blue-600' : 'bg-indigo-600'} text-white py-8 rounded-[3rem] font-black uppercase text-xs tracking-[0.4em] shadow-2xl active:scale-95 transition-all disabled:opacity-20 mt-4`}>
                      {isSaving ? 'SYNCING DATA...' : 'কনফার্ম ও ডাটা সেভ করুন ➔'}
                   </button>
                </div>
             </div>
 
-            {/* ⏳ SIDE LISTS: Pending & History */}
+            {/* ⏳ LISTS */}
             <div className="space-y-8 h-full">
                <div className="bg-white rounded-[3.5rem] border border-slate-100 shadow-xl overflow-hidden flex flex-col min-h-[700px] lg:min-h-[900px]">
                   <div className="p-10 border-b bg-slate-50/50 flex justify-between items-center shrink-0">
                      <div>
                         <h4 className="text-xl font-black text-slate-800 uppercase italic tracking-tighter">অপেক্ষমাণ অনুমোদন</h4>
-                        <p className="text-[11px] font-bold text-slate-400 uppercase mt-2 tracking-widest">Pending Approvals ({pendingRequests.length})</p>
+                        <p className="text-[11px] font-bold text-slate-400 uppercase mt-2 tracking-widest">Pending ({pendingRequests.length})</p>
                      </div>
                      <div className="w-12 h-12 bg-orange-100 rounded-2xl flex items-center justify-center text-orange-600 animate-pulse font-black italic text-xl">!</div>
                   </div>
 
-                  <div className="flex-1 overflow-y-auto custom-scroll p-8 space-y-4">
+                  <div className="flex-1 overflow-y-auto p-8 space-y-4">
                      {pendingRequests.map(req => {
                         const isBooking = req.submitted_by?.includes('[BOOKING]');
                         const name = req.submitted_by?.replace('[BOOKING] ', '');
                         return (
-                           <div key={req.id} className={`bg-white p-8 rounded-[3rem] border-2 shadow-sm flex flex-col sm:flex-row justify-between items-start sm:items-center gap-6 group animate-reveal ${isBooking ? 'border-indigo-100' : 'border-slate-50 hover:border-blue-100'} transition-all`}>
-                              <div className="min-w-0 pr-4">
-                                 <h4 className="font-black text-slate-800 uppercase italic text-[16px] truncate leading-none mb-3">{req.customers?.name}</h4>
-                                 <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{req.company} • {name}</p>
-                                 {isBooking && <span className="inline-block mt-3 px-4 py-1.5 bg-indigo-50 text-indigo-600 text-[9px] font-black rounded-xl uppercase italic">Booking Advance</span>}
+                           <div key={req.id} className={`bg-white p-6 rounded-[2.5rem] border-2 shadow-sm flex flex-col sm:flex-row justify-between items-center gap-6 group animate-reveal ${isBooking ? 'border-indigo-100' : 'border-slate-50 hover:border-blue-100'} transition-all`}>
+                              <div className="min-w-0 flex-1">
+                                 <h4 className="font-black text-slate-800 uppercase italic text-[15px] truncate leading-none mb-2">{req.customers?.name}</h4>
+                                 <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{req.company} • {name}</p>
                               </div>
-                              <div className="text-right flex items-center gap-6 shrink-0 w-full sm:w-auto border-t sm:border-t-0 pt-4 sm:pt-0">
-                                 <p className={`text-2xl font-black italic tracking-tighter ${isBooking ? 'text-indigo-600' : 'text-slate-900'}`}>৳{safeFormat(req.amount)}</p>
+                              <div className="flex items-center gap-3">
+                                 <p className={`text-xl font-black italic tracking-tighter ${isBooking ? 'text-indigo-600' : 'text-slate-900'}`}>৳{safeFormat(req.amount)}</p>
+                                 
                                  {isAdmin && (
-                                    <button onClick={() => handleApprove(req)} className="bg-emerald-600 text-white px-8 py-4 rounded-2xl font-black text-[11px] uppercase shadow-lg active:scale-95 hover:bg-emerald-700 transition-all tracking-widest">APPROVE</button>
+                                    <button onClick={() => handleApprove(req)} className="bg-emerald-600 text-white px-5 py-2.5 rounded-xl font-black text-[9px] uppercase shadow-md active:scale-95">APPROVE</button>
+                                 )}
+                                 
+                                 {/* ❌ DELETE BUTTON FOR ERROR CORRECTION */}
+                                 {(isAdmin || req.submitted_by?.includes(user.name)) && (
+                                    <button onClick={() => handleDeleteRequest(req.id)} className="w-10 h-10 bg-rose-50 text-rose-500 rounded-xl flex items-center justify-center font-bold hover:bg-rose-500 hover:text-white transition-all shadow-sm" title="ডিলিট করুন">✕</button>
                                  )}
                               </div>
                            </div>
                         );
                      })}
-                     {pendingRequests.length === 0 && (
-                        <div className="py-32 text-center opacity-10 flex flex-col items-center">
-                           <span className="text-8xl mb-6">✅</span>
-                           <p className="text-sm font-black uppercase tracking-[0.4em]">সব রিকোয়েস্ট অনুমোদিত</p>
-                        </div>
-                     )}
                   </div>
 
+                  {/* Today's Confirmed */}
                   <div className="p-10 border-t bg-emerald-50/30 shrink-0">
-                     <h4 className="text-[11px] font-black text-emerald-600 uppercase italic tracking-widest mb-8 ml-2">আজকের কনফার্মড আদায়</h4>
+                     <h4 className="text-[11px] font-black text-emerald-600 uppercase italic tracking-widest mb-6">আজকের কনফার্মড আদায়</h4>
                      <div className="space-y-4">
                         {confirmedToday.map(tx => {
                            const isBookingTx = tx.meta?.is_booking === true || tx.items?.[0]?.note?.includes('বুকিং');
                            return (
-                              <div key={tx.id} className={`p-6 rounded-[2.5rem] border-2 flex justify-between items-center animate-reveal group ${isBookingTx ? 'bg-indigo-50 border-indigo-100' : 'bg-white border-emerald-100'} hover:shadow-lg transition-all`}>
-                                 <div className="min-w-0 pr-4">
-                                    <h4 className="font-black text-slate-700 uppercase italic text-[14px] truncate leading-none mb-2">{tx.customers?.name}</h4>
-                                    <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">{tx.company} • {isBookingTx ? 'বুকিং জমা' : 'নগদ আদায়'}</p>
+                              <div key={tx.id} className={`p-5 rounded-[2rem] border-2 flex justify-between items-center ${isBookingTx ? 'bg-indigo-50 border-indigo-100' : 'bg-white border-emerald-100'}`}>
+                                 <div className="min-w-0 flex-1">
+                                    <h4 className="font-black text-slate-700 uppercase italic text-[13px] truncate mb-1">{tx.customers?.name}</h4>
+                                    <p className="text-[8px] font-bold text-slate-400 uppercase">{tx.company} • {isBookingTx ? 'বুকিং' : 'কালেকশন'}</p>
                                  </div>
-                                 <div className="flex items-center gap-6">
-                                    <p className={`text-xl font-black italic tracking-tighter ${isBookingTx ? 'text-indigo-700' : 'text-emerald-700'}`}>৳{safeFormat(tx.amount)}</p>
-                                    {(isAdmin || isStaff) && (
-                                       <button
-                                          onClick={() => handleDeleteTransaction(tx)}
-                                          className="w-10 h-10 bg-rose-50 text-rose-500 rounded-xl flex items-center justify-center text-sm opacity-0 group-hover:opacity-100 transition-opacity hover:bg-rose-500 hover:text-white"
-                                          title="Delete Entry"
-                                       >
-                                          🗑️
-                                       </button>
+                                 <div className="flex items-center gap-4">
+                                    <p className={`text-lg font-black italic ${isBookingTx ? 'text-indigo-700' : 'text-emerald-700'}`}>৳{safeFormat(tx.amount)}</p>
+                                    {(isAdmin || (isStaff && tx.submitted_by === user.name)) && (
+                                       <button onClick={() => handleDeleteTransaction(tx)} className="text-rose-400 hover:text-rose-600 font-bold">🗑️</button>
                                     )}
                                  </div>
                               </div>
                            );
                         })}
-                        {confirmedToday.length === 0 && (
-                           <p className="text-center py-10 text-[11px] font-black text-slate-300 uppercase italic tracking-widest">আজ কোনো আদায় নেই</p>
-                        )}
                      </div>
                   </div>
                </div>
@@ -470,7 +460,6 @@ const Collections: React.FC<CollectionsProps> = ({ company, user }) => {
 
          {loading && (
             <div className="fixed inset-0 bg-white/60 backdrop-blur-sm z-[9999] flex flex-col items-center justify-center font-black uppercase italic text-blue-600 animate-pulse tracking-[0.4em]">
-               <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mb-4"></div>
                Syncing Collection Nodes...
             </div>
          )}
