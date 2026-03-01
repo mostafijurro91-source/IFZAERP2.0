@@ -171,17 +171,17 @@ const Inventory: React.FC<InventoryProps> = ({ company, role }) => {
         <table className="w-full text-left min-w-[1200px]">
           <thead className="bg-slate-900 text-white/50 text-[9px] font-black uppercase tracking-widest italic border-b border-white/5">
             <tr>
-              <th className="px-6 py-5 text-center">#</th>
-              <th className="px-6 py-5">Product Model</th>
-              <th className="px-6 py-5 text-center">TP Rate</th>
-              <th className="px-6 py-5 text-center">Purchased</th>
-              <th className="px-6 py-5 text-center text-rose-400">Sold</th>
-              <th className="px-6 py-5 text-center text-cyan-400">Replaced</th>
-              <th className="px-6 py-5 text-center text-emerald-400">Returned</th>
-              <th className="px-6 py-5 text-center text-blue-400">Net Stock</th>
-              <th className="px-6 py-5 text-center bg-white/5 text-emerald-400">Stock</th>
-              <th className="px-6 py-5 text-center text-indigo-400">Total Value</th>
-              <th className="px-6 py-5 text-right">Manage</th>
+              <th className="px-3 py-3 text-center">#</th>
+              <th className="px-3 py-3">Product Model</th>
+              <th className="px-3 py-3 text-center">TP Rate</th>
+              <th className="px-3 py-3 text-center">Purchased</th>
+              <th className="px-3 py-3 text-center text-rose-400">Sold</th>
+              <th className="px-3 py-3 text-center text-cyan-400">Replaced</th>
+              <th className="px-3 py-3 text-center text-emerald-400">Returned</th>
+              <th className="px-3 py-3 text-center text-blue-400">Net Stock</th>
+              <th className="px-3 py-3 text-center bg-white/5 text-emerald-400">Stock</th>
+              <th className="px-3 py-3 text-center text-indigo-400">Total Value</th>
+              <th className="px-3 py-3 text-right">Manage</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-50 text-[13px] font-bold italic">
@@ -191,32 +191,32 @@ const Inventory: React.FC<InventoryProps> = ({ company, role }) => {
               <tr><td colSpan={11} className="py-20 text-center text-slate-300 font-black uppercase">কোনো রেকর্ড পাওয়া যায়নি</td></tr>
             ) : filtered.map((p, idx) => (
               <tr key={p.id} className="hover:bg-blue-50/30 transition-all group animate-reveal" style={{ animationDelay: `${idx * 0.02}s` }}>
-                <td className="px-6 py-5 text-center text-slate-300">{(idx + 1).toString().padStart(2, '0')}</td>
-                <td className="px-6 py-5">
-                  <p className="font-black uppercase italic text-slate-800 leading-tight">{p.name}</p>
-                  <p className="text-[8px] text-slate-400 uppercase mt-1 tracking-widest">Rate: ৳{p.tp} | MRP: ৳{p.mrp}</p>
+                <td className="px-3 py-2.5 text-center text-slate-400 text-xs">{(idx + 1).toString().padStart(2, '0')}</td>
+                <td className="px-3 py-2.5">
+                  <p className="font-extrabold uppercase italic text-slate-800 leading-tight text-xs">{p.name}</p>
+                  <p className="text-[7px] text-slate-400 uppercase mt-0.5 tracking-widest">Rate: ৳{p.tp} | MRP: ৳{p.mrp}</p>
                 </td>
-                <td className="px-6 py-5 text-center text-slate-800 font-black text-base">৳{p.tp}</td>
-                <td className="px-6 py-5 text-center text-slate-600 font-black text-base">{p.purchased}</td>
-                <td className="px-6 py-5 text-center text-rose-600 font-black text-base">{p.sold}</td>
-                <td className="px-6 py-5 text-center text-cyan-600 font-black text-base">{p.replaced}</td>
-                <td className="px-6 py-5 text-center text-emerald-500 font-black text-base">+{p.returned}</td>
-                <td className="px-6 py-5 text-center text-blue-600 font-black text-xl">{p.calcStock}</td>
-                <td className="px-6 py-5 text-center bg-emerald-50/30">
-                  <div className="flex items-center justify-center gap-4">
-                    <button onClick={() => handleQuickAdjust(p.id, -1)} className="w-8 h-8 bg-white border border-rose-100 text-rose-500 rounded-xl flex items-center justify-center hover:bg-rose-500 hover:text-white transition-all shadow-sm">-</button>
-                    <div className="text-center">
-                      <span className={`text-[18px] font-black italic tracking-tighter ${p.stock < 10 ? 'text-rose-600' : 'text-slate-900'}`}>{p.stock}</span>
+                <td className="px-3 py-2.5 text-center text-slate-800 font-extrabold text-sm">৳{p.tp}</td>
+                <td className="px-3 py-2.5 text-center text-slate-600 font-bold text-sm">{p.purchased}</td>
+                <td className="px-3 py-2.5 text-center text-rose-600 font-bold text-sm">{p.sold}</td>
+                <td className="px-3 py-2.5 text-center text-cyan-600 font-bold text-sm">{p.replaced}</td>
+                <td className="px-3 py-2.5 text-center text-emerald-500 font-bold text-sm">+{p.returned}</td>
+                <td className="px-3 py-2.5 text-center text-blue-600 font-black text-base">{p.calcStock}</td>
+                <td className="px-3 py-2.5 text-center bg-emerald-50/30">
+                  <div className="flex items-center justify-center gap-2">
+                    <button onClick={() => handleQuickAdjust(p.id, -1)} className="w-6 h-6 bg-white border border-rose-100 text-rose-500 rounded-lg flex items-center justify-center hover:bg-rose-500 hover:text-white transition-all shadow-sm text-xs font-bold">-</button>
+                    <div className="text-center w-6">
+                      <span className={`text-[14px] font-black italic tracking-tighter ${p.stock < 10 ? 'text-rose-600' : 'text-slate-900'}`}>{p.stock}</span>
                     </div>
-                    <button onClick={() => handleQuickAdjust(p.id, 1)} className="w-8 h-8 bg-white border border-emerald-100 text-emerald-500 rounded-xl flex items-center justify-center hover:bg-emerald-500 hover:text-white transition-all shadow-sm">+</button>
+                    <button onClick={() => handleQuickAdjust(p.id, 1)} className="w-6 h-6 bg-white border border-emerald-100 text-emerald-500 rounded-lg flex items-center justify-center hover:bg-emerald-500 hover:text-white transition-all shadow-sm text-xs font-bold">+</button>
                   </div>
                 </td>
-                <td className="px-6 py-5 text-center text-indigo-600 font-black text-base">৳{formatCurrency((p.stock || 0) * (p.tp || 0)).replace('৳', '')}</td>
-                <td className="px-6 py-5 text-right">
-                  <div className="flex justify-end gap-2">
-                    <button onClick={() => { setEditingProduct(p); setShowEditModal(true); }} className="w-10 h-10 bg-white border text-indigo-600 rounded-xl flex items-center justify-center text-xs hover:bg-indigo-600 hover:text-white transition-all shadow-md active:scale-90">📝</button>
+                <td className="px-3 py-2.5 text-center text-indigo-600 font-extrabold text-sm">৳{formatCurrency((p.stock || 0) * (p.tp || 0)).replace('৳', '')}</td>
+                <td className="px-3 py-2.5 text-right">
+                  <div className="flex justify-end gap-1.5">
+                    <button onClick={() => { setEditingProduct(p); setShowEditModal(true); }} className="w-8 h-8 bg-white border text-indigo-600 rounded-lg flex items-center justify-center text-[10px] hover:bg-indigo-600 hover:text-white transition-all shadow-md active:scale-90">📝</button>
                     {isAdmin && (
-                      <button onClick={async () => { if (confirm(`ডিলিট নিশ্চিত? ${p.name}`)) { await supabase.from('products').delete().eq('id', p.id); fetchProducts(); } }} className="w-10 h-10 bg-white border text-rose-500 rounded-xl flex items-center justify-center text-xs hover:bg-rose-500 hover:text-white transition-all shadow-md active:scale-90">🗑️</button>
+                      <button onClick={async () => { if (confirm(`ডিলিট নিশ্চিত? ${p.name}`)) { await supabase.from('products').delete().eq('id', p.id); fetchProducts(); } }} className="w-8 h-8 bg-white border text-rose-500 rounded-lg flex items-center justify-center text-[10px] hover:bg-rose-500 hover:text-white transition-all shadow-md active:scale-90">🗑️</button>
                     )}
                   </div>
                 </td>
