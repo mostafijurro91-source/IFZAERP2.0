@@ -139,91 +139,88 @@ const Inventory: React.FC<InventoryProps> = ({ company, role }) => {
   return (
     <div className="space-y-8 pb-40 text-slate-900 animate-reveal">
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 no-print">
-        <div className="bg-white p-8 rounded-[2.5rem] shadow-xl border border-slate-100 flex items-center justify-between">
-          <div>
-            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 italic">Total Inventory Valuation (TP)</p>
-            <h3 className="text-3xl font-black italic tracking-tighter text-slate-900">{formatCurrency(totalStockVal)}</h3>
+      <div className="bg-white rounded-[3rem] border border-slate-100 shadow-xl overflow-hidden animate-reveal">
+        {/* -- Unified Header Content Start -- */}
+        <div className="p-6 md:p-8 bg-slate-50 border-b flex flex-col md:flex-row gap-6 justify-between items-center relative z-10 transition-all">
+          <div className="flex-1 w-full flex flex-col sm:flex-row gap-6">
+            <div className="flex flex-col">
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 italic">Total Inventory Valuation</p>
+              <h3 className="text-3xl font-black italic tracking-tighter text-indigo-600">{formatCurrency(totalStockVal)}</h3>
+            </div>
+
+            <div className="flex-1 flex gap-2 items-center bg-white p-2 rounded-2xl shadow-sm border w-full h-[3.5rem]">
+              <span className="pl-4 text-slate-400">🔍</span>
+              <input type="text" placeholder="মডেল সার্চ করুন (যেমন: 2.0 RM)..." className="flex-1 p-2 bg-transparent border-none text-[13px] font-bold uppercase outline-none" value={search} onChange={e => setSearch(e.target.value)} />
+            </div>
           </div>
-          <div className="w-14 h-14 bg-indigo-50 rounded-2xl flex items-center justify-center text-2xl">📊</div>
-        </div>
-        <div className="bg-slate-900 p-8 rounded-[2.5rem] shadow-2xl flex flex-col justify-center text-white relative overflow-hidden">
-          <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/10 blur-3xl rounded-full"></div>
-          <h2 className="text-xl font-black uppercase italic tracking-tighter leading-none relative z-10">মাস্টার ইনভেন্টরি লেজার</h2>
-          <p className="text-[8px] text-indigo-400 font-bold uppercase mt-2 tracking-widest relative z-10">Transparent Stock Tracking Active ✓</p>
-        </div>
-      </div>
 
-      <div className="sticky top-0 z-[110] bg-white/90 backdrop-blur-md -mx-4 px-4 py-4 border-b flex flex-col md:flex-row gap-4 items-center shadow-sm">
-        <div className="flex-1 flex gap-2 items-center bg-slate-100 p-2 rounded-2xl shadow-inner border w-full">
-          <span className="pl-4 text-slate-400">🔍</span>
-          <input type="text" placeholder="মডেল সার্চ করুন (যেমন: 2.0 RM)..." className="flex-1 p-3 bg-transparent border-none text-[13px] font-bold uppercase outline-none" value={search} onChange={e => setSearch(e.target.value)} />
+          <div className="flex gap-2 w-full md:w-auto h-[3.5rem]">
+            {isAdmin && (
+              <button onClick={() => setShowAddModal(true)} className="flex-1 md:flex-none bg-blue-600 text-white px-6 rounded-2xl font-black text-[10px] uppercase shadow-md active:scale-95 transition-all hover:bg-blue-700 whitespace-nowrap">+ নিউ মডেল</button>
+            )}
+            <button onClick={fetchProducts} className="bg-slate-900 text-white px-6 rounded-2xl font-black text-[10px] uppercase shadow-md active:scale-95 transition-all hover:bg-slate-800">🔄 রিফ্রেশ</button>
+          </div>
         </div>
-        <div className="flex gap-2 w-full md:w-auto">
-          {isAdmin && (
-            <button onClick={() => setShowAddModal(true)} className="flex-1 md:flex-none bg-blue-600 text-white px-8 py-4 rounded-2xl font-black text-[10px] uppercase shadow-lg active:scale-95 transition-all">+ নিউ মডেল যোগ</button>
-          )}
-          <button onClick={fetchProducts} className="bg-slate-900 text-white px-8 py-4 rounded-2xl font-black text-[10px] uppercase shadow-lg active:scale-95 transition-all">🔄 রিফ্রেশ</button>
-        </div>
-      </div>
+        {/* -- Unified Header Content End -- */}
 
-      <div className="bg-white rounded-[3rem] border border-slate-100 shadow-xl overflow-hidden overflow-x-auto custom-scroll">
-        <table className="w-full text-left min-w-[1200px]">
-          <thead className="bg-slate-900 text-white/50 text-[9px] font-black uppercase tracking-widest italic border-b border-white/5">
-            <tr>
-              <th className="px-3 py-3 text-center">#</th>
-              <th className="px-3 py-3">Product Model</th>
-              <th className="px-3 py-3 text-center">TP Rate</th>
-              <th className="px-3 py-3 text-center">Purchased</th>
-              <th className="px-3 py-3 text-center text-rose-400">Sold</th>
-              <th className="px-3 py-3 text-center text-cyan-400">Replaced</th>
-              <th className="px-3 py-3 text-center text-emerald-400">Returned</th>
-              <th className="px-3 py-3 text-center text-blue-400">Net Stock</th>
-              <th className="px-3 py-3 text-center bg-white/5 text-emerald-400">Stock</th>
-              <th className="px-3 py-3 text-center text-indigo-400">Total Value</th>
-              <th className="px-3 py-3 text-right">Manage</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-50 text-[13px] font-bold italic">
-            {loading ? (
-              <tr><td colSpan={11} className="py-20 text-center animate-pulse text-slate-300 font-black uppercase italic tracking-[0.4em]">Node Data Synchronizing...</td></tr>
-            ) : filtered.length === 0 ? (
-              <tr><td colSpan={11} className="py-20 text-center text-slate-300 font-black uppercase">কোনো রেকর্ড পাওয়া যায়নি</td></tr>
-            ) : filtered.map((p, idx) => (
-              <tr key={p.id} className="hover:bg-blue-50/30 transition-all group animate-reveal" style={{ animationDelay: `${idx * 0.02}s` }}>
-                <td className="px-3 py-2.5 text-center text-slate-400 text-xs">{(idx + 1).toString().padStart(2, '0')}</td>
-                <td className="px-3 py-2.5">
-                  <p className="font-extrabold uppercase italic text-slate-800 leading-tight text-xs">{p.name}</p>
-                  <p className="text-[7px] text-slate-400 uppercase mt-0.5 tracking-widest">Rate: ৳{p.tp} | MRP: ৳{p.mrp}</p>
-                </td>
-                <td className="px-3 py-2.5 text-center text-slate-800 font-extrabold text-sm">৳{p.tp}</td>
-                <td className="px-3 py-2.5 text-center text-slate-600 font-bold text-sm">{p.purchased}</td>
-                <td className="px-3 py-2.5 text-center text-rose-600 font-bold text-sm">{p.sold}</td>
-                <td className="px-3 py-2.5 text-center text-cyan-600 font-bold text-sm">{p.replaced}</td>
-                <td className="px-3 py-2.5 text-center text-emerald-500 font-bold text-sm">+{p.returned}</td>
-                <td className="px-3 py-2.5 text-center text-blue-600 font-black text-base">{p.calcStock}</td>
-                <td className="px-3 py-2.5 text-center bg-emerald-50/30">
-                  <div className="flex items-center justify-center gap-2">
-                    <button onClick={() => handleQuickAdjust(p.id, -1)} className="w-6 h-6 bg-white border border-rose-100 text-rose-500 rounded-lg flex items-center justify-center hover:bg-rose-500 hover:text-white transition-all shadow-sm text-xs font-bold">-</button>
-                    <div className="text-center w-6">
-                      <span className={`text-[14px] font-black italic tracking-tighter ${p.stock < 10 ? 'text-rose-600' : 'text-slate-900'}`}>{p.stock}</span>
-                    </div>
-                    <button onClick={() => handleQuickAdjust(p.id, 1)} className="w-6 h-6 bg-white border border-emerald-100 text-emerald-500 rounded-lg flex items-center justify-center hover:bg-emerald-500 hover:text-white transition-all shadow-sm text-xs font-bold">+</button>
-                  </div>
-                </td>
-                <td className="px-3 py-2.5 text-center text-indigo-600 font-extrabold text-sm">৳{formatCurrency((p.stock || 0) * (p.tp || 0)).replace('৳', '')}</td>
-                <td className="px-3 py-2.5 text-right">
-                  <div className="flex justify-end gap-1.5">
-                    <button onClick={() => { setEditingProduct(p); setShowEditModal(true); }} className="w-8 h-8 bg-white border text-indigo-600 rounded-lg flex items-center justify-center text-[10px] hover:bg-indigo-600 hover:text-white transition-all shadow-md active:scale-90">📝</button>
-                    {isAdmin && (
-                      <button onClick={async () => { if (confirm(`ডিলিট নিশ্চিত? ${p.name}`)) { await supabase.from('products').delete().eq('id', p.id); fetchProducts(); } }} className="w-8 h-8 bg-white border text-rose-500 rounded-lg flex items-center justify-center text-[10px] hover:bg-rose-500 hover:text-white transition-all shadow-md active:scale-90">🗑️</button>
-                    )}
-                  </div>
-                </td>
+        <div className="overflow-x-auto custom-scroll max-h-[60vh]">
+          <table className="w-full text-left min-w-[1200px] h-full">
+            <thead className="bg-slate-900 text-white/50 text-[9px] font-black uppercase tracking-widest italic border-b border-white/5 sticky top-0 z-[100]">
+              <tr>
+                <th className="px-3 py-3 text-center">#</th>
+                <th className="px-3 py-3">Product Model</th>
+                <th className="px-3 py-3 text-center">TP Rate</th>
+                <th className="px-3 py-3 text-center">Purchased</th>
+                <th className="px-3 py-3 text-center text-rose-400">Sold</th>
+                <th className="px-3 py-3 text-center text-cyan-400">Replaced</th>
+                <th className="px-3 py-3 text-center text-emerald-400">Returned</th>
+                <th className="px-3 py-3 text-center text-blue-400">Net Stock</th>
+                <th className="px-3 py-3 text-center bg-white/5 text-emerald-400">Stock</th>
+                <th className="px-3 py-3 text-center text-indigo-400">Total Value</th>
+                <th className="px-3 py-3 text-right">Manage</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody className="divide-y divide-slate-50 text-[13px] font-bold italic">
+              {loading ? (
+                <tr><td colSpan={11} className="py-20 text-center animate-pulse text-slate-300 font-black uppercase italic tracking-[0.4em]">Node Data Synchronizing...</td></tr>
+              ) : filtered.length === 0 ? (
+                <tr><td colSpan={11} className="py-20 text-center text-slate-300 font-black uppercase">কোনো রেকর্ড পাওয়া যায়নি</td></tr>
+              ) : filtered.map((p, idx) => (
+                <tr key={p.id} className="hover:bg-blue-50/30 transition-all group animate-reveal" style={{ animationDelay: `${idx * 0.02}s` }}>
+                  <td className="px-3 py-2.5 text-center text-slate-400 text-xs">{(idx + 1).toString().padStart(2, '0')}</td>
+                  <td className="px-3 py-2.5">
+                    <p className="font-extrabold uppercase italic text-slate-800 leading-tight text-xs">{p.name}</p>
+                    <p className="text-[7px] text-slate-400 uppercase mt-0.5 tracking-widest">Rate: ৳{p.tp} | MRP: ৳{p.mrp}</p>
+                  </td>
+                  <td className="px-3 py-2.5 text-center text-slate-800 font-extrabold text-sm">৳{p.tp}</td>
+                  <td className="px-3 py-2.5 text-center text-slate-600 font-bold text-sm">{p.purchased}</td>
+                  <td className="px-3 py-2.5 text-center text-rose-600 font-bold text-sm">{p.sold}</td>
+                  <td className="px-3 py-2.5 text-center text-cyan-600 font-bold text-sm">{p.replaced}</td>
+                  <td className="px-3 py-2.5 text-center text-emerald-500 font-bold text-sm">+{p.returned}</td>
+                  <td className="px-3 py-2.5 text-center text-blue-600 font-black text-base">{p.calcStock}</td>
+                  <td className="px-3 py-2.5 text-center bg-emerald-50/30">
+                    <div className="flex items-center justify-center gap-2">
+                      <button onClick={() => handleQuickAdjust(p.id, -1)} className="w-6 h-6 bg-white border border-rose-100 text-rose-500 rounded-lg flex items-center justify-center hover:bg-rose-500 hover:text-white transition-all shadow-sm text-xs font-bold">-</button>
+                      <div className="text-center w-6">
+                        <span className={`text-[14px] font-black italic tracking-tighter ${p.stock < 10 ? 'text-rose-600' : 'text-slate-900'}`}>{p.stock}</span>
+                      </div>
+                      <button onClick={() => handleQuickAdjust(p.id, 1)} className="w-6 h-6 bg-white border border-emerald-100 text-emerald-500 rounded-lg flex items-center justify-center hover:bg-emerald-500 hover:text-white transition-all shadow-sm text-xs font-bold">+</button>
+                    </div>
+                  </td>
+                  <td className="px-3 py-2.5 text-center text-indigo-600 font-extrabold text-sm">৳{formatCurrency((p.stock || 0) * (p.tp || 0)).replace('৳', '')}</td>
+                  <td className="px-3 py-2.5 text-right">
+                    <div className="flex justify-end gap-1.5">
+                      <button onClick={() => { setEditingProduct(p); setShowEditModal(true); }} className="w-8 h-8 bg-white border text-indigo-600 rounded-lg flex items-center justify-center text-[10px] hover:bg-indigo-600 hover:text-white transition-all shadow-md active:scale-90">📝</button>
+                      {isAdmin && (
+                        <button onClick={async () => { if (confirm(`ডিলিট নিশ্চিত? ${p.name}`)) { await supabase.from('products').delete().eq('id', p.id); fetchProducts(); } }} className="w-8 h-8 bg-white border text-rose-500 rounded-lg flex items-center justify-center text-[10px] hover:bg-rose-500 hover:text-white transition-all shadow-md active:scale-90">🗑️</button>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
 
       {/* ➕ ADD PRODUCT MODAL */}
