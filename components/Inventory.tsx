@@ -194,7 +194,7 @@ const Inventory: React.FC<InventoryProps> = ({ company, role }) => {
                 <td className="px-6 py-5 text-center text-slate-300">{(idx + 1).toString().padStart(2, '0')}</td>
                 <td className="px-6 py-5">
                   <p className="font-black uppercase italic text-slate-800 leading-tight">{p.name}</p>
-                  <p className="text-[8px] text-slate-400 uppercase mt-1 tracking-widest">MRP: ৳{p.mrp}</p>
+                  <p className="text-[8px] text-slate-400 uppercase mt-1 tracking-widest">Rate: ৳{p.tp} | MRP: ৳{p.mrp}</p>
                 </td>
                 <td className="px-6 py-5 text-center text-slate-800 font-black text-base">৳{p.tp}</td>
                 <td className="px-6 py-5 text-center text-slate-600 font-black text-base">{p.purchased}</td>
