@@ -31,7 +31,20 @@ const Customers: React.FC<CustomerProps> = ({ company, role, userName }) => {
   const [currentLedgerStats, setCurrentLedgerStats] = useState({ reg: 0, book: 0 });
   const [editingCustomer, setEditingCustomer] = useState<any>(null);
 
+  const [areaSearch, setAreaSearch] = useState("");
+  const [showAreaDropdown, setShowAreaDropdown] = useState(false);
+  const areaDropdownRef = useRef<HTMLDivElement>(null);
   const ledgerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (areaDropdownRef.current && !areaDropdownRef.current.contains(event.target as Node)) {
+        setShowAreaDropdown(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
   const [formData, setFormData] = useState({
     name: '',
     phone: '',
@@ -214,11 +227,46 @@ const Customers: React.FC<CustomerProps> = ({ company, role, userName }) => {
           <div className="flex-[2] flex gap-2 items-center bg-slate-100 p-2 rounded-3xl shadow-inner border border-slate-200 w-full group transition-all">
             <input autoFocus type="text" placeholder="দোকান বা ইউজার আইডি সার্চ..." className="flex-1 p-3 bg-transparent border-none text-[13px] font-bold uppercase outline-none text-slate-900" value={search} onChange={e => setSearch(e.target.value)} />
           </div>
-          <div className="flex gap-2 w-full md:w-auto shrink-0">
-            <select className="flex-1 md:flex-none p-4 bg-white border border-slate-200 rounded-3xl text-[10px] font-black uppercase outline-none shadow-sm focus:border-blue-600 transition-all" value={selectedArea} onChange={e => setSelectedArea(e.target.value)}>
-              <option value="">সকল এরিয়া</option>
-              {uniqueAreas.map(area => <option key={area} value={area}>{area}</option>)}
-            </select>
+          <div className="flex gap-2 w-full md:w-auto shrink-0 relative" ref={areaDropdownRef}>
+            <div className="relative flex-1 md:flex-none">
+              <button
+                onClick={() => setShowAreaDropdown(!showAreaDropdown)}
+                className="w-full md:w-48 p-4 bg-white border border-slate-200 rounded-3xl text-[10px] font-black uppercase outline-none shadow-sm focus:border-blue-600 transition-all text-left flex justify-between items-center"
+              >
+                <span>{selectedArea || "সকল এরিয়া"}</span>
+                <span className="text-[8px] opacity-40">▼</span>
+              </button>
+
+              {showAreaDropdown && (
+                <div className="absolute top-full mt-2 left-0 w-64 bg-white border border-slate-200 rounded-2xl shadow-2xl z-[5000] overflow-hidden animate-reveal">
+                  <input
+                    type="text"
+                    placeholder="এরিয়া খুঁজুন..."
+                    className="w-full p-4 border-b border-slate-100 text-[11px] font-bold outline-none bg-slate-50"
+                    value={areaSearch}
+                    onChange={e => setAreaSearch(e.target.value)}
+                    autoFocus
+                  />
+                  <div className="max-h-60 overflow-y-auto custom-scroll">
+                    <div
+                      className="p-4 hover:bg-slate-50 cursor-pointer text-[10px] font-black uppercase text-slate-400"
+                      onClick={() => { setSelectedArea(""); setShowAreaDropdown(false); }}
+                    >
+                      সকল এরিয়া
+                    </div>
+                    {uniqueAreas.filter(a => a.toLowerCase().includes(areaSearch.toLowerCase())).map(area => (
+                      <div
+                        key={area}
+                        className="p-4 hover:bg-blue-50 cursor-pointer text-[10px] font-black uppercase text-slate-700 border-t border-slate-50"
+                        onClick={() => { setSelectedArea(area); setShowAreaDropdown(false); setAreaSearch(""); }}
+                      >
+                        {area}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
             <button onClick={() => setIsCompact(!isCompact)} className="bg-white p-4 rounded-2xl shadow-sm border border-slate-200 text-xl active:scale-90 transition-transform">{isCompact ? "🔳" : "☰"}</button>
             {isAdmin && <button onClick={() => { setEditingCustomer(null); setFormData({ name: '', phone: '', address: '', money_amount: '', portal_username: '', portal_password: '' }); setShowModal(true); }} className="bg-blue-600 text-white px-8 py-4 rounded-3xl font-black uppercase text-[10px] shadow-xl">+ দোকান যোগ</button>}
           </div>
@@ -377,43 +425,53 @@ const Customers: React.FC<CustomerProps> = ({ company, role, userName }) => {
                         <th className="py-4 text-[11px] font-black uppercase text-slate-400 tracking-widest pl-4">তারিখ</th>
                         <th className="py-4 text-[11px] font-black uppercase text-slate-400 tracking-widest">বিবরণ</th>
                         <th className="py-4 text-[11px] font-black uppercase text-slate-400 tracking-widest text-right">বকেয়া</th>
+                        <th className="py-4 text-[11px] font-black uppercase text-slate-400 tracking-widest text-right">ফেরত</th>
                         <th className="py-4 text-[11px] font-black uppercase text-slate-400 tracking-widest text-right">আদায়</th>
                         <th className="py-4 text-[11px] font-black uppercase text-slate-400 tracking-widest text-center pr-4">Action</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-50">
                       {ledgerHistory.length === 0 ? (
-                        <tr><td colSpan={5} className="py-20 text-center opacity-30 font-black uppercase italic">কোনো লেনদেন রেকর্ড পাওয়া যায়নি</td></tr>
-                      ) : ledgerHistory.map((tx) => (
-                        <tr key={tx.id} className="group hover:bg-slate-50/50 transition-colors">
-                          <td className="py-4 text-[11px] font-bold text-slate-400 pl-4">{new Date(tx.created_at).toLocaleDateString('bn-BD')}</td>
-                          <td className="py-4">
-                            <p className="text-[13px] font-black text-slate-700 italic leading-none">{tx.items?.[0]?.note || 'Transaction'}</p>
-                            <p className="text-[9px] font-bold text-slate-300 uppercase mt-1">ID: {String(tx.id).slice(-6).toUpperCase()}</p>
-                          </td>
-                          <td className="py-4 text-right pr-2">
-                            {tx.payment_type === 'DUE' ? (
-                              <span className="text-[14px] font-black italic text-rose-600">৳{Number(tx.amount).toLocaleString()}</span>
-                            ) : '-'}
-                          </td>
-                          <td className="py-4 text-right pr-2">
-                            {tx.payment_type === 'COLLECTION' ? (
-                              <span className="text-[14px] font-black italic text-emerald-600">৳{Number(tx.amount).toLocaleString()}</span>
-                            ) : '-'}
-                          </td>
-                          <td className="py-4 text-center pr-4">
-                            {isAdmin && (
-                              <button
-                                onClick={() => handleDeleteLedgerEntry(tx)}
-                                className="w-8 h-8 bg-rose-50 text-rose-500 rounded-xl flex items-center justify-center text-[10px] opacity-0 group-hover:opacity-100 transition-all hover:bg-rose-500 hover:text-white mx-auto"
-                                title="এন্ট্রি মুছুন"
-                              >
-                                🗑️
-                              </button>
-                            )}
-                          </td>
-                        </tr>
-                      ))}
+                        <tr><td colSpan={6} className="py-20 text-center opacity-30 font-black uppercase italic">কোনো লেনদেন রেকর্ড পাওয়া যায়নি</td></tr>
+                      ) : ledgerHistory.map((tx) => {
+                        const returnItem = tx.items?.find((it: any) => it.action === 'RETURN');
+                        const returnAmount = returnItem ? Math.abs(tx.items.reduce((s: number, it: any) => it.action === 'RETURN' ? s + (Number(it.total) || 0) : s, 0)) : 0;
+
+                        return (
+                          <tr key={tx.id} className="group hover:bg-slate-50/50 transition-colors">
+                            <td className="py-4 text-[11px] font-bold text-slate-400 pl-4">{new Date(tx.created_at).toLocaleDateString('bn-BD')}</td>
+                            <td className="py-4">
+                              <p className="text-[13px] font-black text-slate-700 italic leading-none">{tx.items?.[0]?.note || (returnItem ? `ফেরত: ${returnItem.name}` : 'Transaction')}</p>
+                              <p className="text-[9px] font-bold text-slate-300 uppercase mt-1">ID: {String(tx.id).slice(-6).toUpperCase()}</p>
+                            </td>
+                            <td className="py-4 text-right pr-2">
+                              {tx.payment_type === 'DUE' && !returnItem ? (
+                                <span className="text-[14px] font-black italic text-rose-600">৳{Number(tx.amount).toLocaleString()}</span>
+                              ) : '-'}
+                            </td>
+                            <td className="py-4 text-right pr-2">
+                              {returnAmount > 0 ? (
+                                <span className="text-[14px] font-black italic text-orange-600">৳{returnAmount.toLocaleString()}</span>
+                              ) : '-'}
+                            </td>
+                            <td className="py-4 text-right pr-2">
+                              {tx.payment_type === 'COLLECTION' ? (
+                                <span className="text-[14px] font-black italic text-emerald-600">৳{Number(tx.amount).toLocaleString()}</span>
+                              ) : '-'}
+                            </td>
+                            <td className="py-4 text-center pr-4">
+                              {isAdmin && (
+                                <button
+                                  onClick={() => handleDeleteLedgerEntry(tx)}
+                                  className="w-8 h-8 bg-rose-50 text-rose-500 rounded-xl flex items-center justify-center text-[10px] opacity-0 group-hover:opacity-100 transition-all hover:bg-rose-500 hover:text-white mx-auto"
+                                  title="এন্ট্রি মুছুন"
+                                >
+                                  🗑️
+                                </button>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
                     </tbody>
                   </table>
                 </div>
