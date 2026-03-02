@@ -218,7 +218,7 @@ const Customers: React.FC<CustomerProps> = ({ company, role, userName }) => {
     } catch (err: any) { alert("ত্রুটি: " + err.message); } finally { setIsSaving(false); }
   };
 
-  const filtered = customers.filter(c => (!search || c.name.toLowerCase().includes(search.toLowerCase()) || c.phone.includes(search)) && (!selectedArea || c.address === selectedArea));
+  const filtered = customers.filter(c => (!search || c.name.toLowerCase().includes(search.toLowerCase()) || (c.phone && c.phone.includes(search))) && (!selectedArea || c.address === selectedArea));
 
   return (
     <div className="space-y-6 pb-40 relative text-slate-900">
@@ -471,7 +471,9 @@ const Customers: React.FC<CustomerProps> = ({ company, role, userName }) => {
                               )}
                             </td>
                           </tr>
-                        ))}
+                        );
+                      })}
+                    )}
                     </tbody>
                   </table>
                 </div>
