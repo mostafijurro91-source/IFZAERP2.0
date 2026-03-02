@@ -325,10 +325,45 @@ const Sales: React.FC<SalesProps> = ({ company, role, user }) => {
         <div className="flex-1 space-y-6 no-print">
           <div className="bg-white p-6 rounded-[2rem] border shadow-sm" ref={dropdownRef}>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <select className="w-full p-4 bg-slate-50 border rounded-2xl outline-none font-bold text-xs appearance-none" value={areaFilter} onChange={e => { setAreaFilter(e.target.value); setShowCustDropdown(true); }}>
-                <option value="">সকল এরিয়া</option>
-                {Array.from(new Set(customers.map(c => c.address?.trim()).filter(Boolean))).sort().map(a => <option key={a} value={a}>{a}</option>)}
-              </select>
+              <div className="relative" ref={areaRef}>
+                <button
+                  onClick={() => setShowAreaDropdown(!showAreaDropdown)}
+                  className="w-full p-4 bg-slate-50 border rounded-2xl outline-none font-bold text-xs flex justify-between items-center transition-all focus:border-blue-500"
+                >
+                  <span className="uppercase">{areaFilter || "সকল এরিয়া"}</span>
+                  <span className="text-[8px] opacity-40">▼</span>
+                </button>
+
+                {showAreaDropdown && (
+                  <div className="absolute top-full mt-2 left-0 w-full bg-white border border-slate-200 rounded-2xl shadow-2xl z-[1000] overflow-hidden animate-reveal">
+                    <input
+                      type="text"
+                      placeholder="এরিয়া খুঁজুন..."
+                      className="w-full p-4 border-b border-slate-100 text-[11px] font-bold outline-none bg-slate-50"
+                      value={areaSearch}
+                      onChange={e => setAreaSearch(e.target.value)}
+                      autoFocus
+                    />
+                    <div className="max-h-60 overflow-y-auto custom-scroll">
+                      <div
+                        className="p-4 hover:bg-slate-50 cursor-pointer text-[10px] font-black uppercase text-slate-400"
+                        onClick={() => { setAreaFilter(""); setShowAreaDropdown(false); setShowCustDropdown(true); }}
+                      >
+                        সকল এরিয়া
+                      </div>
+                      {Array.from(new Set(customers.map(c => c.address?.trim()).filter(Boolean))).sort().filter(a => a.toLowerCase().includes(areaSearch.toLowerCase())).map(area => (
+                        <div
+                          key={area}
+                          className="p-4 hover:bg-blue-50 cursor-pointer text-[10px] font-black uppercase text-slate-700 border-t border-slate-50"
+                          onClick={() => { setAreaFilter(area); setShowAreaDropdown(false); setShowCustDropdown(true); setAreaSearch(""); }}
+                        >
+                          {area}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
               <button onClick={() => setShowCustDropdown(!showCustDropdown)} className={`w-full p-4 rounded-2xl border flex items-center justify-between text-left ${selectedCust ? 'bg-blue-50 border-blue-200' : 'bg-slate-50'}`}>
                 {selectedCust ? <span className="font-black text-blue-700 text-xs uppercase">{selectedCust.name}</span> : <span className="text-xs font-bold text-slate-400 uppercase">দোকান বাছাই করুন...</span>}
                 <span>▼</span>
