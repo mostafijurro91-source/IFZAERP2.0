@@ -26,7 +26,8 @@ const Customers: React.FC<CustomerProps> = ({ company, role, userName }) => {
   const [showLedger, setShowLedger] = useState(false);
   const [selectedLedgerCust, setSelectedLedgerCust] = useState<any>(null);
   const [ledgerHistory, setLedgerHistory] = useState<any[]>([]);
-  const [isSaving, setIsSaving] = useState(false);
+  const [isSaving, setIsSaving] = false;
+  const [isDownloading, setIsDownloading] = useState(false);
 
   const [currentLedgerStats, setCurrentLedgerStats] = useState({ reg: 0, book: 0 });
   const [editingCustomer, setEditingCustomer] = useState<any>(null);
@@ -218,6 +219,31 @@ const Customers: React.FC<CustomerProps> = ({ company, role, userName }) => {
     } catch (err: any) { alert("ত্রুটি: " + err.message); } finally { setIsSaving(false); }
   };
 
+  const handleDownloadLedger = async () => {
+    if (!ledgerRef.current || isDownloading) return;
+    setIsDownloading(true);
+    try {
+      const canvas = await html2canvas(ledgerRef.current, {
+        scale: 2,
+        useCORS: true,
+        backgroundColor: '#ffffff',
+        logging: false
+      });
+      const imgData = canvas.toDataURL('image/jpeg', 0.95);
+      const pdf = new jsPDF('p', 'mm', 'a4');
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const imgHeight = (canvas.height * pdfWidth) / canvas.width;
+
+      pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, imgHeight);
+      pdf.save(`Statement_${selectedLedgerCust?.name}_${new Date().toLocaleDateString()}.pdf`);
+    } catch (e) {
+      console.error(e);
+      alert("PDF তৈরি করা যায়নি।");
+    } finally {
+      setIsDownloading(false);
+    }
+  };
+
   const filtered = customers.filter(c => (!search || c.name.toLowerCase().includes(search.toLowerCase()) || (c.phone && c.phone.includes(search))) && (!selectedArea || c.address === selectedArea));
 
   return (
@@ -401,7 +427,16 @@ const Customers: React.FC<CustomerProps> = ({ company, role, userName }) => {
                 <h3 className="text-2xl font-black uppercase italic tracking-tighter">কাস্টমার স্টেটমেন্ট (লেজার)</h3>
                 <p className="text-[10px] text-slate-500 font-bold uppercase mt-1.5 tracking-widest">{selectedLedgerCust.name} • {company}</p>
               </div>
-              <button onClick={() => setShowLedger(false)} className="text-4xl text-slate-500 hover:text-white font-black">✕</button>
+              <div className="flex items-center gap-4">
+                <button
+                  onClick={handleDownloadLedger}
+                  disabled={isDownloading}
+                  className="bg-white/10 hover:bg-white/20 text-white px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all active:scale-95 flex items-center gap-2 border border-white/10"
+                >
+                  {isDownloading ? 'প্রসেসিং...' : 'প্রিন্ট স্টেটমেন্ট ⎙'}
+                </button>
+                <button onClick={() => setShowLedger(false)} className="text-4xl text-slate-500 hover:text-white font-black">✕</button>
+              </div>
             </div>
 
             <div className="flex-1 overflow-y-auto custom-scroll p-1" ref={ledgerRef}>
