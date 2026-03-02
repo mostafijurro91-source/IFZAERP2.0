@@ -26,7 +26,7 @@ const Customers: React.FC<CustomerProps> = ({ company, role, userName }) => {
   const [showLedger, setShowLedger] = useState(false);
   const [selectedLedgerCust, setSelectedLedgerCust] = useState<any>(null);
   const [ledgerHistory, setLedgerHistory] = useState<any[]>([]);
-  const [isSaving, setIsSaving] = false;
+  const [isSaving, setIsSaving] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
 
   const [currentLedgerStats, setCurrentLedgerStats] = useState({ reg: 0, book: 0 });
