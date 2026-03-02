@@ -155,22 +155,38 @@ const Customers: React.FC<CustomerProps> = ({ company, role, userName }) => {
   const fetchCustomerLedger = async (cust: any) => {
     setSelectedLedgerCust(cust);
     setShowLedger(true);
-    setLedgerHistory([]);
+    setLedgerHistory([]); // Clear previous ledger
+    setCurrentLedgerStats({ reg: 0, book: 0 }); // Clear previous stats
+
     try {
-      const dbCo = mapToDbCompany(company);
-      const { data } = await supabase.from('transactions').select('*').eq('customer_id', cust.id).eq('company', dbCo).order('created_at', { ascending: false });
+      const dbCo = mapToDbCompany(company); // Use 'company' from props
+      const { data, error } = await supabase
+        .from('transactions')
+        .select('*')
+        .eq('customer_id', cust.id) // Use cust.id
+        .eq('company', dbCo)
+        .order('created_at', { ascending: false });
 
-      // Filter for booking deposits only as requested
-      const bookingOnly = data?.filter(tx => tx.payment_type === 'COLLECTION' && (tx.meta?.is_booking === true || tx.items?.[0]?.note?.includes('বুকিং'))) || [];
+      if (error) throw error;
+      setLedgerHistory(data || []);
 
-      let b = 0;
-      bookingOnly.forEach(tx => {
-        b += (Number(tx.amount) || 0);
+      // Calculate totals
+      let totalR = 0;
+      let totalB = 0;
+      data?.forEach(tx => {
+        const amt = Number(tx.amount);
+        const isBooking = tx.meta?.is_booking === true || tx.items?.[0]?.note?.includes('বুকিং');
+        if (tx.payment_type === 'COLLECTION') {
+          if (isBooking) totalB += amt;
+          else totalR -= amt;
+        } else { // DUE
+          totalR += amt;
+        }
       });
-
-      setCurrentLedgerStats({ reg: 0, book: b });
-      setLedgerHistory(bookingOnly);
-    } catch (err) { console.error(err); }
+      setCurrentLedgerStats({ reg: totalR, book: totalB });
+    } catch (err: any) {
+      console.error('Error fetching ledger:', err);
+    }
   };
 
   const handleDeleteLedgerEntry = async (tx: any) => {
@@ -342,41 +358,54 @@ const Customers: React.FC<CustomerProps> = ({ company, role, userName }) => {
 
             <div className="flex-1 overflow-y-auto custom-scroll p-1" ref={ledgerRef}>
               <div className="p-10 text-black">
-                <div className="flex justify-center mb-10">
-                  <div className="w-full max-w-md p-8 bg-indigo-50 border-2 border-indigo-600 rounded-[2.5rem] text-center shadow-xl">
-                    <p className="text-[11px] font-black uppercase italic mb-3 text-indigo-600 tracking-[0.2em]">মোট বুকিং জমা (Total Booking Deposit)</p>
-                    <p className="text-5xl font-black italic text-indigo-700 tracking-tighter">৳{currentLedgerStats.book.toLocaleString()}</p>
+                {/* 📊 LEDGER STATS */}
+                <div className="grid grid-cols-2 gap-4 mb-8">
+                  <div className="bg-slate-900 p-6 rounded-[2.5rem] border border-white/5 shadow-xl text-center">
+                    <p className="text-[10px] font-black text-rose-400 uppercase tracking-widest mb-2 italic">বকেয়া (Regular Due)</p>
+                    <p className="text-2xl font-black italic tracking-tighter text-rose-400">৳{currentLedgerStats.reg.toLocaleString()}</p>
+                  </div>
+                  <div className="bg-slate-900 p-6 rounded-[2.5rem] border border-white/5 shadow-xl text-center">
+                    <p className="text-[10px] font-black text-indigo-400 uppercase tracking-widest mb-2 italic">বুকিং জমা (Booking)</p>
+                    <p className="text-2xl font-black italic tracking-tighter text-indigo-400">৳{currentLedgerStats.book.toLocaleString()}</p>
                   </div>
                 </div>
-                <table className="w-full border-collapse border-2 border-black">
-                  <thead>
-                    <tr className="bg-slate-100 text-[10px] font-black uppercase italic border-b-2 border-black text-left">
-                      <th className="p-4 border border-black">তারিখ</th>
-                      <th className="p-4 border border-black">বিস্তারিত বিবরণ</th>
-                      <th className="p-4 border border-black text-right">জমার পরিমাণ</th>
-                      <th className="p-4 border border-black text-center">অ্যাকশন</th>
-                    </tr>
-                  </thead>
-                  <tbody className="text-[11px] font-bold">
-                    {ledgerHistory.length === 0 ? (
-                      <tr><td colSpan={4} className="py-20 text-center opacity-30 font-black uppercase italic">কোনো বুকিং রেকর্ড পাওয়া যায়নি</td></tr>
-                    ) : ledgerHistory.map((tx, i) => {
-                      const isBank = tx.meta?.is_bank_deposit === true;
-                      return (
-                        <tr key={tx.id} className="border border-black hover:bg-indigo-50/10 transition-colors">
-                          <td className="p-4 border border-black">{new Date(tx.created_at).toLocaleDateString('bn-BD')}</td>
-                          <td className="p-4 border border-black uppercase italic font-black">
-                            <span className="text-indigo-600">
-                              📅 বুকিং {isBank ? 'ব্যাংক' : 'ক্যাশ'} জমা
-                            </span>
-                            <p className="text-[8px] text-slate-400 mt-1 uppercase italic">{tx.items?.[0]?.note || 'বুকিং অগ্রিম'}</p>
+
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left">
+                    <thead>
+                      <tr className="border-b-2 border-slate-100 italic">
+                        <th className="py-4 text-[11px] font-black uppercase text-slate-400 tracking-widest pl-4">তারিখ</th>
+                        <th className="py-4 text-[11px] font-black uppercase text-slate-400 tracking-widest">বিবরণ</th>
+                        <th className="py-4 text-[11px] font-black uppercase text-slate-400 tracking-widest text-right">বকেয়া</th>
+                        <th className="py-4 text-[11px] font-black uppercase text-slate-400 tracking-widest text-right">আদায়</th>
+                        <th className="py-4 text-[11px] font-black uppercase text-slate-400 tracking-widest text-center pr-4">Action</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-50">
+                      {ledgerHistory.length === 0 ? (
+                        <tr><td colSpan={5} className="py-20 text-center opacity-30 font-black uppercase italic">কোনো লেনদেন রেকর্ড পাওয়া যায়নি</td></tr>
+                      ) : ledgerHistory.map((tx) => (
+                        <tr key={tx.id} className="group hover:bg-slate-50/50 transition-colors">
+                          <td className="py-4 text-[11px] font-bold text-slate-400 pl-4">{new Date(tx.created_at).toLocaleDateString('bn-BD')}</td>
+                          <td className="py-4">
+                            <p className="text-[13px] font-black text-slate-700 italic leading-none">{tx.items?.[0]?.note || 'Transaction'}</p>
+                            <p className="text-[9px] font-bold text-slate-300 uppercase mt-1">ID: {String(tx.id).slice(-6).toUpperCase()}</p>
                           </td>
-                          <td className="p-4 text-right border border-black text-emerald-600 font-extrabold text-base italic"> ৳{Number(tx.amount).toLocaleString()} </td>
-                          <td className="p-4 text-center border border-black">
+                          <td className="py-4 text-right pr-2">
+                            {tx.payment_type === 'DUE' ? (
+                              <span className="text-[14px] font-black italic text-rose-600">৳{Number(tx.amount).toLocaleString()}</span>
+                            ) : '-'}
+                          </td>
+                          <td className="py-4 text-right pr-2">
+                            {tx.payment_type === 'COLLECTION' ? (
+                              <span className="text-[14px] font-black italic text-emerald-600">৳{Number(tx.amount).toLocaleString()}</span>
+                            ) : '-'}
+                          </td>
+                          <td className="py-4 text-center pr-4">
                             {isAdmin && (
                               <button
                                 onClick={() => handleDeleteLedgerEntry(tx)}
-                                className="w-10 h-10 bg-rose-50 text-rose-500 rounded-xl flex items-center justify-center text-sm hover:bg-rose-500 hover:text-white transition-all shadow-sm mx-auto"
+                                className="w-8 h-8 bg-rose-50 text-rose-500 rounded-xl flex items-center justify-center text-[10px] opacity-0 group-hover:opacity-100 transition-all hover:bg-rose-500 hover:text-white mx-auto"
                                 title="এন্ট্রি মুছুন"
                               >
                                 🗑️
@@ -384,10 +413,10 @@ const Customers: React.FC<CustomerProps> = ({ company, role, userName }) => {
                             )}
                           </td>
                         </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             </div>
           </div>
