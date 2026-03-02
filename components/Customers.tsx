@@ -27,12 +27,10 @@ const Customers: React.FC<CustomerProps> = ({ company, role, userName }) => {
   const [selectedLedgerCust, setSelectedLedgerCust] = useState<any>(null);
   const [ledgerHistory, setLedgerHistory] = useState<any[]>([]);
   const [isSaving, setIsSaving] = useState(false);
-  const [areaSearch, setAreaSearch] = useState("");
-  const [showAreaDropdown, setShowAreaDropdown] = useState(false);
-  const [isDownloading, setIsDownloading] = useState(false);
+
   const [currentLedgerStats, setCurrentLedgerStats] = useState({ reg: 0, book: 0 });
   const [editingCustomer, setEditingCustomer] = useState<any>(null);
-  const dropdownRef = useRef<HTMLDivElement>(null);
+
   const ledgerRef = useRef<HTMLDivElement>(null);
   const [formData, setFormData] = useState({
     name: '',
@@ -46,15 +44,6 @@ const Customers: React.FC<CustomerProps> = ({ company, role, userName }) => {
   const isAdmin = role.toUpperCase() === 'ADMIN';
 
   useEffect(() => { fetchCustomers(); }, [company]);
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-        setShowAreaDropdown(false);
-      }
-    };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
 
   const fetchCustomers = async () => {
     try {
@@ -66,7 +55,7 @@ const Customers: React.FC<CustomerProps> = ({ company, role, userName }) => {
       const regMap: Record<string, number> = {};
       const bookMap: Record<string, number> = {};
 
-      txData?.forEach((tx: any) => {
+      txData?.forEach(tx => {
         const amt = Number(tx.amount) || 0;
         const cid = tx.customer_id;
         const isBooking = tx.meta?.is_booking === true || tx.items?.[0]?.note?.includes('বুকিং');
@@ -85,7 +74,7 @@ const Customers: React.FC<CustomerProps> = ({ company, role, userName }) => {
       setCustomers(custData || []);
       setRegularDues(regMap);
       setBookingAdvances(bookMap);
-      setUniqueAreas(Array.from(new Set(custData?.map((c: any) => c.address?.trim()).filter(Boolean) || [])).sort() as string[]);
+      setUniqueAreas(Array.from(new Set(custData?.map(c => c.address?.trim()).filter(Boolean) || [])).sort() as string[]);
     } catch (err) { console.error(err); } finally { setLoading(false); }
   };
 
@@ -169,53 +158,38 @@ const Customers: React.FC<CustomerProps> = ({ company, role, userName }) => {
     setLedgerHistory([]);
     try {
       const dbCo = mapToDbCompany(company);
-      const { data } = await supabase.from('transactions').select('*').eq('customer_id', cust.id).eq('company', dbCo).order('created_at', { ascending: true });
-      let r = 0, b = 0;
-      data?.forEach((tx: any) => {
-        const amt = Number(tx.amount) || 0;
-        const isBooking = tx.meta?.is_booking === true || tx.items?.[0]?.note?.includes('বুকিং');
-        if (tx.payment_type === 'DUE') r += amt;
-        else if (tx.payment_type === 'COLLECTION') {
-          if (isBooking) b += amt;
-          else r -= amt;
-        }
+      const { data } = await supabase.from('transactions').select('*').eq('customer_id', cust.id).eq('company', dbCo).order('created_at', { ascending: false });
+
+      // Filter for booking deposits only as requested
+      const bookingOnly = data?.filter(tx => tx.payment_type === 'COLLECTION' && (tx.meta?.is_booking === true || tx.items?.[0]?.note?.includes('বুকিং'))) || [];
+
+      let b = 0;
+      bookingOnly.forEach(tx => {
+        b += (Number(tx.amount) || 0);
       });
-      setCurrentLedgerStats({ reg: r, book: b });
-      setLedgerHistory(data || []);
+
+      setCurrentLedgerStats({ reg: 0, book: b });
+      setLedgerHistory(bookingOnly);
     } catch (err) { console.error(err); }
   };
 
-  const downloadLedgerPDF = async () => {
-    if (!ledgerRef.current || isDownloading) return;
-    setIsDownloading(true);
+  const handleDeleteLedgerEntry = async (tx: any) => {
+    if (!isAdmin) return;
+    const txIdShort = String(tx.id).slice(-6).toUpperCase();
+    if (!confirm(`আপনি কি নিশ্চিত এই জমার এন্ট্রিটি (#${txIdShort}) ডিলিট করতে চান?`)) return;
+
+    setIsSaving(true);
     try {
-      const canvas = await html2canvas(ledgerRef.current, { scale: 3, useCORS: true, backgroundColor: '#ffffff' });
-      const imgData = canvas.toDataURL('image/jpeg', 1.0);
-      const pdf = new jsPDF('p', 'mm', 'a4');
-
-      const pdfWidth = pdf.internal.pageSize.getWidth();
-      const pdfHeight = pdf.internal.pageSize.getHeight();
-      const imgHeight = (canvas.height * pdfWidth) / canvas.width;
-
-      let heightLeft = imgHeight;
-      let position = 0;
-
-      pdf.addImage(imgData, 'JPEG', 0, position, pdfWidth, imgHeight);
-      heightLeft -= pdfHeight;
-
-      while (heightLeft > 0) {
-        position -= pdfHeight;
-        pdf.addPage();
-        pdf.addImage(imgData, 'JPEG', 0, position, pdfWidth, imgHeight);
-        heightLeft -= pdfHeight;
-      }
-
-      pdf.save(`Statement_${selectedLedgerCust?.name}.pdf`);
-    } catch (e) { alert("PDF তৈরি করা যায়নি।"); } finally { setIsDownloading(false); }
+      // Delete notification first if exists
+      await supabase.from('notifications').delete().eq('customer_id', tx.customer_id).ilike('message', `%#${txIdShort}%`);
+      const { error } = await supabase.from('transactions').delete().eq('id', tx.id);
+      if (error) throw error;
+      alert("এন্ট্রিটি সফলভাবে মুছে ফেলা হয়েছে! ✅");
+      if (selectedLedgerCust) fetchCustomerLedger(selectedLedgerCust);
+    } catch (err: any) { alert("ত্রুটি: " + err.message); } finally { setIsSaving(false); }
   };
 
-  const filteredAreas = useMemo(() => uniqueAreas.filter((a: string) => a.toLowerCase().includes(areaSearch.toLowerCase())), [uniqueAreas, areaSearch]);
-  const filtered = customers.filter((c: any) => (!search || c.name.toLowerCase().includes(search.toLowerCase()) || c.phone.includes(search)) && (!selectedArea || c.address === selectedArea));
+  const filtered = customers.filter(c => (!search || c.name.toLowerCase().includes(search.toLowerCase()) || c.phone.includes(search)) && (!selectedArea || c.address === selectedArea));
 
   return (
     <div className="space-y-6 pb-40 relative text-slate-900">
@@ -224,43 +198,11 @@ const Customers: React.FC<CustomerProps> = ({ company, role, userName }) => {
           <div className="flex-[2] flex gap-2 items-center bg-slate-100 p-2 rounded-3xl shadow-inner border border-slate-200 w-full group transition-all">
             <input autoFocus type="text" placeholder="দোকান বা ইউজার আইডি সার্চ..." className="flex-1 p-3 bg-transparent border-none text-[13px] font-bold uppercase outline-none text-slate-900" value={search} onChange={e => setSearch(e.target.value)} />
           </div>
-          <div className="flex gap-2 w-full md:w-auto shrink-0 relative" ref={dropdownRef}>
-            <div className="relative flex-1 md:flex-none">
-              <button
-                onClick={() => setShowAreaDropdown(!showAreaDropdown)}
-                className={`w-full md:w-48 p-4 bg-white border border-slate-200 rounded-3xl text-[10px] font-black uppercase outline-none shadow-sm transition-all flex items-center justify-between ${selectedArea ? 'border-blue-600' : ''}`}
-              >
-                {selectedArea ? <span className="text-blue-700">{selectedArea}</span> : <span className="text-slate-400">সকল এরিয়া</span>}
-                <span className="ml-2">▼</span>
-              </button>
-              {showAreaDropdown && (
-                <div className="absolute top-[60px] left-0 right-0 md:w-64 z-[600] bg-white border border-slate-200 rounded-3xl shadow-2xl overflow-hidden animate-reveal">
-                  <input
-                    className="w-full p-4 border-b font-bold text-[10px] outline-none bg-slate-50 uppercase"
-                    placeholder="সার্চ এরিয়া..."
-                    value={areaSearch}
-                    onChange={(e: any) => setAreaSearch(e.target.value)}
-                  />
-                  <div className="max-h-60 overflow-y-auto">
-                    <div
-                      onClick={() => { setSelectedArea(""); setShowAreaDropdown(false); setAreaSearch(""); }}
-                      className="p-4 hover:bg-blue-50 border-b border-slate-50 cursor-pointer font-bold text-[10px] uppercase text-slate-400 italic"
-                    >
-                      সকল এরিয়া
-                    </div>
-                    {filteredAreas.map((area: string) => (
-                      <div
-                        key={area}
-                        onClick={() => { setSelectedArea(area); setShowAreaDropdown(false); setAreaSearch(""); }}
-                        className="p-4 hover:bg-blue-50 border-b border-slate-50 cursor-pointer font-black text-[10px] uppercase text-slate-700"
-                      >
-                        {area}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
+          <div className="flex gap-2 w-full md:w-auto shrink-0">
+            <select className="flex-1 md:flex-none p-4 bg-white border border-slate-200 rounded-3xl text-[10px] font-black uppercase outline-none shadow-sm focus:border-blue-600 transition-all" value={selectedArea} onChange={e => setSelectedArea(e.target.value)}>
+              <option value="">সকল এরিয়া</option>
+              {uniqueAreas.map(area => <option key={area} value={area}>{area}</option>)}
+            </select>
             <button onClick={() => setIsCompact(!isCompact)} className="bg-white p-4 rounded-2xl shadow-sm border border-slate-200 text-xl active:scale-90 transition-transform">{isCompact ? "🔳" : "☰"}</button>
             {isAdmin && <button onClick={() => { setEditingCustomer(null); setFormData({ name: '', phone: '', address: '', money_amount: '', portal_username: '', portal_password: '' }); setShowModal(true); }} className="bg-blue-600 text-white px-8 py-4 rounded-3xl font-black uppercase text-[10px] shadow-xl">+ দোকান যোগ</button>}
           </div>
@@ -277,7 +219,7 @@ const Customers: React.FC<CustomerProps> = ({ company, role, userName }) => {
               <div className="col-span-3 text-right">Actions</div>
             </div>
           )}
-          {filtered.map((c: any, idx: number) => {
+          {filtered.map((c, idx) => {
             const regBal = regularDues[c.id] || 0;
             const bookBal = bookingAdvances[c.id] || 0;
             return (
@@ -395,50 +337,52 @@ const Customers: React.FC<CustomerProps> = ({ company, role, userName }) => {
                 <h3 className="text-2xl font-black uppercase italic tracking-tighter">কাস্টমার স্টেটমেন্ট (লেজার)</h3>
                 <p className="text-[10px] text-slate-500 font-bold uppercase mt-1.5 tracking-widest">{selectedLedgerCust.name} • {company}</p>
               </div>
-              <div className="flex gap-4 items-center">
-                <button disabled={isDownloading} onClick={downloadLedgerPDF} className="bg-white text-slate-900 px-6 py-3 rounded-2xl font-black text-[10px] uppercase shadow-xl active:scale-95 transition-all">PDF ডাউনলোড ⎙</button>
-                <button onClick={() => setShowLedger(false)} className="text-4xl text-slate-500 hover:text-white font-black">✕</button>
-              </div>
+              <button onClick={() => setShowLedger(false)} className="text-4xl text-slate-500 hover:text-white font-black">✕</button>
             </div>
 
             <div className="flex-1 overflow-y-auto custom-scroll p-1" ref={ledgerRef}>
               <div className="p-10 text-black">
-                <div className="grid grid-cols-2 gap-4 mb-10">
-                  <div className="p-6 bg-slate-50 border-2 border-black rounded-3xl text-center">
-                    <p className="text-[10px] font-black uppercase italic mb-2">রেগুলার বকেয়া (isolated):</p>
-                    <p className={`text-4xl font-black italic ${currentLedgerStats.reg > 0 ? 'text-rose-600' : 'text-emerald-600'}`}>৳{currentLedgerStats.reg.toLocaleString()}</p>
-                  </div>
-                  <div className="p-6 bg-indigo-50 border-2 border-indigo-600 rounded-3xl text-center">
-                    <p className="text-[10px] font-black uppercase italic mb-2 text-indigo-600">বুকিং জমা (Isolated Account):</p>
-                    <p className="text-4xl font-black italic text-indigo-600">৳{currentLedgerStats.book.toLocaleString()}</p>
+                <div className="flex justify-center mb-10">
+                  <div className="w-full max-w-md p-8 bg-indigo-50 border-2 border-indigo-600 rounded-[2.5rem] text-center shadow-xl">
+                    <p className="text-[11px] font-black uppercase italic mb-3 text-indigo-600 tracking-[0.2em]">মোট বুকিং জমা (Total Booking Deposit)</p>
+                    <p className="text-5xl font-black italic text-indigo-700 tracking-tighter">৳{currentLedgerStats.book.toLocaleString()}</p>
                   </div>
                 </div>
                 <table className="w-full border-collapse border-2 border-black">
                   <thead>
                     <tr className="bg-slate-100 text-[10px] font-black uppercase italic border-b-2 border-black text-left">
                       <th className="p-4 border border-black">তারিখ</th>
-                      <th className="p-4 border border-black">বিবরণ</th>
-                      <th className="p-4 border border-black text-right">বাকি</th>
-                      <th className="p-4 border border-black text-right">জমা</th>
+                      <th className="p-4 border border-black">বিস্তারিত বিবরণ</th>
+                      <th className="p-4 border border-black text-right">জমার পরিমাণ</th>
+                      <th className="p-4 border border-black text-center">অ্যাকশন</th>
                     </tr>
                   </thead>
                   <tbody className="text-[11px] font-bold">
-                    {ledgerHistory.map((tx, i) => {
-                      const isColl = tx.payment_type === 'COLLECTION';
-                      const isBooking = tx.meta?.is_booking === true || tx.items?.[0]?.note?.includes('বুকিং');
+                    {ledgerHistory.length === 0 ? (
+                      <tr><td colSpan={4} className="py-20 text-center opacity-30 font-black uppercase italic">কোনো বুকিং রেকর্ড পাওয়া যায়নি</td></tr>
+                    ) : ledgerHistory.map((tx, i) => {
                       const isBank = tx.meta?.is_bank_deposit === true;
                       return (
-                        <tr key={tx.id} className={`border border-black ${isBooking ? 'bg-indigo-50/20' : ''}`}>
+                        <tr key={tx.id} className="border border-black hover:bg-indigo-50/10 transition-colors">
                           <td className="p-4 border border-black">{new Date(tx.created_at).toLocaleDateString('bn-BD')}</td>
                           <td className="p-4 border border-black uppercase italic font-black">
-                            {isColl ? (
-                              <span className={isBooking ? "text-indigo-600" : "text-emerald-600"}>
-                                {isBooking ? `📅 বুকিং ${isBank ? 'ব্যাংক' : 'ক্যাশ'} জমা` : '💰 নগদ আদায়'}
-                              </span>
-                            ) : (<span>📄 সেলস মেমো</span>)}
+                            <span className="text-indigo-600">
+                              📅 বুকিং {isBank ? 'ব্যাংক' : 'ক্যাশ'} জমা
+                            </span>
+                            <p className="text-[8px] text-slate-400 mt-1 uppercase italic">{tx.items?.[0]?.note || 'বুকিং অগ্রিম'}</p>
                           </td>
-                          <td className="p-4 text-right border border-black text-rose-600 font-black italic"> {!isColl ? `৳${Number(tx.amount).toLocaleString()}` : '—'} </td>
-                          <td className="p-4 text-right border border-black text-emerald-600 font-black italic"> {isColl ? `৳${Number(tx.amount).toLocaleString()}` : '—'} </td>
+                          <td className="p-4 text-right border border-black text-emerald-600 font-extrabold text-base italic"> ৳{Number(tx.amount).toLocaleString()} </td>
+                          <td className="p-4 text-center border border-black">
+                            {isAdmin && (
+                              <button
+                                onClick={() => handleDeleteLedgerEntry(tx)}
+                                className="w-10 h-10 bg-rose-50 text-rose-500 rounded-xl flex items-center justify-center text-sm hover:bg-rose-500 hover:text-white transition-all shadow-sm mx-auto"
+                                title="এন্ট্রি মুছুন"
+                              >
+                                🗑️
+                              </button>
+                            )}
+                          </td>
                         </tr>
                       );
                     })}
