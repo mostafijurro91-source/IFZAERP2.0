@@ -28,6 +28,8 @@ const Customers: React.FC<CustomerProps> = ({ company, role, userName }) => {
   const [ledgerHistory, setLedgerHistory] = useState<any[]>([]);
   const [isSaving, setIsSaving] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
+  const [selectedMemo, setSelectedMemo] = useState<any>(null);
+  const [showMemoModal, setShowMemoModal] = useState(false);
 
   const [currentLedgerStats, setCurrentLedgerStats] = useState({ reg: 0, book: 0 });
   const [editingCustomer, setEditingCustomer] = useState<any>(null);
@@ -36,6 +38,7 @@ const Customers: React.FC<CustomerProps> = ({ company, role, userName }) => {
   const [showAreaDropdown, setShowAreaDropdown] = useState(false);
   const areaDropdownRef = useRef<HTMLDivElement>(null);
   const ledgerRef = useRef<HTMLDivElement>(null);
+  const memoRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -56,6 +59,15 @@ const Customers: React.FC<CustomerProps> = ({ company, role, userName }) => {
   });
 
   const isAdmin = role.toUpperCase() === 'ADMIN';
+
+  const getStaffContacts = (co: Company) => {
+    switch (co) {
+      case 'Transtec': return "01701551690";
+      case 'SQ Light': return "+8801774105970";
+      case 'SQ Cables': return "+8801709643451";
+      default: return "";
+    }
+  };
 
   useEffect(() => { fetchCustomers(); }, [company]);
 
@@ -238,6 +250,28 @@ const Customers: React.FC<CustomerProps> = ({ company, role, userName }) => {
       pdf.save(`Statement_${selectedLedgerCust?.name}_${new Date().toLocaleDateString()}.pdf`);
     } catch (e) {
       console.error(e);
+      alert("PDF তৈরি করা যায়নি।");
+    } finally {
+      setIsDownloading(false);
+    }
+  };
+
+  const handleDownloadIndividualMemo = async () => {
+    if (!memoRef.current || isDownloading) return;
+    setIsDownloading(true);
+    try {
+      const canvas = await html2canvas(memoRef.current, {
+        scale: 3,
+        useCORS: true,
+        backgroundColor: '#ffffff'
+      });
+      const imgData = canvas.toDataURL('image/jpeg', 1.0);
+      const pdf = new jsPDF('p', 'mm', 'a5');
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const imgHeight = (canvas.height * pdfWidth) / canvas.width;
+      pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, imgHeight);
+      pdf.save(`Memo_${selectedLedgerCust?.name}_${selectedMemo?.id?.slice(-6)}.pdf`);
+    } catch (e) {
       alert("PDF তৈরি করা যায়নি।");
     } finally {
       setIsDownloading(false);
@@ -495,15 +529,26 @@ const Customers: React.FC<CustomerProps> = ({ company, role, userName }) => {
                               ) : '-'}
                             </td>
                             <td className="py-4 text-center pr-4">
-                              {isAdmin && (
-                                <button
-                                  onClick={() => handleDeleteLedgerEntry(tx)}
-                                  className="w-8 h-8 bg-rose-50 text-rose-500 rounded-xl flex items-center justify-center text-[10px] opacity-0 group-hover:opacity-100 transition-all hover:bg-rose-500 hover:text-white mx-auto"
-                                  title="এন্ট্রি মুছুন"
-                                >
-                                  🗑️
-                                </button>
-                              )}
+                              <div className="flex gap-1 justify-center">
+                                {tx.items && tx.items.length > 0 && (
+                                  <button
+                                    onClick={() => { setSelectedMemo(tx); setShowMemoModal(true); }}
+                                    className="w-8 h-8 bg-indigo-50 text-indigo-600 rounded-xl flex items-center justify-center text-[10px] opacity-0 group-hover:opacity-100 transition-all hover:bg-indigo-600 hover:text-white"
+                                    title="মেমো দেখুন"
+                                  >
+                                    📄
+                                  </button>
+                                )}
+                                {isAdmin && (
+                                  <button
+                                    onClick={() => handleDeleteLedgerEntry(tx)}
+                                    className="w-8 h-8 bg-rose-50 text-rose-500 rounded-xl flex items-center justify-center text-[10px] opacity-0 group-hover:opacity-100 transition-all hover:bg-rose-500 hover:text-white"
+                                    title="এন্ট্রি মুছুন"
+                                  >
+                                    🗑️
+                                  </button>
+                                )}
+                              </div>
                             </td>
                           </tr>
                         );
@@ -512,6 +557,86 @@ const Customers: React.FC<CustomerProps> = ({ company, role, userName }) => {
                   </table>
                 </div>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* 🧾 INDIVIDUAL MEMO PREVIEW MODAL */}
+      {showMemoModal && selectedMemo && (
+        <div className="fixed inset-0 bg-black/98 backdrop-blur-3xl z-[5000] flex flex-col items-center p-4 overflow-y-auto no-print">
+          <div className="w-full max-w-[148mm] flex justify-between items-center mb-8 sticky top-0 z-[5001] bg-slate-900/90 p-6 rounded-[2.5rem] border border-white/10">
+            <button onClick={() => setShowMemoModal(false)} className="text-white font-black uppercase text-[10px] px-6 transition-colors hover:text-blue-400">← ফিরে যান</button>
+            <button disabled={isDownloading} onClick={handleDownloadIndividualMemo} className="bg-white text-slate-900 px-8 py-4 rounded-xl font-black text-[10px] uppercase shadow-xl active:scale-95">PDF ডাউনলোড ⎙</button>
+          </div>
+
+          <div ref={memoRef} className="bg-white w-[148mm] min-h-fit p-10 flex flex-col font-sans text-black relative overflow-hidden">
+            <p className="text-center font-bold text-[11px] mb-2 italic leading-tight text-black">বিসমিল্লাহির রাহমানির রাহিম</p>
+
+            <div className="text-center border-b border-black pb-4 mb-4">
+              <h1 className="text-[26px] font-black uppercase italic tracking-tighter leading-none mb-1 text-blue-600">IFZA ELECTRONICS</h1>
+              <p className="text-[10px] font-black uppercase tracking-[0.2em] mb-1 text-black">{company} DIVISION</p>
+              <p className="text-[8px] font-bold text-black italic">যোগাযোগ: {getStaffContacts(company)}</p>
+            </div>
+
+            <div className="flex justify-between items-start mb-6">
+              <div className="space-y-1 flex-1">
+                <p className="text-[18px] font-black uppercase italic leading-tight text-blue-600">{selectedLedgerCust?.name}</p>
+                <p className="text-[10px] font-bold text-black">📍 ঠিকানা: {selectedLedgerCust?.address} | 📱 {selectedLedgerCust?.phone}</p>
+              </div>
+
+              <div className="text-right space-y-1 w-44">
+                <p className="text-[9px] font-black uppercase text-black mb-2">তারিখ: {new Date(selectedMemo.created_at).toLocaleDateString('bn-BD')}</p>
+                <p className="text-[10px] font-black uppercase text-black">মেমো আইডি: #{selectedMemo.id.slice(-6).toUpperCase()}</p>
+              </div>
+            </div>
+
+            <div className="flex-1 mt-4">
+              <table className="w-full border-collapse">
+                <thead>
+                  <tr className="text-[10px] font-black uppercase italic border-b-2 border-black text-left text-black">
+                    <th className="py-2 w-8">Sl</th>
+                    <th className="py-2">বিবরণ (Description)</th>
+                    <th className="py-2 text-center w-16">দর</th>
+                    <th className="py-2 text-center w-12">Qty</th>
+                    <th className="py-2 text-right w-20">মোট</th>
+                  </tr>
+                </thead>
+                <tbody className="text-[10px] text-black">
+                  {selectedMemo.items?.map((it: any, idx: number) => (
+                    <tr key={idx} className={`font-bold italic border-b border-black ${it.action === 'RETURN' ? 'text-red-600' : it.action === 'REPLACE' ? 'text-blue-600' : 'text-black'}`}>
+                      <td className="py-2">{idx + 1}</td>
+                      <td className="py-2 uppercase">
+                        <span>{it.name}</span>
+                        {it.mrp && <span className="ml-2 text-[7px] font-black">MRP: ৳{it.mrp}</span>}
+                        {it.action !== 'SALE' && <span className="ml-2 text-[7px] border border-black px-1 rounded uppercase">[{it.action}]</span>}
+                      </td>
+                      <td className="py-2 text-center">৳{it.action === 'REPLACE' ? '0' : it.price}</td>
+                      <td className="py-2 text-center">{it.qty}</td>
+                      <td className="py-2 text-right">
+                        {it.action === 'REPLACE' ? '৳0' : (it.action === 'RETURN' ? '-' : '') + '৳' + Math.round(Number(it.total) || 0).toLocaleString()}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="mt-8 flex justify-end">
+              <div className="w-56 space-y-1 font-black italic text-[10px] text-black">
+                <div className="flex justify-between border-t-2 border-black pt-2 text-[15px] text-blue-600">
+                  <span className="uppercase">নিট বিল:</span>
+                  <span>৳{Math.round(Number(selectedMemo.amount) || 0).toLocaleString()}</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-16 flex justify-between items-end px-4 mb-4 text-black">
+              <div className="text-center w-40 border-t border-black pt-2 font-black uppercase italic text-[9px]">ক্রেতার স্বাক্ষর</div>
+              <div className="text-center w-48 border-t border-black pt-2 font-black uppercase italic text-[9px]">কর্তৃপক্ষের স্বাক্ষর</div>
+            </div>
+
+            <div className="text-center mt-auto pt-10">
+              <p className="text-[7px] font-bold uppercase italic tracking-[0.2em] text-black">POWERED BY IFZAERP.COM</p>
             </div>
           </div>
         </div>
