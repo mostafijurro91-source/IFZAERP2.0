@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Company, UserRole, User, Product, Customer, formatCurrency } from '../types';
+import { Company, UserRole, User, Product, formatCurrency } from '../types';
 import { supabase, db, mapToDbCompany } from '../lib/supabase';
 import { jsPDF } from 'jspdf';
 import * as html2canvasModule from 'html2canvas';
@@ -24,16 +24,14 @@ interface SalesProps {
 
 const Sales: React.FC<SalesProps> = ({ company, role, user }) => {
   const [products, setProducts] = useState<Product[]>([]);
-  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [customers, setCustomers] = useState<any[]>([]);
   const [cart, setCart] = useState<CartItem[]>([]);
 
-  const [selectedCust, setSelectedCust] = useState<Customer | null>(null);
+  const [selectedCust, setSelectedCust] = useState<any>(null);
   const [custSearch, setCustSearch] = useState("");
   const [areaFilter, setAreaFilter] = useState("");
   const [prodSearch, setProdSearch] = useState("");
   const [showCustDropdown, setShowCustDropdown] = useState(false);
-  const [showAreaDropdown, setShowAreaDropdown] = useState(false);
-  const [areaSearch, setAreaSearch] = useState("");
 
   const [globalDiscount, setGlobalDiscount] = useState<number>(0);
   const [cashReceived, setCashReceived] = useState<number>(0);
@@ -63,17 +61,6 @@ const Sales: React.FC<SalesProps> = ({ company, role, user }) => {
       setLastPaymentFromDb(0);
     }
   }, [selectedCust, company]);
-
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-        setShowAreaDropdown(false);
-        setShowCustDropdown(false);
-      }
-    };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
 
   const loadData = async () => {
     setLoading(true);
@@ -107,7 +94,7 @@ const Sales: React.FC<SalesProps> = ({ company, role, user }) => {
     try {
       const { data } = await supabase
         .from('transactions')
-        .select('amount, payment_type, created_at')
+        .select('amount, payment_type, created_at, meta, items')
         .eq('customer_id', customerId)
         .eq('company', dbCo)
         .order('created_at', { ascending: false });
@@ -116,13 +103,17 @@ const Sales: React.FC<SalesProps> = ({ company, role, user }) => {
       let lastColl = 0;
       let foundLastColl = false;
 
-      data?.forEach((tx: { amount: number | string; payment_type: string }) => {
+      data?.forEach(tx => {
         const amt = Number(tx.amount);
+        const isBooking = tx.meta?.is_booking === true || tx.items?.[0]?.note?.includes('বুকিং');
+
         if (tx.payment_type === 'COLLECTION') {
-          due -= amt;
-          if (!foundLastColl) {
-            lastColl = amt;
-            foundLastColl = true;
+          if (!isBooking) {
+            due -= amt;
+            if (!foundLastColl) {
+              lastColl = amt;
+              foundLastColl = true;
+            }
           }
         } else {
           due += amt;
@@ -143,9 +134,9 @@ const Sales: React.FC<SalesProps> = ({ company, role, user }) => {
   };
 
   const addToCart = (p: Product) => {
-    const existing = cart.find((i: CartItem) => i.id === p.id && i.action === 'SALE');
+    const existing = cart.find(i => i.id === p.id && i.action === 'SALE');
     if (existing) {
-      setCart(cart.map((i: CartItem) => (i.id === p.id && i.action === 'SALE') ? { ...i, qty: i.qty + 1 } : i));
+      setCart(cart.map(i => (i.id === p.id && i.action === 'SALE') ? { ...i, qty: i.qty + 1 } : i));
     } else {
       setCart([...cart, { ...p, qty: 1, editedPrice: p.tp, discountPercent: 0, action: 'SALE' }]);
     }
@@ -153,19 +144,19 @@ const Sales: React.FC<SalesProps> = ({ company, role, user }) => {
   };
 
   const updateCartItem = (idx: number, updates: Partial<CartItem>) => {
-    setCart((prev: CartItem[]) => {
+    setCart(prev => {
       const next = [...prev];
       next[idx] = { ...next[idx], ...updates };
-      return next.filter((i: CartItem) => i.qty > 0 || (i.qty === 0 && updates.qty === undefined));
+      return next.filter(i => i.qty > 0 || (i.qty === 0 && updates.qty === undefined));
     });
   };
 
   const removeItem = (idx: number) => {
-    setCart((prev: CartItem[]) => prev.filter((_: CartItem, i: number) => i !== idx));
+    setCart(prev => prev.filter((_, i) => i !== idx));
   };
 
   const totals = useMemo(() => {
-    const subtotal = cart.reduce((sum: number, i: CartItem) => {
+    const subtotal = cart.reduce((sum, i) => {
       if (i.action === 'REPLACE') return sum;
       const itemPrice = Number(i.editedPrice);
       const itemDisc = (itemPrice * Number(i.discountPercent)) / 100;
@@ -186,7 +177,7 @@ const Sales: React.FC<SalesProps> = ({ company, role, user }) => {
 
     setIsSaving(true);
     try {
-      const itemsToSave = cart.map((i: CartItem) => {
+      const itemsToSave = cart.map(i => {
         const isReplace = i.action === 'REPLACE';
         const price = isReplace ? 0 : Number(i.editedPrice);
         const discount = isReplace ? 0 : Number(i.discountPercent);
@@ -310,46 +301,21 @@ const Sales: React.FC<SalesProps> = ({ company, role, user }) => {
       const canvas = await html2canvas(invoiceRef.current, { scale: 3, useCORS: true, backgroundColor: '#ffffff' });
       const imgData = canvas.toDataURL('image/jpeg', 1.0);
       const pdf = new jsPDF('p', 'mm', 'a5');
-
       const pdfWidth = pdf.internal.pageSize.getWidth();
-      const pdfHeight = pdf.internal.pageSize.getHeight();
       const imgHeight = (canvas.height * pdfWidth) / canvas.width;
-
-      // If content is only slightly longer than one page, scale it down to fit one page.
-      // Otherwise, use multi-page logic.
-      const shouldScaleStore = cart.length > 25 && imgHeight > pdfHeight && imgHeight < pdfHeight * 1.5;
-
-      if (shouldScaleStore) {
-        pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, pdfHeight);
-      } else {
-        let heightLeft = imgHeight;
-        let position = 0;
-
-        pdf.addImage(imgData, 'JPEG', 0, position, pdfWidth, imgHeight);
-        heightLeft -= pdfHeight;
-
-        while (heightLeft > 0) {
-          position -= pdfHeight;
-          pdf.addPage();
-          pdf.addImage(imgData, 'JPEG', 0, position, pdfWidth, imgHeight);
-          heightLeft -= pdfHeight;
-        }
-      }
-
+      pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, imgHeight);
       pdf.save(`IFZA_Memo_${selectedCust?.name}.pdf`);
     } catch (e) { alert("PDF তৈরি করা যায়নি।"); } finally { setIsDownloading(false); }
   };
 
   const filteredCustomers = useMemo(() => {
-    return customers.filter((c: Customer) => {
+    return customers.filter(c => {
       const q = custSearch.toLowerCase().trim();
-      return (c.name.toLowerCase().includes(q) || (c.phone && c.phone.includes(q))) && (!areaFilter || c.address === areaFilter);
+      return (c.name.toLowerCase().includes(q) || c.phone.includes(q)) && (!areaFilter || c.address === areaFilter);
     });
   }, [customers, custSearch, areaFilter]);
 
-  const uniqueAreas = useMemo(() => Array.from(new Set(customers.map((c: Customer) => c.address?.trim()).filter(Boolean))).sort(), [customers]);
-  const filteredAreas = useMemo(() => uniqueAreas.filter((a: any) => a.toLowerCase().includes(areaSearch.toLowerCase())), [uniqueAreas, areaSearch]);
-  const filteredProducts = useMemo(() => products.filter((p: Product) => p.name.toLowerCase().includes(prodSearch.toLowerCase())), [products, prodSearch]);
+  const filteredProducts = useMemo(() => products.filter(p => p.name.toLowerCase().includes(prodSearch.toLowerCase())), [products, prodSearch]);
 
   return (
     <div className="flex flex-col gap-6 pb-32 animate-reveal text-black font-sans">
@@ -358,37 +324,23 @@ const Sales: React.FC<SalesProps> = ({ company, role, user }) => {
         {/* LEFT: Product Selection */}
         <div className="flex-1 space-y-6 no-print">
           <div className="bg-white p-6 rounded-[2rem] border shadow-sm" ref={dropdownRef}>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 relative">
-              <div className="relative">
-                <button onClick={() => setShowAreaDropdown(!showAreaDropdown)} className={`w-full p-4 rounded-2xl border flex items-center justify-between text-left ${areaFilter ? 'bg-blue-50 border-blue-200' : 'bg-slate-50'}`}>
-                  {areaFilter ? <span className="font-black text-blue-700 text-xs uppercase">{areaFilter}</span> : <span className="text-xs font-bold text-slate-400 uppercase">সকল এরিয়া</span>}
-                  <span>▼</span>
-                </button>
-                {showAreaDropdown && (
-                  <div className="absolute top-[60px] left-0 right-0 z-[600] bg-white border rounded-2xl shadow-2xl overflow-hidden animate-reveal">
-                    <input className="w-full p-4 border-b font-bold text-xs" placeholder="এরিয়া সার্চ..." value={areaSearch} onChange={(e: any) => setAreaSearch(e.target.value)} />
-                    <div className="max-h-60 overflow-y-auto">
-                      <div onClick={() => { setAreaFilter(""); setShowAreaDropdown(false); setAreaSearch(""); setSelectedCust(null); }} className="p-4 hover:bg-blue-50 border-b cursor-pointer font-bold text-xs uppercase">সকল এরিয়া</div>
-                      {filteredAreas.map((a: any) => <div key={a} onClick={() => { setAreaFilter(a); setShowAreaDropdown(false); setAreaSearch(""); setSelectedCust(null); setShowCustDropdown(true); }} className="p-4 hover:bg-blue-50 border-b cursor-pointer font-bold text-xs uppercase">{a}</div>)}
-                    </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <select className="w-full p-4 bg-slate-50 border rounded-2xl outline-none font-bold text-xs appearance-none" value={areaFilter} onChange={e => { setAreaFilter(e.target.value); setShowCustDropdown(true); }}>
+                <option value="">সকল এরিয়া</option>
+                {Array.from(new Set(customers.map(c => c.address?.trim()).filter(Boolean))).sort().map(a => <option key={a} value={a}>{a}</option>)}
+              </select>
+              <button onClick={() => setShowCustDropdown(!showCustDropdown)} className={`w-full p-4 rounded-2xl border flex items-center justify-between text-left ${selectedCust ? 'bg-blue-50 border-blue-200' : 'bg-slate-50'}`}>
+                {selectedCust ? <span className="font-black text-blue-700 text-xs uppercase">{selectedCust.name}</span> : <span className="text-xs font-bold text-slate-400 uppercase">দোকান বাছাই করুন...</span>}
+                <span>▼</span>
+              </button>
+              {showCustDropdown && (
+                <div className="absolute top-[280px] left-8 right-8 md:w-[400px] z-[500] bg-white border rounded-2xl shadow-2xl overflow-hidden animate-reveal">
+                  <input className="w-full p-4 border-b font-bold text-xs" placeholder="খুঁজুন..." value={custSearch} onChange={e => setCustSearch(e.target.value)} />
+                  <div className="max-h-60 overflow-y-auto">
+                    {filteredCustomers.map(c => <div key={c.id} onClick={() => { setSelectedCust(c); setShowCustDropdown(false); }} className="p-4 hover:bg-blue-50 border-b cursor-pointer font-bold text-xs uppercase">{c.name} - {c.address}</div>)}
                   </div>
-                )}
-              </div>
-
-              <div className="relative">
-                <button onClick={() => setShowCustDropdown(!showCustDropdown)} className={`w-full p-4 rounded-2xl border flex items-center justify-between text-left ${selectedCust ? 'bg-blue-50 border-blue-200' : 'bg-slate-50'}`}>
-                  {selectedCust ? <span className="font-black text-blue-700 text-xs uppercase">{selectedCust.name}</span> : <span className="text-xs font-bold text-slate-400 uppercase">দোকান বাছাই করুন...</span>}
-                  <span>▼</span>
-                </button>
-                {showCustDropdown && (
-                  <div className="absolute top-[60px] left-0 right-0 z-[500] bg-white border rounded-2xl shadow-2xl overflow-hidden animate-reveal">
-                    <input className="w-full p-4 border-b font-bold text-xs" placeholder="খুঁজুন..." value={custSearch} onChange={(e: any) => setCustSearch(e.target.value)} />
-                    <div className="max-h-60 overflow-y-auto">
-                      {filteredCustomers.map((c: Customer) => <div key={c.id} onClick={() => { setSelectedCust(c); setShowCustDropdown(false); }} className="p-4 hover:bg-blue-50 border-b cursor-pointer font-bold text-xs uppercase">{c.name} - {c.address}</div>)}
-                    </div>
-                  </div>
-                )}
-              </div>
+                </div>
+              )}
             </div>
           </div>
 
@@ -521,7 +473,7 @@ const Sales: React.FC<SalesProps> = ({ company, role, user }) => {
             <tbody className="divide-y text-[12px] font-bold">
               {recentMemos.length === 0 ? (
                 <tr><td colSpan={5} className="p-20 text-center opacity-20 font-black uppercase italic italic text-sm">এই তারিখে কোনো মেমো পাওয়া যায়নি</td></tr>
-              ) : recentMemos.map((memo: any, idx: number) => (
+              ) : recentMemos.map((memo, idx) => (
                 <tr key={memo.id} className="hover:bg-blue-50/50 transition-colors animate-reveal" style={{ animationDelay: `${idx * 0.05}s` }}>
                   <td className="px-8 py-6 text-slate-400 font-black italic">
                     {new Date(memo.created_at).toLocaleTimeString('bn-BD', { hour: '2-digit', minute: '2-digit' })}
@@ -536,7 +488,7 @@ const Sales: React.FC<SalesProps> = ({ company, role, user }) => {
                     </span>
                   </td>
                   <td className="px-8 py-6 text-right font-black italic text-base text-slate-900 tracking-tighter">
-                    {formatCurrency(Number(memo.amount))}
+                    {formatCurrency(memo.amount)}
                   </td>
                   <td className="px-8 py-6 text-center">
                     <button
@@ -565,23 +517,23 @@ const Sales: React.FC<SalesProps> = ({ company, role, user }) => {
             </div>
           </div>
 
-          <div ref={invoiceRef} className={`bg-white w-[148mm] min-h-fit ${cart.length > 30 ? 'p-6' : 'p-10'} flex flex-col font-sans text-black relative overflow-hidden`}>
-            <p className="text-center font-bold text-[11px] mb-1 italic leading-tight text-black">
+          <div ref={invoiceRef} className="bg-white w-[148mm] min-h-fit p-10 flex flex-col font-sans text-black relative overflow-hidden">
+            <p className="text-center font-bold text-[11px] mb-2 italic leading-tight text-black">
               বিসমিল্লাহির রাহমানির রাহিম
             </p>
 
-            <div className={`text-center border-b border-black ${cart.length > 30 ? 'pb-2 mb-2' : 'pb-4 mb-4'}`}>
-              <h1 className={`${cart.length > 30 ? 'text-[22px]' : 'text-[26px]'} font-black uppercase italic tracking-tighter leading-none mb-1 text-blue-600`}>IFZA ELECTRONICS</h1>
+            <div className="text-center border-b border-black pb-4 mb-4">
+              <h1 className="text-[26px] font-black uppercase italic tracking-tighter leading-none mb-1 text-blue-600">IFZA ELECTRONICS</h1>
               <p className="text-[10px] font-black uppercase tracking-[0.2em] mb-1 text-black">{company} DIVISION</p>
               <p className="text-[8px] font-bold text-black italic">যোগাযোগ: {getStaffContacts(company)}</p>
             </div>
 
-            <div className={`flex justify-between items-start ${cart.length > 30 ? 'mb-2' : 'mb-6'}`}>
+            <div className="flex justify-between items-start mb-6">
               <div className="space-y-1 flex-1">
-                <p className={`${cart.length > 30 ? 'text-[15px]' : 'text-[18px]'} font-black uppercase italic leading-tight text-blue-600`}>{selectedCust.name}</p>
+                <p className="text-[18px] font-black uppercase italic leading-tight text-blue-600">{selectedCust.name}</p>
                 <p className="text-[10px] font-bold text-black">📍 ঠিকানা: {selectedCust.address} | 📱 {selectedCust.phone}</p>
 
-                <div className={`${cart.length > 30 ? 'mt-1' : 'mt-4'} flex gap-4`}>
+                <div className="mt-4 flex gap-4">
                   <div className="border-l-4 border-black pl-3">
                     <p className="text-[8px] font-black uppercase text-black">সর্বশেষ জমা:</p>
                     <p className="text-[13px] font-black text-black">৳{lastPaymentFromDb.toLocaleString()}</p>
@@ -595,36 +547,36 @@ const Sales: React.FC<SalesProps> = ({ company, role, user }) => {
                 </div>
               </div>
 
-              <div className="text-right space-y-0.5 w-44">
-                <p className="text-[9px] font-black uppercase text-black mb-1">তারিখ: {new Date().toLocaleDateString('bn-BD')}</p>
-                <p className="flex justify-between font-bold text-[10px] text-black"><span>পূর্বের বাকি:</span> <span className="text-red-600">৳{Math.round(prevDue).toLocaleString()}</span></p>
-                <p className="flex justify-between font-black text-[13px] border-t border-black pt-0.5 text-black"><span>মোট বাকি:</span> <span className="text-red-600">৳{Math.round(totals.finalTotalBalance).toLocaleString()}</span></p>
+              <div className="text-right space-y-1 w-44">
+                <p className="text-[9px] font-black uppercase text-black mb-2">তারিখ: {new Date().toLocaleDateString('bn-BD')}</p>
+                <p className="flex justify-between font-bold text-[11px] text-black"><span>পূর্বের বাকি:</span> <span className="text-red-600">৳{Math.round(prevDue).toLocaleString()}</span></p>
+                <p className="flex justify-between font-black text-[14px] border-t border-black pt-1 text-black"><span>মোট বাকি:</span> <span className="text-red-600">৳{Math.round(totals.finalTotalBalance).toLocaleString()}</span></p>
               </div>
             </div>
 
-            <div className="flex-1 mt-2">
+            <div className="flex-1 mt-4">
               <table className="w-full border-collapse">
                 <thead>
-                  <tr className="text-[9px] font-black uppercase italic border-b-2 border-black text-left text-black">
-                    <th className="py-1 w-8">Sl</th>
-                    <th className="py-1">বিবরণ (Description)</th>
-                    <th className="py-1 text-center w-16">দর</th>
-                    <th className="py-1 text-center w-12">Qty</th>
-                    <th className="py-1 text-right w-20">মোট</th>
+                  <tr className="text-[10px] font-black uppercase italic border-b-2 border-black text-left text-black">
+                    <th className="py-2 w-8">Sl</th>
+                    <th className="py-2">বিবরণ (Description)</th>
+                    <th className="py-2 text-center w-16">দর</th>
+                    <th className="py-2 text-center w-12">Qty</th>
+                    <th className="py-2 text-right w-20">মোট</th>
                   </tr>
                 </thead>
-                <tbody className={`${cart.length > 40 ? "text-[7.5px]" : cart.length > 25 ? "text-[8.5px]" : "text-[10px]"} text-black`}>
-                  {cart.map((it: CartItem, idx: number) => (
-                    <tr key={idx} className={`font-bold italic border-b border-black/10 ${it.action === 'RETURN' ? 'text-red-600' : it.action === 'REPLACE' ? 'text-blue-600' : 'text-black'}`}>
-                      <td className={`${cart.length > 30 ? 'py-0.5' : 'py-1.5'}`}>{idx + 1}</td>
-                      <td className={`${cart.length > 30 ? 'py-0.5' : 'py-1.5'} uppercase`}>
+                <tbody className={`${cart.length > 35 ? "text-[8px]" : "text-[10px]"} text-black`}>
+                  {cart.map((it, idx) => (
+                    <tr key={idx} className={`font-bold italic border-b border-black ${it.action === 'RETURN' ? 'text-red-600' : it.action === 'REPLACE' ? 'text-blue-600' : 'text-black'}`}>
+                      <td className="py-2">{idx + 1}</td>
+                      <td className="py-2 uppercase">
                         <span>{it.name}</span>
-                        <span className="ml-2 text-[7px] font-black opacity-40">MRP: ৳{it.mrp}</span>
+                        <span className="ml-2 text-[7px] font-black">MRP: ৳{it.mrp}</span>
                         {it.action !== 'SALE' && <span className="ml-2 text-[7px] border border-black px-1 rounded uppercase">[{it.action}]</span>}
                       </td>
-                      <td className={`${cart.length > 30 ? 'py-0.5' : 'py-1.5'} text-center`}>৳{it.action === 'REPLACE' ? '0' : it.editedPrice}</td>
-                      <td className={`${cart.length > 30 ? 'py-0.5' : 'py-1.5'} text-center`}>{it.qty}</td>
-                      <td className={`${cart.length > 30 ? 'py-0.5' : 'py-1.5'} text-right`}>
+                      <td className="py-2 text-center">৳{it.action === 'REPLACE' ? '0' : it.editedPrice}</td>
+                      <td className="py-2 text-center">{it.qty}</td>
+                      <td className="py-2 text-right">
                         {it.action === 'REPLACE' ? '৳0' : (it.action === 'RETURN' ? '-' : '') + '৳' + Math.round(((it.editedPrice - (it.editedPrice * it.discountPercent / 100)) * it.qty)).toLocaleString()}
                       </td>
                     </tr>
@@ -633,22 +585,22 @@ const Sales: React.FC<SalesProps> = ({ company, role, user }) => {
               </table>
             </div>
 
-            <div className={`${cart.length > 30 ? 'mt-4' : 'mt-6'} flex justify-end`}>
-              <div className={`w-56 space-y-0.5 font-black italic ${cart.length > 30 ? 'text-[9px]' : 'text-[10px]'} text-black`}>
+            <div className="mt-8 flex justify-end">
+              <div className="w-56 space-y-1 font-black italic text-[10px] text-black">
                 <div className="flex justify-between"><span>SUB-TOTAL:</span><span>৳{Math.round(totals.subtotal).toLocaleString()}</span></div>
                 {globalDiscount > 0 && <div className="flex justify-between text-red-600"><span>DISC ({globalDiscount}%):</span><span>-৳{Math.round(totals.globalDiscAmount).toLocaleString()}</span></div>}
-                <div className="flex justify-between border-t-2 border-black pt-1 text-[14px] text-blue-600">
+                <div className="flex justify-between border-t-2 border-black pt-2 text-[15px] text-blue-600">
                   <span className="uppercase">নিট বিল:</span>
                   <span>৳{Math.round(totals.netTotal).toLocaleString()}</span>
                 </div>
               </div>
             </div>
 
-            <div className={`${cart.length > 30 ? 'mt-10' : 'mt-20'} flex justify-between items-end px-4 mb-4 text-black`}>
+            <div className="mt-20 flex justify-between items-end px-4 mb-4 text-black">
               <div className="text-center w-40 border-t border-black pt-2 font-black uppercase italic text-[9px]">ক্রেতার স্বাক্ষর</div>
               <div className="text-center">
                 <div className="mb-1">
-                  <p className={`${cart.length > 30 ? 'text-[10px]' : 'text-[12px]'} font-black text-red-600 uppercase italic leading-none`}>এস এম মোস্তাফিজুর রহমান</p>
+                  <p className="text-[12px] font-black text-red-600 uppercase italic leading-none">এস এম মোস্তাফিজুর রহমান</p>
                   <p className="text-[9px] font-bold text-red-600 uppercase mt-1">ইফজা ইলেকট্রনিক্স</p>
                 </div>
                 <div className="w-48 border-t border-black pt-2">
@@ -657,7 +609,7 @@ const Sales: React.FC<SalesProps> = ({ company, role, user }) => {
               </div>
             </div>
 
-            <div className={`text-center mt-auto ${cart.length > 30 ? 'pt-4' : 'pt-10'}`}>
+            <div className="text-center mt-auto pt-10">
               <p className="text-[7px] font-bold uppercase italic tracking-[0.2em] text-black">POWERED BY IFZAERP.COM</p>
             </div>
           </div>
