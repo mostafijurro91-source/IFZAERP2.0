@@ -473,7 +473,6 @@ const Customers: React.FC<CustomerProps> = ({ company, role, userName }) => {
                           </tr>
                         );
                       })}
-                    )}
                     </tbody>
                   </table>
                 </div>
