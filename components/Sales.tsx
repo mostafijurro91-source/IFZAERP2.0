@@ -326,12 +326,14 @@ const Sales: React.FC<SalesProps> = ({ company, role, user }) => {
 
   const filteredCustomers = useMemo(() => {
     return customers.filter(c => {
-      const q = custSearch.toLowerCase().trim();
-      return (c.name.toLowerCase().includes(q) || (c.phone && c.phone.includes(q))) && (!areaFilter || c.address === areaFilter);
+      const q = (custSearch || "").toLowerCase().trim();
+      const name = (c.name || "").toLowerCase();
+      const phone = (c.phone || "");
+      return (name.includes(q) || phone.includes(q)) && (!areaFilter || c.address === areaFilter);
     });
   }, [customers, custSearch, areaFilter]);
 
-  const filteredProducts = useMemo(() => products.filter(p => p.name.toLowerCase().includes(prodSearch.toLowerCase())), [products, prodSearch]);
+  const filteredProducts = useMemo(() => products.filter(p => (p.name || "").toLowerCase().includes((prodSearch || "").toLowerCase())), [products, prodSearch]);
 
   return (
     <div className="flex flex-col gap-6 pb-32 animate-reveal text-black font-sans">
@@ -367,7 +369,7 @@ const Sales: React.FC<SalesProps> = ({ company, role, user }) => {
                       >
                         সকল এরিয়া
                       </div>
-                      {Array.from(new Set(customers.map(c => c.address?.trim()).filter(Boolean))).sort().filter(a => a.toLowerCase().includes(areaSearch.toLowerCase())).map(area => (
+                      {Array.from(new Set(customers.map(c => String(c.address || "").trim()).filter(Boolean))).sort().filter(a => a.toLowerCase().includes((areaSearch || "").toLowerCase())).map(area => (
                         <div
                           key={area}
                           className="p-4 hover:bg-blue-50 cursor-pointer text-[10px] font-black uppercase text-slate-700 border-t border-slate-50"
