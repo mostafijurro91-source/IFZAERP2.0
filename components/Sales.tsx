@@ -32,6 +32,8 @@ const Sales: React.FC<SalesProps> = ({ company, role, user }) => {
   const [areaFilter, setAreaFilter] = useState("");
   const [prodSearch, setProdSearch] = useState("");
   const [showCustDropdown, setShowCustDropdown] = useState(false);
+  const [areaSearch, setAreaSearch] = useState("");
+  const [showAreaDropdown, setShowAreaDropdown] = useState(false);
 
   const [globalDiscount, setGlobalDiscount] = useState<number>(0);
   const [cashReceived, setCashReceived] = useState<number>(0);
@@ -48,10 +50,24 @@ const Sales: React.FC<SalesProps> = ({ company, role, user }) => {
 
   const invoiceRef = useRef<HTMLDivElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const areaRef = useRef<HTMLDivElement>(null);
   const dbCo = mapToDbCompany(company);
 
   useEffect(() => { loadData(); }, [company]);
   useEffect(() => { fetchRecentMemos(); }, [company, historyDate]);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (areaRef.current && !areaRef.current.contains(event.target as Node)) {
+        setShowAreaDropdown(false);
+      }
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setShowCustDropdown(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   useEffect(() => {
     if (selectedCust) {
@@ -311,7 +327,7 @@ const Sales: React.FC<SalesProps> = ({ company, role, user }) => {
   const filteredCustomers = useMemo(() => {
     return customers.filter(c => {
       const q = custSearch.toLowerCase().trim();
-      return (c.name.toLowerCase().includes(q) || c.phone.includes(q)) && (!areaFilter || c.address === areaFilter);
+      return (c.name.toLowerCase().includes(q) || (c.phone && c.phone.includes(q))) && (!areaFilter || c.address === areaFilter);
     });
   }, [customers, custSearch, areaFilter]);
 
