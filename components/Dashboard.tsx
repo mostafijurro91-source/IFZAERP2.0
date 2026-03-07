@@ -52,8 +52,7 @@ const Dashboard: React.FC<DashboardProps> = ({ company, role }) => {
         const isBooking = tx.meta?.is_booking === true || tx.items?.[0]?.note?.includes('বুকিং');
         const custId = tx.customers?.id || 'unknown';
 
-        // Overdue Tracking Logic
-        if (!customerMap[custId]) {
+        if (!customerMap[custId] && custId !== 'unknown') {
           customerMap[custId] = { 
             name: tx.customers?.name || 'Unknown', 
             balance: 0, 
@@ -68,34 +67,33 @@ const Dashboard: React.FC<DashboardProps> = ({ company, role }) => {
             book_adv += amt;
           } else {
             reg_due -= amt;
-            customerMap[custId].balance -= amt;
+            if (customerMap[custId]) customerMap[custId].balance -= amt;
           }
           if (monthlyMap[txMonth]) monthlyMap[txMonth].collection += amt;
         } else if (tx.payment_type === 'DUE') {
           if (txDate === todayStr) t_sales += amt;
           reg_due += amt;
-          customerMap[custId].balance += amt;
+          if (customerMap[custId]) customerMap[custId].balance += amt;
           if (monthlyMap[txMonth]) monthlyMap[txMonth].sales += amt;
         }
 
-        // Update Last Activity Date
-        if (txFullDate > customerMap[custId].lastDate) {
+        if (customerMap[custId] && txFullDate > customerMap[custId].lastDate) {
           customerMap[custId].lastDate = txFullDate;
         }
 
         if (txDate === todayStr) recent.push({ name: tx.customers?.name || 'Unknown', amount: amt, date: tx.created_at, type: tx.payment_type === 'COLLECTION' ? 'C' : 'S' });
       });
 
-      // Filter Overdue (30 Days+)
       const thirtyDaysAgo = new Date();
       thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+      
       const overdue = Object.values(customerMap)
         .filter(c => c.balance > 100 && c.lastDate < thirtyDaysAgo)
         .sort((a, b) => b.balance - a.balance);
 
       setOverdueCustomers(overdue);
+
       const sValue = prodRes.data?.reduce((acc, p) => acc + (Number(p.tp) * Number(p.stock)), 0) || 0;
-      
       setStats({ todaySales: t_sales, todayCollection: t_coll, regularDue: reg_due, bookingAdvance: book_adv, stockValue: sValue, monthSales: 0 });
       setRecentActivity(recent.sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()).slice(0, 10));
       setMonthlyData(Object.values(monthlyMap));
@@ -104,19 +102,14 @@ const Dashboard: React.FC<DashboardProps> = ({ company, role }) => {
 
   const downloadOverduePDF = () => {
     const doc = new jsPDF();
-    doc.text(`${company} - Overdue Customer Report`, 14, 15);
-    const tableData = overdueCustomers.map(c => [
-      c.name, 
-      c.phone, 
-      c.balance.toLocaleString() + ' BDT', 
-      new Date(c.lastDate).toLocaleDateString('bn-BD')
-    ]);
+    doc.text(`${company} - Overdue Report`, 14, 20);
+    const tableData = overdueCustomers.map(c => [c.name, c.balance.toLocaleString(), new Date(c.lastDate).toLocaleDateString()]);
     (doc as any).autoTable({
-      head: [['Customer Name', 'Phone', 'Balance', 'Last Activity']],
+      head: [['Customer', 'Balance', 'Last Activity']],
       body: tableData,
-      startY: 25,
+      startY: 30,
     });
-    doc.save(`Overdue_Report_${company}.pdf`);
+    doc.save(`Report_${company}.pdf`);
   };
 
   const brandTheme = useMemo(() => {
@@ -129,132 +122,67 @@ const Dashboard: React.FC<DashboardProps> = ({ company, role }) => {
   }, [company]);
 
   return (
-    <div className="space-y-6 pb-40 animate-reveal text-slate-900">
+    <div className="p-4 space-y-6 pb-40 text-slate-900">
       
-      {/* 🎭 Cinematic Hero Banner */}
-      <div className={`p-8 md:p-12 rounded-[2.5rem] bg-gradient-to-br ${brandTheme.gradient} text-white shadow-xl relative overflow-hidden group`}>
-         <div className="absolute right-[-20px] top-[-20px] text-[160px] opacity-10 font-bold italic group-hover:scale-110 group-hover:rotate-12 transition-all duration-[3000ms] animate-float">{brandTheme.icon}</div>
-         <div className="relative z-10">
-            <p className="text-[9px] font-black uppercase tracking-[0.6em] text-white/50 mb-3 italic">Enterprise Resource Planning</p>
-            <h2 className="text-3xl md:text-5xl font-black italic tracking-tighter lowercase leading-tight">ifza<span className="text-white/30">.</span>{company.toLowerCase().replace(' ', '')}</h2>
-            <div className="flex gap-3 mt-6">
-               <span className="bg-white/10 backdrop-blur-xl px-6 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest italic border border-white/10 flex items-center gap-2">
-                 <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-ping"></span> Live Cloud Sync
-               </span>
-            </div>
-         </div>
+      {/* Hero Banner */}
+      <div className={`p-6 rounded-[2rem] bg-gradient-to-br ${brandTheme.gradient} text-white shadow-lg relative overflow-hidden`}>
+         <h2 className="text-2xl font-black italic lowercase tracking-tighter">ifza.{company.toLowerCase().replace(' ', '')}</h2>
+         <p className="text-[8px] font-bold uppercase tracking-widest opacity-60">Enterprise ERP Portal</p>
       </div>
 
-      {/* 📊 Stat Cards Grid */}
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+      {/* Stats Grid */}
+      <div className="grid grid-cols-2 gap-3">
         {[
-          { label: 'আজকের বিক্রি', val: stats.todaySales, color: 'text-blue-600', icon: '🛒', bg: 'bg-blue-50' },
-          { label: 'আজকের আদায়', val: stats.todayCollection, color: 'text-emerald-600', icon: '💰', bg: 'bg-emerald-50' },
-          { label: 'মালের বকেয়া', val: stats.regularDue, color: 'text-rose-600', icon: '⏳', bg: 'bg-rose-50' },
-          { label: 'বুকিং জমা', val: stats.bookingAdvance, color: 'text-indigo-600', icon: '📅', bg: 'bg-indigo-50' },
-          { label: 'স্টক ভ্যালু', val: stats.stockValue, color: 'text-slate-900', icon: '📦', bg: 'bg-slate-100' }
+          { label: 'আজকের বিক্রি', val: stats.todaySales, color: 'text-blue-600', bg: 'bg-blue-50' },
+          { label: 'আজকের আদায়', val: stats.todayCollection, color: 'text-emerald-600', bg: 'bg-emerald-50' },
+          { label: 'মালের বকেয়া', val: stats.regularDue, color: 'text-rose-600', bg: 'bg-rose-50' },
+          { label: 'স্টক ভ্যালু', val: stats.stockValue, color: 'text-slate-900', bg: 'bg-slate-100' }
         ].map((card, i) => (
-          <div key={i} className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-md hover:shadow-xl transition-all duration-700 hover:-translate-y-1 animate-reveal relative overflow-hidden group" style={{ animationDelay: `${i*0.1}s` }}>
-             <div className={`absolute top-0 right-0 w-16 h-16 ${card.bg} rounded-bl-[2.5rem] -z-0 opacity-40 group-hover:scale-125 transition-transform`}></div>
-             <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-3 italic relative z-10 leading-none">{card.label}</p>
-             <p className={`text-lg md:text-xl font-black italic tracking-tighter ${card.color} leading-none relative z-10`}>{formatCurrency(card.val)}</p>
+          <div key={i} className="bg-white p-4 rounded-3xl border border-slate-100 shadow-sm relative overflow-hidden">
+             <p className="text-[8px] font-black text-slate-400 uppercase mb-1">{card.label}</p>
+             <p className={`text-sm font-black italic ${card.color}`}>{formatCurrency(card.val)}</p>
           </div>
         ))}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-         {/* Monthly Graph Table */}
-         <div className="lg:col-span-2 bg-white rounded-[2.5rem] shadow-lg border border-slate-100 overflow-hidden animate-reveal stagger-2">
-            <div className="p-6 border-b border-slate-50 flex justify-between items-center bg-slate-50/30">
-               <h3 className="text-[9px] font-black uppercase italic tracking-[0.2em] text-slate-400">Monthly Ledger Flow</h3>
-               <span className="bg-indigo-50 text-indigo-600 px-4 py-1 rounded-full text-[8px] font-black uppercase italic animate-pulse">Synced ✓</span>
-            </div>
-            <div className="overflow-x-auto custom-scroll max-h-[400px]">
-               <table className="w-full text-left">
-                  <thead className="sticky top-0 bg-white z-20">
-                     <tr className="text-[8px] font-black text-slate-300 uppercase tracking-widest border-b border-slate-50">
-                        <th className="px-6 py-4">Month Index</th>
-                        <th className="px-6 py-4 text-center">Sales Vol.</th>
-                        <th className="px-6 py-4 text-right">Collection</th>
-                     </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-50 text-[11px] font-bold uppercase italic">
-                     {monthlyData.map((d, i) => (
-                        <tr key={i} className="hover:bg-indigo-50/20 transition-all group">
-                           <td className="px-6 py-4 text-slate-700 font-black">{d.month}</td>
-                           <td className="px-6 py-4 text-center text-slate-900">{d.sales.toLocaleString()}৳</td>
-                           <td className="px-6 py-4 text-right text-emerald-600 font-black">+{d.collection.toLocaleString()}৳</td>
-                        </tr>
-                     ))}
-                  </tbody>
-               </table>
-            </div>
-         </div>
-
-         {/* Recent Stream */}
-         <div className="bg-slate-900 rounded-[2.5rem] shadow-2xl p-6 flex flex-col animate-reveal stagger-3 relative overflow-hidden">
-            <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-600/10 blur-[50px] rounded-full"></div>
-            <div className="flex justify-between items-center mb-8 relative z-10">
-               <h3 className="text-[9px] font-black uppercase italic tracking-[0.2em] text-indigo-400">Live Activity</h3>
-               <div className="w-2 h-2 bg-emerald-500 rounded-full animate-ping"></div>
-            </div>
-            <div className="space-y-4 overflow-y-auto custom-scroll max-h-[400px] pr-2 relative z-10">
-               {recentActivity.map((act, i) => (
-                 <div key={i} className="p-4 bg-white/5 rounded-[1.5rem] flex items-center justify-between border border-white/5 group hover:bg-white/10 transition-all animate-reveal">
-                    <div className="flex items-center gap-4">
-                       <div className={`w-9 h-9 rounded-xl flex items-center justify-center text-white font-black italic shadow-xl transition-transform group-hover:scale-110 text-[10px] ${act.type === 'C' ? 'bg-emerald-500' : 'bg-indigo-500'}`}>{act.type}</div>
-                       <div className="min-w-0">
-                          <p className="text-[11px] font-black uppercase italic text-white truncate leading-none mb-1.5">{act.name}</p>
-                          <p className="text-[8px] font-black text-slate-500 uppercase tracking-widest">{new Date(act.date).toLocaleTimeString('bn-BD')}</p>
-                       </div>
-                    </div>
-                    <p className="text-sm font-black italic text-white leading-none tracking-tight group-hover:text-indigo-400 transition-colors">{act.amount.toLocaleString()}৳</p>
-                 </div>
-               ))}
-            </div>
-         </div>
-      </div>
-
-      {/* ⚠️ Critical Overdue Alerts Section */}
-      <div className="bg-white rounded-[2.5rem] shadow-xl border border-rose-100 overflow-hidden animate-reveal">
-        <div className="p-6 bg-rose-50/50 flex justify-between items-center border-b border-rose-100">
-           <div className="flex items-center gap-3">
-              <span className="text-2xl">⚠️</span>
-              <div>
-                 <h3 className="text-[10px] font-black uppercase italic tracking-[0.2em] text-rose-600 leading-none">Critical Overdue Status</h3>
-                 <p className="text-[9px] font-bold text-slate-400 mt-1 uppercase italic">যাদের ১ মাসের বেশি সময় লেনদেন নেই</p>
-              </div>
-           </div>
-           <button 
-             onClick={downloadOverduePDF}
-             className="bg-rose-600 hover:bg-rose-700 text-white px-4 py-2 rounded-xl text-[9px] font-black italic uppercase tracking-widest transition-all shadow-lg active:scale-95"
-           >
-             Download Report ↓
-           </button>
+      {/* ⚠️ Critical Overdue (এটিই আপনার নতুন এড করা সেকশন) */}
+      <div className="bg-white rounded-[2rem] shadow-xl border border-rose-100 overflow-hidden">
+        <div className="p-4 bg-rose-50 flex justify-between items-center border-b border-rose-100">
+           <h3 className="text-[10px] font-black uppercase text-rose-600 italic">Critical Overdue</h3>
+           <button onClick={downloadOverduePDF} className="bg-rose-600 text-white px-3 py-1 rounded-lg text-[8px] font-bold uppercase">PDF ↓</button>
         </div>
-        
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 p-6">
+        <div className="p-4 space-y-3">
            {overdueCustomers.length > 0 ? overdueCustomers.map((cust, i) => (
-              <div key={i} className="flex justify-between items-center p-4 bg-slate-50 rounded-[1.5rem] border border-transparent hover:border-rose-200 hover:bg-white transition-all group shadow-sm">
+              <div key={i} className="flex justify-between items-center p-3 bg-slate-50 rounded-2xl border border-rose-50">
                  <div className="min-w-0">
-                    <p className="text-[11px] font-black uppercase text-slate-800 italic truncate group-hover:text-rose-600">{cust.name}</p>
-                    <p className="text-[8px] font-bold text-slate-400 uppercase tracking-tighter mt-1">
-                       শেষ: {new Date(cust.lastDate).toLocaleDateString('bn-BD')}
-                    </p>
+                    <p className="text-[10px] font-black uppercase text-slate-800 truncate">{cust.name}</p>
+                    <p className="text-[7px] font-bold text-slate-400 uppercase">শেষ: {new Date(cust.lastDate).toLocaleDateString('bn-BD')}</p>
                  </div>
-                 <div className="text-right">
-                    <p className="text-sm font-black italic text-rose-600 tracking-tight">
-                       {cust.balance.toLocaleString()}৳
-                    </p>
-                    <span className="text-[7px] font-black text-rose-300 uppercase italic leading-none">Overdue</span>
-                 </div>
+                 <p className="text-xs font-black text-rose-600 italic">{cust.balance.toLocaleString()}৳</p>
               </div>
            )) : (
-              <div className="col-span-full py-10 text-center">
-                 <p className="text-[11px] font-black text-slate-300 uppercase italic">অভিনন্দন! বর্তমানে কোন দীর্ঘমেয়াদী বকেয়া নেই। ✨</p>
-              </div>
+              <p className="text-[10px] text-center py-4 font-bold text-slate-400 italic">বর্তমানে কোন দীর্ঘমেয়াদী বকেয়া নেই। ✨</p>
            )}
         </div>
+      </div>
+
+      {/* Recent Activity */}
+      <div className="bg-slate-900 rounded-[2rem] p-5 shadow-2xl">
+         <h3 className="text-[9px] font-black uppercase text-indigo-400 mb-4 tracking-widest">Live Activity</h3>
+         <div className="space-y-3 max-h-[300px] overflow-y-auto custom-scroll pr-1">
+            {recentActivity.map((act, i) => (
+              <div key={i} className="p-3 bg-white/5 rounded-2xl flex items-center justify-between border border-white/5">
+                 <div className="flex items-center gap-3">
+                    <div className={`w-7 h-7 rounded-lg flex items-center justify-center text-white font-black text-[8px] ${act.type === 'C' ? 'bg-emerald-500' : 'bg-indigo-500'}`}>{act.type}</div>
+                    <div className="min-w-0 text-left">
+                       <p className="text-[9px] font-black uppercase italic text-white truncate leading-none">{act.name}</p>
+                       <p className="text-[7px] font-bold text-slate-500 uppercase mt-1">{new Date(act.date).toLocaleTimeString('bn-BD')}</p>
+                    </div>
+                 </div>
+                 <p className="text-[11px] font-black italic text-white">{act.amount.toLocaleString()}৳</p>
+              </div>
+            ))}
+         </div>
       </div>
 
     </div>
