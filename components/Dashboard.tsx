@@ -1,7 +1,8 @@
-
 import React, { useState, useEffect, useMemo } from 'react';
 import { Company, UserRole, formatCurrency } from '../types';
 import { supabase, mapToDbCompany } from '../lib/supabase';
+import { jsPDF } from 'jspdf';
+import 'jspdf-autotable';
 
 interface DashboardProps {
   company: Company;
@@ -15,6 +16,7 @@ const Dashboard: React.FC<DashboardProps> = ({ company, role }) => {
   const [loading, setLoading] = useState(true);
   const [recentActivity, setRecentActivity] = useState<any[]>([]);
   const [monthlyData, setMonthlyData] = useState<any[]>([]);
+  const [overdueCustomers, setOverdueCustomers] = useState<any[]>([]);
 
   useEffect(() => { fetchDashboardData(); }, [company]);
 
@@ -27,12 +29,14 @@ const Dashboard: React.FC<DashboardProps> = ({ company, role }) => {
       const startOfYear = new Date(today.getFullYear(), 0, 1).toISOString();
 
       const [txRes, prodRes] = await Promise.all([
-        supabase.from('transactions').select('*, customers(name)').eq('company', dbCompany).gte('created_at', startOfYear),
+        supabase.from('transactions').select('*, customers(id, name, phone)').eq('company', dbCompany).gte('created_at', startOfYear),
         supabase.from('products').select('tp, stock').eq('company', dbCompany)
       ]);
 
       let t_sales = 0, t_coll = 0, reg_due = 0, book_adv = 0;
       const recent: any[] = [];
+      const customerMap: Record<string, { name: string, balance: number, lastDate: Date, phone: string }> = {};
+      
       const monthlyMap: Record<string, { month: string, sales: number, collection: number }> = {};
       const monthNames = ["জানুয়ারি", "ফেব্রুয়ারি", "মার্চ", "এপ্রিল", "মে", "জুন", "জুলাই", "আগস্ট", "সেপ্টেম্বর", "অক্টোবর", "নভেম্বর", "ডিসেম্বর"];
       monthNames.forEach((name, idx) => {
@@ -43,8 +47,20 @@ const Dashboard: React.FC<DashboardProps> = ({ company, role }) => {
       txRes.data?.forEach(tx => {
         const amt = Number(tx.amount) || 0;
         const txDate = tx.created_at.split('T')[0];
+        const txFullDate = new Date(tx.created_at);
         const txMonth = tx.created_at.slice(0, 7);
         const isBooking = tx.meta?.is_booking === true || tx.items?.[0]?.note?.includes('বুকিং');
+        const custId = tx.customers?.id || 'unknown';
+
+        // Overdue Tracking Logic
+        if (!customerMap[custId]) {
+          customerMap[custId] = { 
+            name: tx.customers?.name || 'Unknown', 
+            balance: 0, 
+            lastDate: txFullDate,
+            phone: tx.customers?.phone || 'N/A'
+          };
+        }
 
         if (tx.payment_type === 'COLLECTION') {
           if (txDate === todayStr) t_coll += amt;
@@ -52,28 +68,55 @@ const Dashboard: React.FC<DashboardProps> = ({ company, role }) => {
             book_adv += amt;
           } else {
             reg_due -= amt;
+            customerMap[custId].balance -= amt;
           }
           if (monthlyMap[txMonth]) monthlyMap[txMonth].collection += amt;
         } else if (tx.payment_type === 'DUE') {
           if (txDate === todayStr) t_sales += amt;
           reg_due += amt;
+          customerMap[custId].balance += amt;
           if (monthlyMap[txMonth]) monthlyMap[txMonth].sales += amt;
         }
+
+        // Update Last Activity Date
+        if (txFullDate > customerMap[custId].lastDate) {
+          customerMap[custId].lastDate = txFullDate;
+        }
+
         if (txDate === todayStr) recent.push({ name: tx.customers?.name || 'Unknown', amount: amt, date: tx.created_at, type: tx.payment_type === 'COLLECTION' ? 'C' : 'S' });
       });
 
+      // Filter Overdue (30 Days+)
+      const thirtyDaysAgo = new Date();
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+      const overdue = Object.values(customerMap)
+        .filter(c => c.balance > 100 && c.lastDate < thirtyDaysAgo)
+        .sort((a, b) => b.balance - a.balance);
+
+      setOverdueCustomers(overdue);
       const sValue = prodRes.data?.reduce((acc, p) => acc + (Number(p.tp) * Number(p.stock)), 0) || 0;
-      setStats({ 
-        todaySales: t_sales, 
-        todayCollection: t_coll, 
-        regularDue: reg_due, 
-        bookingAdvance: book_adv, 
-        stockValue: sValue, 
-        monthSales: 0 
-      });
+      
+      setStats({ todaySales: t_sales, todayCollection: t_coll, regularDue: reg_due, bookingAdvance: book_adv, stockValue: sValue, monthSales: 0 });
       setRecentActivity(recent.sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()).slice(0, 10));
       setMonthlyData(Object.values(monthlyMap));
     } finally { setLoading(false); }
+  };
+
+  const downloadOverduePDF = () => {
+    const doc = new jsPDF();
+    doc.text(`${company} - Overdue Customer Report`, 14, 15);
+    const tableData = overdueCustomers.map(c => [
+      c.name, 
+      c.phone, 
+      c.balance.toLocaleString() + ' BDT', 
+      new Date(c.lastDate).toLocaleDateString('bn-BD')
+    ]);
+    (doc as any).autoTable({
+      head: [['Customer Name', 'Phone', 'Balance', 'Last Activity']],
+      body: tableData,
+      startY: 25,
+    });
+    doc.save(`Overdue_Report_${company}.pdf`);
   };
 
   const brandTheme = useMemo(() => {
@@ -126,9 +169,9 @@ const Dashboard: React.FC<DashboardProps> = ({ company, role }) => {
                <h3 className="text-[9px] font-black uppercase italic tracking-[0.2em] text-slate-400">Monthly Ledger Flow</h3>
                <span className="bg-indigo-50 text-indigo-600 px-4 py-1 rounded-full text-[8px] font-black uppercase italic animate-pulse">Synced ✓</span>
             </div>
-            <div className="overflow-x-auto custom-scroll">
+            <div className="overflow-x-auto custom-scroll max-h-[400px]">
                <table className="w-full text-left">
-                  <thead>
+                  <thead className="sticky top-0 bg-white z-20">
                      <tr className="text-[8px] font-black text-slate-300 uppercase tracking-widest border-b border-slate-50">
                         <th className="px-6 py-4">Month Index</th>
                         <th className="px-6 py-4 text-center">Sales Vol.</th>
@@ -155,7 +198,7 @@ const Dashboard: React.FC<DashboardProps> = ({ company, role }) => {
                <h3 className="text-[9px] font-black uppercase italic tracking-[0.2em] text-indigo-400">Live Activity</h3>
                <div className="w-2 h-2 bg-emerald-500 rounded-full animate-ping"></div>
             </div>
-            <div className="space-y-4 overflow-y-auto custom-scroll max-h-[500px] pr-2 relative z-10">
+            <div className="space-y-4 overflow-y-auto custom-scroll max-h-[400px] pr-2 relative z-10">
                {recentActivity.map((act, i) => (
                  <div key={i} className="p-4 bg-white/5 rounded-[1.5rem] flex items-center justify-between border border-white/5 group hover:bg-white/10 transition-all animate-reveal">
                     <div className="flex items-center gap-4">
@@ -171,6 +214,49 @@ const Dashboard: React.FC<DashboardProps> = ({ company, role }) => {
             </div>
          </div>
       </div>
+
+      {/* ⚠️ Critical Overdue Alerts Section */}
+      <div className="bg-white rounded-[2.5rem] shadow-xl border border-rose-100 overflow-hidden animate-reveal">
+        <div className="p-6 bg-rose-50/50 flex justify-between items-center border-b border-rose-100">
+           <div className="flex items-center gap-3">
+              <span className="text-2xl">⚠️</span>
+              <div>
+                 <h3 className="text-[10px] font-black uppercase italic tracking-[0.2em] text-rose-600 leading-none">Critical Overdue Status</h3>
+                 <p className="text-[9px] font-bold text-slate-400 mt-1 uppercase italic">যাদের ১ মাসের বেশি সময় লেনদেন নেই</p>
+              </div>
+           </div>
+           <button 
+             onClick={downloadOverduePDF}
+             className="bg-rose-600 hover:bg-rose-700 text-white px-4 py-2 rounded-xl text-[9px] font-black italic uppercase tracking-widest transition-all shadow-lg active:scale-95"
+           >
+             Download Report ↓
+           </button>
+        </div>
+        
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 p-6">
+           {overdueCustomers.length > 0 ? overdueCustomers.map((cust, i) => (
+              <div key={i} className="flex justify-between items-center p-4 bg-slate-50 rounded-[1.5rem] border border-transparent hover:border-rose-200 hover:bg-white transition-all group shadow-sm">
+                 <div className="min-w-0">
+                    <p className="text-[11px] font-black uppercase text-slate-800 italic truncate group-hover:text-rose-600">{cust.name}</p>
+                    <p className="text-[8px] font-bold text-slate-400 uppercase tracking-tighter mt-1">
+                       শেষ: {new Date(cust.lastDate).toLocaleDateString('bn-BD')}
+                    </p>
+                 </div>
+                 <div className="text-right">
+                    <p className="text-sm font-black italic text-rose-600 tracking-tight">
+                       {cust.balance.toLocaleString()}৳
+                    </p>
+                    <span className="text-[7px] font-black text-rose-300 uppercase italic leading-none">Overdue</span>
+                 </div>
+              </div>
+           )) : (
+              <div className="col-span-full py-10 text-center">
+                 <p className="text-[11px] font-black text-slate-300 uppercase italic">অভিনন্দন! বর্তমানে কোন দীর্ঘমেয়াদী বকেয়া নেই। ✨</p>
+              </div>
+           )}
+        </div>
+      </div>
+
     </div>
   );
 };
