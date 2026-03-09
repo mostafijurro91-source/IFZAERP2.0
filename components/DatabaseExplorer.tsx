@@ -143,7 +143,7 @@ const DatabaseExplorer: React.FC = () => {
                         <div className="w-12 h-12 bg-slate-50 rounded-2xl flex items-center justify-center text-2xl group-hover:scale-110 transition-transform">{t.icon}</div>
                         <div className="text-right">
                            <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1 italic">Data Weight</p>
-                           <p className="text-xl font-black italic text-slate-900 group-hover:text-blue-600 transition-colors">{formatSize(t.sizeKB)}</p>
+                           <p className="text-xl font-black italic text-slate-900 group-hover:text-blue-600 transition-colors">{formatSize(t.sizeKB || 0)}</p>
                         </div>
                      </div>
                      <div className="flex justify-between items-end">
@@ -181,20 +181,20 @@ const DatabaseExplorer: React.FC = () => {
                         <thead className="bg-slate-900 text-white/40 text-[9px] font-black uppercase italic tracking-widest border-b border-white/10">
                            <tr>
                               <th className="px-8 py-6">Record ID</th>
-                              {Object.keys(tableData[0]).filter(k => k !== 'id').map(key => (
+                              {tableData[0] ? Object.keys(tableData[0]).filter(k => k !== 'id').map(key => (
                                  <th key={key} className="px-8 py-6">{key}</th>
-                              ))}
+                              )) : null}
                            </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100 text-[11px] font-bold">
                            {tableData.map((row, i) => (
                               <tr key={i} className="hover:bg-blue-50/50 transition-colors">
-                                 <td className="px-8 py-6 font-black text-blue-600">#{row.id ? String(row.id).slice(-6).toUpperCase() : 'N/A'}</td>
-                                 {Object.entries(row).filter(([k]) => k !== 'id').map(([key, val]: any) => (
+                                 <td className="px-8 py-6 font-black text-blue-600">#{row?.id ? String(row.id).slice(-6).toUpperCase() : 'N/A'}</td>
+                                 {row ? Object.entries(row).filter(([k]) => k !== 'id').map(([key, val]: any) => (
                                     <td key={key} className="px-8 py-6 text-slate-700 truncate max-w-[200px]">
-                                       {typeof val === 'object' ? JSON.stringify(val).slice(0, 50) + '...' : String(val)}
+                                       {val && typeof val === 'object' ? JSON.stringify(val).slice(0, 50) + '...' : String(val ?? '')}
                                     </td>
-                                 ))}
+                                 )) : null}
                               </tr>
                            ))}
                         </tbody>
