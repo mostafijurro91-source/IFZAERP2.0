@@ -10,7 +10,7 @@ interface DashboardProps {
 
 const Dashboard: React.FC<DashboardProps> = ({ company, role }) => {
   const [stats, setStats] = useState({
-    todaySales: 0, todayCollection: 0, regularDue: 0, bookingAdvance: 0, stockValue: 0, monthSales: 0
+    todaySales: 0, todayCollection: 0, regularDue: 0, bookingAdvance: 0, stockValue: 0, currentMonthSales: 0, avgMonthSales: 0, avgMonthCollection: 0
   });
   const [loading, setLoading] = useState(true);
   const [recentActivity, setRecentActivity] = useState<any[]>([]);
@@ -35,11 +35,11 @@ const Dashboard: React.FC<DashboardProps> = ({ company, role }) => {
 
       let t_sales = 0, t_coll = 0, reg_due = 0, book_adv = 0;
       const recent: any[] = [];
-      const monthlyMap: Record<string, { month: string, sales: number, collection: number }> = {};
+      const monthlyMap: Record<string, { month: string, sales: number, collection: number, returns: number }> = {};
       const monthNames = ["জানুয়ারি", "ফেব্রুয়ারি", "মার্চ", "এপ্রিল", "মে", "জুন", "জুলাই", "আগস্ট", "সেপ্টেম্বর", "অক্টোবর", "নভেম্বর", "ডিসেম্বর"];
       monthNames.forEach((name, idx) => {
         const key = `${today.getFullYear()}-${(idx + 1).toString().padStart(2, '0')}`;
-        monthlyMap[key] = { month: name, sales: 0, collection: 0 };
+        monthlyMap[key] = { month: name, sales: 0, collection: 0, returns: 0 };
       });
 
       const customerStatsMap: Record<string, { name: string, phone: string, address: string, due: number, lastTxDate: Date }> = {};
@@ -51,6 +51,13 @@ const Dashboard: React.FC<DashboardProps> = ({ company, role }) => {
         const txDate = new Date(tx.created_at);
         const isBooking = tx.meta?.is_booking === true || tx.items?.[0]?.note?.includes('বুকিং');
         const cid = tx.customer_id;
+
+        const returnItem = tx.items?.find((it: any) => it.action === 'RETURN');
+        const returnAmount = returnItem ? Math.abs(tx.items.reduce((s: number, it: any) => it.action === 'RETURN' ? s + (Number(it.total) || 0) : s, 0)) : 0;
+
+        if (returnAmount > 0 && monthlyMap[txMonth]) {
+          monthlyMap[txMonth].returns += returnAmount;
+        }
 
         if (cid) {
           if (!customerStatsMap[cid]) {
@@ -89,6 +96,22 @@ const Dashboard: React.FC<DashboardProps> = ({ company, role }) => {
         .filter(c => c.due > 0 && c.lastTxDate < thirtyDaysAgo)
         .sort((a, b) => b.due - a.due);
 
+      let currSales = 0;
+      let totalSales = 0;
+      let totalCollection = 0;
+      let activeMonths = 0;
+
+      const currentMonthKey = `${today.getFullYear()}-${(today.getMonth() + 1).toString().padStart(2, '0')}`;
+      if (monthlyMap[currentMonthKey]) currSales = monthlyMap[currentMonthKey].sales;
+
+      Object.values(monthlyMap).forEach(m => {
+        if (m.sales > 0 || m.collection > 0 || m.returns > 0) activeMonths++;
+        totalSales += m.sales;
+        totalCollection += m.collection;
+      });
+
+      const avgSales = activeMonths > 0 ? totalSales / activeMonths : 0;
+      const avgCollection = activeMonths > 0 ? totalCollection / activeMonths : 0;
 
       const sValue = prodRes.data?.reduce((acc, p) => acc + (Number(p.tp) * Number(p.stock)), 0) || 0;
       setStats({
@@ -97,7 +120,9 @@ const Dashboard: React.FC<DashboardProps> = ({ company, role }) => {
         regularDue: reg_due,
         bookingAdvance: book_adv,
         stockValue: sValue,
-        monthSales: 0
+        currentMonthSales: currSales,
+        avgMonthSales: avgSales,
+        avgMonthCollection: avgCollection
       });
       setRecentActivity(recent.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).slice(0, 10));
       setMonthlyData(Object.values(monthlyMap));
@@ -132,13 +157,16 @@ const Dashboard: React.FC<DashboardProps> = ({ company, role }) => {
       </div>
 
       {/* 📊 Stat Cards Grid */}
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-8 gap-4">
         {[
           { label: 'আজকের বিক্রি', val: stats.todaySales, color: 'text-blue-600', icon: '🛒', bg: 'bg-blue-50' },
           { label: 'আজকের আদায়', val: stats.todayCollection, color: 'text-emerald-600', icon: '💰', bg: 'bg-emerald-50' },
           { label: 'মালের বকেয়া', val: stats.regularDue, color: 'text-rose-600', icon: '⏳', bg: 'bg-rose-50' },
           { label: 'বুকিং জমা', val: stats.bookingAdvance, color: 'text-indigo-600', icon: '📅', bg: 'bg-indigo-50' },
-          { label: 'স্টক ভ্যালু', val: stats.stockValue, color: 'text-slate-900', icon: '📦', bg: 'bg-slate-100' }
+          { label: 'স্টক ভ্যালু', val: stats.stockValue, color: 'text-slate-900', icon: '📦', bg: 'bg-slate-100' },
+          { label: 'চলতি মাসের সেল', val: stats.currentMonthSales, color: 'text-fuchsia-600', icon: '📈', bg: 'bg-fuchsia-50' },
+          { label: 'গড় মাসিক সেল', val: stats.avgMonthSales, color: 'text-violet-600', icon: '📊', bg: 'bg-violet-50' },
+          { label: 'গড় মাসিক আদায়', val: stats.avgMonthCollection, color: 'text-teal-600', icon: '💸', bg: 'bg-teal-50' }
         ].map((card, i) => (
           <div key={i} className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-md hover:shadow-xl transition-all duration-700 hover:-translate-y-1 animate-reveal relative overflow-hidden group" style={{ animationDelay: `${i * 0.1}s` }}>
             <div className={`absolute top-0 right-0 w-16 h-16 ${card.bg} rounded-bl-[2.5rem] -z-0 opacity-40 group-hover:scale-125 transition-transform`}></div>
@@ -161,6 +189,7 @@ const Dashboard: React.FC<DashboardProps> = ({ company, role }) => {
                 <tr className="text-[8px] font-black text-slate-300 uppercase tracking-widest border-b border-slate-50">
                   <th className="px-6 py-4">Month Index</th>
                   <th className="px-6 py-4 text-center">Sales Vol.</th>
+                  <th className="px-6 py-4 text-center">Returns</th>
                   <th className="px-6 py-4 text-right">Collection</th>
                 </tr>
               </thead>
@@ -168,8 +197,9 @@ const Dashboard: React.FC<DashboardProps> = ({ company, role }) => {
                 {monthlyData.map((d, i) => (
                   <tr key={i} className="hover:bg-indigo-50/20 transition-all group">
                     <td className="px-6 py-4 text-slate-700 font-black">{d.month}</td>
-                    <td className="px-6 py-4 text-center text-slate-900">{d.sales.toLocaleString()}৳</td>
-                    <td className="px-6 py-4 text-right text-emerald-600 font-black">+{d.collection.toLocaleString()}৳</td>
+                    <td className="px-6 py-4 text-center text-slate-900">{Math.round(d.sales).toLocaleString()}৳</td>
+                    <td className="px-6 py-4 text-center text-rose-500">{d.returns > 0 ? `-${Math.round(d.returns).toLocaleString()}৳` : '-'}</td>
+                    <td className="px-6 py-4 text-right text-emerald-600 font-black">+{Math.round(d.collection).toLocaleString()}৳</td>
                   </tr>
                 ))}
               </tbody>
