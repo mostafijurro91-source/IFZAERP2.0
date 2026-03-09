@@ -48,17 +48,10 @@ const Dashboard: React.FC<DashboardProps> = ({ company, role }) => {
 
       txRes.data?.forEach(tx => {
         const amt = Number(tx.amount) || 0;
-
-        // Debug first 10 DUE transactions with their items
-        if (tx.payment_type === 'DUE' && dueTxCount < 10) {
-          console.log('DUE tx:', { id: tx.id, amount: tx.amount, isMemo: tx.items?.some((it: any) => ['SALE', 'RETURN', 'REPLACE'].includes(it.action)), items: tx.items });
-          dueTxCount++;
-        }
         const txDateStr = tx.created_at.split('T')[0];
         const txMonth = tx.created_at.slice(0, 7);
         const txDate = new Date(tx.created_at);
         const isBooking = tx.meta?.is_booking === true || tx.items?.[0]?.note?.includes('বুকিং');
-        const isMemo = tx.items?.some((it: any) => ['SALE', 'RETURN', 'REPLACE'].includes(it.action));
         const cid = tx.customer_id;
 
         const returnItem = tx.items?.find((it: any) => it.action === 'RETURN');
@@ -93,14 +86,10 @@ const Dashboard: React.FC<DashboardProps> = ({ company, role }) => {
           }
           if (monthlyMap[txMonth]) monthlyMap[txMonth].collection += amt;
         } else if (tx.payment_type === 'DUE') {
-          if (isMemo) {
-            if (txDateStr === todayStr) t_sales += amt;
-            if (monthlyMap[txMonth]) monthlyMap[txMonth].sales += amt;
-          }
-
-          // Balance calculations still use the full raw amount (including manual dues)
+          if (txDateStr === todayStr) t_sales += amt;
           reg_due += amt;
           if (cid) customerStatsMap[cid].due += amt;
+          if (monthlyMap[txMonth]) monthlyMap[txMonth].sales += amt;
         }
         if (txDateStr === todayStr) recent.push({ name: tx.customers?.name || 'Unknown', amount: amt, date: tx.created_at, type: tx.payment_type === 'COLLECTION' ? 'C' : 'S' });
       });
