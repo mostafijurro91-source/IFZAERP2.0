@@ -84,10 +84,19 @@ const Dashboard: React.FC<DashboardProps> = ({ company, role }) => {
           }
           if (monthlyMap[txMonth]) monthlyMap[txMonth].collection += amt;
         } else if (tx.payment_type === 'DUE') {
-          if (txDateStr === todayStr) t_sales += amt;
+          // Calculate actual sales value (excluding returns and just general due entries)
+          const actualSaleAmount = tx.items?.reduce((sum: number, it: any) =>
+            it.action === 'ADD' ? sum + (Number(it.total) || 0) : sum, 0
+          ) || 0;
+
+          if (actualSaleAmount > 0) {
+            if (txDateStr === todayStr) t_sales += actualSaleAmount;
+            if (monthlyMap[txMonth]) monthlyMap[txMonth].sales += actualSaleAmount;
+          }
+
+          // Balance calculations still use the full raw amount
           reg_due += amt;
           if (cid) customerStatsMap[cid].due += amt;
-          if (monthlyMap[txMonth]) monthlyMap[txMonth].sales += amt;
         }
         if (txDateStr === todayStr) recent.push({ name: tx.customers?.name || 'Unknown', amount: amt, date: tx.created_at, type: tx.payment_type === 'COLLECTION' ? 'C' : 'S' });
       });
