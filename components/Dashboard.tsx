@@ -50,6 +50,7 @@ const Dashboard: React.FC<DashboardProps> = ({ company, role }) => {
         const txMonth = tx.created_at.slice(0, 7);
         const txDate = new Date(tx.created_at);
         const isBooking = tx.meta?.is_booking === true || tx.items?.[0]?.note?.includes('বুকিং');
+        const isMemo = tx.items?.some((it: any) => ['SALE', 'RETURN', 'REPLACE'].includes(it.action));
         const cid = tx.customer_id;
 
         const returnItem = tx.items?.find((it: any) => it.action === 'RETURN');
@@ -84,17 +85,12 @@ const Dashboard: React.FC<DashboardProps> = ({ company, role }) => {
           }
           if (monthlyMap[txMonth]) monthlyMap[txMonth].collection += amt;
         } else if (tx.payment_type === 'DUE') {
-          // Calculate actual sales value (excluding returns and just general due entries)
-          const actualSaleAmount = tx.items?.reduce((sum: number, it: any) =>
-            it.action === 'ADD' ? sum + (Number(it.total) || 0) : sum, 0
-          ) || 0;
-
-          if (actualSaleAmount > 0) {
-            if (txDateStr === todayStr) t_sales += actualSaleAmount;
-            if (monthlyMap[txMonth]) monthlyMap[txMonth].sales += actualSaleAmount;
+          if (isMemo) {
+            if (txDateStr === todayStr) t_sales += amt;
+            if (monthlyMap[txMonth]) monthlyMap[txMonth].sales += amt;
           }
 
-          // Balance calculations still use the full raw amount
+          // Balance calculations still use the full raw amount (including manual dues)
           reg_due += amt;
           if (cid) customerStatsMap[cid].due += amt;
         }
