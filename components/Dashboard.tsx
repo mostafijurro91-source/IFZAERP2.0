@@ -34,6 +34,8 @@ const Dashboard: React.FC<DashboardProps> = ({ company, role }) => {
       ]);
 
       let t_sales = 0, t_coll = 0, reg_due = 0, book_adv = 0;
+      let dueTxCount = 0; // For temporary debugging
+
       const recent: any[] = [];
       const monthlyMap: Record<string, { month: string, sales: number, collection: number, returns: number }> = {};
       const monthNames = ["জানুয়ারি", "ফেব্রুয়ারি", "মার্চ", "এপ্রিল", "মে", "জুন", "জুলাই", "আগস্ট", "সেপ্টেম্বর", "অক্টোবর", "নভেম্বর", "ডিসেম্বর"];
@@ -46,6 +48,12 @@ const Dashboard: React.FC<DashboardProps> = ({ company, role }) => {
 
       txRes.data?.forEach(tx => {
         const amt = Number(tx.amount) || 0;
+
+        // Debug first 10 DUE transactions with their items
+        if (tx.payment_type === 'DUE' && dueTxCount < 10) {
+          console.log('DUE tx:', { id: tx.id, amount: tx.amount, isMemo: tx.items?.some((it: any) => ['SALE', 'RETURN', 'REPLACE'].includes(it.action)), items: tx.items });
+          dueTxCount++;
+        }
         const txDateStr = tx.created_at.split('T')[0];
         const txMonth = tx.created_at.slice(0, 7);
         const txDate = new Date(tx.created_at);
