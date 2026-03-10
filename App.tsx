@@ -19,7 +19,6 @@ import MarketingPage from './components/MarketingPage';
 import CustomerPortal from './components/CustomerPortal';
 import Showroom from './components/Showroom';
 import Tracking from './components/Tracking';
-import StaffTracking from './components/StaffTracking';
 import DatabaseExplorer from './components/DatabaseExplorer';
 import { User, Company } from './types';
 import { supabase, checkSupabaseConnection } from './lib/supabase';
@@ -230,7 +229,6 @@ const App: React.FC = () => {
             {activeTab === 'ledger' && <CompanyLedger company={selectedCompany} role={user.role} />}
             {activeTab === 'reports' && <Reports company={selectedCompany} userRole={user.role} userName={user.name} />}
             {activeTab === 'team' && <Team />}
-            {activeTab === 'staff_tracking' && <StaffTracking company={selectedCompany} />}
             {activeTab === 'db_explorer' && <DatabaseExplorer />}
             {activeTab === 'github_sync' && <Tracking />}
           </div>
