@@ -122,7 +122,6 @@ const Sidebar: React.FC<SidebarProps> = ({
     { id: 'customers', label: '👥 কাস্টমার ডাটা', roles: ['ADMIN', 'STAFF', 'DELIVERY'] },
     { id: 'ledger', label: '📒 কোম্পানি লেজার', roles: ['ADMIN'] },
     { id: 'db_explorer', label: '🗄️ ডেটাবেজ এক্সপ্লোরার', roles: ['ADMIN'] },
-    { id: 'staff_tracking', label: '🛰️ স্টাফ ট্র্যাকিং', roles: ['ADMIN', 'STAFF'] },
     { id: 'reports', label: '📁 অল রিপোর্টস', roles: ['ADMIN', 'STAFF'] },
     { id: 'team', label: '🛡️ টিম মনিটরিং', roles: ['ADMIN'] }
   ].filter(m => m.roles.includes(user.role));
