@@ -1,63 +1,7 @@
 
-import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Company, User, formatCurrency } from '../types';
+import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
-
-declare var L: any; // Leaflet global reference
-
-// Haversine formula for distance in meters
-const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
-  if (!lat1 || !lon1 || !lat2 || !lon2) return 0;
-  const R = 6371e3; 
-  const φ1 = lat1 * Math.PI / 180;
-  const φ2 = lat2 * Math.PI / 180;
-  const Δφ = (lat2 - lat1) * Math.PI / 180;
-  const Δλ = (lon2 - lon1) * Math.PI / 180;
-  const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
-            Math.cos(φ1) * Math.cos(φ2) *
-            Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  return R * c;
-};
-
-// MiniMap Component
-const MiniMap: React.FC<{ lat: number, lng: number, id: string }> = ({ lat, lng, id }) => {
-  const mapRef = useRef<HTMLDivElement>(null);
-  const instanceRef = useRef<any>(null);
-
-  useEffect(() => {
-    if (mapRef.current && !instanceRef.current) {
-      instanceRef.current = L.map(mapRef.current, {
-        zoomControl: false,
-        attributionControl: false,
-        scrollWheelZoom: false,
-        dragging: false,
-        touchZoom: false
-      }).setView([lat, lng], 16);
-
-      L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png').addTo(instanceRef.current);
-      
-      const icon = L.divIcon({
-        className: 'custom-user-icon',
-        html: `<div class="w-4 h-4 bg-blue-600 rounded-full border-2 border-white shadow-lg animate-pulse"></div>`,
-        iconSize: [16, 16]
-      });
-
-      L.marker([lat, lng], { icon }).addTo(instanceRef.current);
-    } else if (instanceRef.current) {
-      instanceRef.current.setView([lat, lng]);
-    }
-  }, [lat, lng]);
-
-  return <div ref={mapRef} className="w-full h-32 rounded-2xl border-2 border-slate-100 overflow-hidden shadow-inner mb-4" id={`mini-map-${id}`} />;
-};
-
-const getETA = (meters: number) => {
-  const speed = 5.5; // m/s
-  const seconds = meters / speed;
-  const minutes = Math.ceil(seconds / 60);
-  return minutes > 60 ? `${Math.floor(minutes/60)}h ${minutes%60}m` : `${minutes} min`;
-};
+import { Company, User, formatCurrency } from '../types';
 
 interface DeliveryHubProps {
   company: Company;
@@ -65,321 +9,196 @@ interface DeliveryHubProps {
 }
 
 const DeliveryHub: React.FC<DeliveryHubProps> = ({ company, user }) => {
-  const [loading, setLoading] = useState(false);
-  const [activeView, setActiveView] = useState<'PERSONAL' | 'ADMIN_CONSOLE'>(user.role === 'ADMIN' ? 'ADMIN_CONSOLE' : 'PERSONAL');
-  const [userLocation, setUserLocation] = useState<{lat: number, lng: number} | null>(null);
-  
-  const [shops, setShops] = useState<any[]>([]);
   const [allTasks, setAllTasks] = useState<any[]>([]);
   const [allOrders, setAllOrders] = useState<any[]>([]);
-  const [allCollections, setAllCollections] = useState<any[]>([]);
-  const [allDues, setAllDues] = useState<Record<string, any>>({});
-  const [activeTripId, setActiveTripId] = useState<string | null>(localStorage.getItem('ifza_active_trip'));
-  const [depositAmount, setDepositAmount] = useState<string>("");
+  const [deliveryStaff, setDeliveryStaff] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState<'PENDING' | 'MY_DELIVERIES' | 'COMPLETED'>('PENDING');
+  const [depositAmount, setDepositAmount] = useState<Record<string, string>>({});
 
-  const [searchTerm, setSearchTerm] = useState("");
-  const [selectedRoute, setSelectedRoute] = useState("");
-  const [filterMode, setFilterMode] = useState<'ALL' | 'UNMAPPED'>('ALL');
-  
-  const [arrivalTimes, setArrivalTimes] = useState<Record<string, number>>(() => {
-    const saved = localStorage.getItem('ifza_arrival_times');
-    return saved ? JSON.parse(saved) : {};
-  });
-  
-  const lastSyncRef = useRef<number>(0);
-
-  const isAdmin = user.role === 'ADMIN';
+  const isAdmin = user.role === 'ADMIN' || user.role === 'STAFF';
 
   useEffect(() => {
     fetchData();
-    const interval = setInterval(fetchData, 60000);
+    const interval = setInterval(fetchData, 30000);
     return () => clearInterval(interval);
-  }, [activeView, company]);
+  }, [company]);
 
   const fetchData = async () => {
     try {
-      const today = new Date(); today.setHours(0,0,0,0);
+      const today = new Date();
+      today.setHours(0,0,0,0);
       const startOfDay = today.toISOString();
       const endOfDay = new Date(today.getTime() + 86400000).toISOString();
 
-      const [custRes, taskRes, txRes, collRes, orderRes] = await Promise.all([
-        supabase.from('customers').select('*').order('name'),
-        supabase.from('delivery_tasks').select('*, customers(*), users(name)').gte('created_at', startOfDay).lt('created_at', endOfDay),
-        supabase.from('transactions').select('customer_id, amount, payment_type, company'),
-        supabase.from('collection_requests').select('*, customers(name)').gte('created_at', startOfDay).lt('created_at', endOfDay),
-        supabase.from('market_orders').select('*').gte('created_at', startOfDay).lt('created_at', endOfDay)
+      const [taskRes, orderRes, staffRes] = await Promise.all([
+        supabase.from('delivery_tasks').select('*, customers(*), users(name)').order('created_at', { ascending: false }),
+        supabase.from('market_orders').select('*, customers(*)').gte('created_at', startOfDay).lt('created_at', endOfDay),
+        supabase.from('users').select('*').in('role', ['DELIVERY', 'STAFF'])
       ]);
 
-      const duesMap: Record<string, any> = {};
-      txRes.data?.forEach(tx => {
-        const cid = tx.customer_id;
-        const co = tx.company;
-        const amt = Number(tx.amount) || 0;
-        if (!duesMap[cid]) duesMap[cid] = { Transtec: 0, 'SQ Light': 0, 'SQ Cables': 0 };
-        if (duesMap[cid][co] !== undefined) {
-          duesMap[cid][co] += (tx.payment_type === 'COLLECTION' ? -amt : amt);
-        }
-      });
-
-      setAllCollections(collRes.data || []);
-      setAllDues(duesMap);
       setAllTasks(taskRes.data || []);
       setAllOrders(orderRes.data || []);
-      setShops(custRes.data || []);
-    } catch (err) {}
-  };
-
-  // SYNC GPS POSITION TO CLOUD FOR LIVE MAP
-  const syncLocationToCloud = async (lat: number, lng: number) => {
-    const now = Date.now();
-    // Throttle to every 5 seconds to save battery/data but still look "live"
-    if (now - lastSyncRef.current < 5000) return;
-    lastSyncRef.current = now;
-
-    try {
-      await supabase.from('users').update({
-        last_lat: lat,
-        last_lng: lng,
-        last_seen: new Date().toISOString()
-      }).eq('id', user.id);
+      setDeliveryStaff(staffRes.data || []);
     } catch (err) {
-      console.error("Sync Error:", err);
+      console.error(err);
+    } finally {
+      setLoading(false);
     }
   };
 
-  useEffect(() => {
-    const watchId = navigator.geolocation.watchPosition(
-      (pos) => {
-        const currentLoc = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-        setUserLocation(currentLoc);
-        
-        // Push to cloud for admin to see live on map
-        syncLocationToCloud(currentLoc.lat, currentLoc.lng);
-
-        const todayTasks = allTasks.filter(t => t.user_id === user.id && t.status === 'PENDING');
-        todayTasks.forEach(task => {
-          const shop = task.customers;
-          if (shop?.lat && shop?.lng) {
-            const dist = calculateDistance(currentLoc.lat, currentLoc.lng, shop.lat, shop.lng);
-            if (dist < 30) { 
-              setArrivalTimes(prev => {
-                if (!prev[shop.id]) return { ...prev, [shop.id]: Date.now() };
-                const timeSpent = (Date.now() - prev[shop.id]) / 60000;
-                if (timeSpent >= 5) handleConfirmDelivery(shop);
-                return prev;
-              });
-            } else {
-              setArrivalTimes(prev => {
-                if (prev[shop.id]) {
-                  const next = {...prev};
-                  delete next[shop.id];
-                  return next;
-                }
-                return prev;
-              });
-            }
-          }
-        });
-      },
-      () => {}, { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
-    );
-    return () => navigator.geolocation.clearWatch(watchId);
-  }, [allTasks, user.id]);
-
-  const handleConfirmDelivery = async (shop: any) => {
-    if (!userLocation) return;
-    const amount = Number(depositAmount) || 0;
-    if (amount <= 0) return alert("দয়া করে কালেকশন পরিমাণ লিখুন!");
-
-    setLoading(true);
+  const handleAssignStaff = async (taskId: string, staffId: string) => {
     try {
-      // 1. Submit Collection Request
-      await supabase.from('collection_requests').insert([{
-        customer_id: shop.id,
-        company: company,
+      const { error } = await supabase
+        .from('delivery_tasks')
+        .update({ assigned_to: staffId, status: 'ASSIGNED' })
+        .eq('id', taskId);
+      
+      if (error) throw error;
+      fetchData();
+    } catch (err: any) {
+      alert("অ্যাসাইনমেন্টে ত্রুটি: " + err.message);
+    }
+  };
+
+  const handleSubmitCollection = async (task: any) => {
+    const amount = parseFloat(depositAmount[task.id] || "0");
+    if (amount <= 0) {
+      alert("সঠিক জমার পরিমাণ লিখুন");
+      return;
+    }
+
+    try {
+      // 1. Create collection request
+      const { error: collError } = await supabase.from('collection_requests').insert([{
+        customer_id: task.customer_id,
         amount: amount,
-        submitted_by: user.name,
+        company: task.company || company,
         status: 'PENDING',
-        meta: { type: 'DELIVERY_HUB_COLLECTION', shop_name: shop.name }
+        collected_by: user.id
       }]);
 
-      // 2. Mark Delivery Task as Completed
-      await supabase.from('delivery_tasks').update({
-        status: 'COMPLETED',
-        completed_at: new Date().toISOString(),
-        lat: userLocation.lat,
-        lng: userLocation.lng
-      }).eq('customer_id', shop.id).eq('user_id', user.id).gte('created_at', new Date().toISOString().split('T')[0]);
-      
-      setActiveTripId(null);
-      setDepositAmount("");
-      localStorage.removeItem('ifza_active_trip');
-      setArrivalTimes(prev => { const n = {...prev}; delete n[shop.id]; return n; });
+      if (collError) throw collError;
+
+      // 2. Mark task as completed
+      const { error: taskError } = await supabase
+        .from('delivery_tasks')
+        .update({ status: 'COMPLETED' })
+        .eq('id', task.id);
+
+      if (taskError) throw taskError;
+
+      alert("কালেকশন এন্ট্রি সফল হয়েছে!");
+      setDepositAmount(prev => ({ ...prev, [task.id]: "" }));
       fetchData();
-      alert("কালেকশন সাবমিট করা হয়েছে এবং ডেলিভারি সফল! ✅");
-    } finally { setLoading(false); }
+    } catch (err: any) {
+      alert("ত্রুটি: " + err.message);
+    }
   };
 
-  const addToRoute = async (shopId: string) => {
-    setLoading(true);
-    try {
-      await supabase.from('delivery_tasks').insert([{ user_id: user.id, customer_id: shopId, company: company, status: 'PENDING' }]);
-      fetchData();
-    } finally { setLoading(false); }
-  };
-
-  const handleSetShopLocation = async (shopId: string) => {
-    if (!userLocation) return alert("লোকেশন পাওয়া যাচ্ছে না!");
-    if (!confirm("দোকানের সামনে দাঁড়িয়ে আছেন? লোকেশন সেভ করুন।")) return;
-    try {
-      await supabase.from('customers').update({ lat: userLocation.lat, lng: userLocation.lng }).eq('id', shopId);
-      fetchData();
-    } catch (err) {}
-  };
-
-  const uniqueRoutes = useMemo(() => Array.from(new Set(shops.map(s => s.address?.trim()).filter(Boolean))).sort(), [shops]);
-
-  const filteredShops = useMemo(() => {
-    return shops.filter(s => {
-      const ms = s.name.toLowerCase().includes(searchTerm.toLowerCase());
-      const mr = selectedRoute ? s.address?.trim() === selectedRoute : true;
-      const mu = filterMode === 'UNMAPPED' ? (!s.lat || !s.lng) : true;
-      return ms && mr && mu;
-    });
-  }, [shops, searchTerm, selectedRoute, filterMode]);
+  const filteredTasks = allTasks.filter(t => {
+    if (activeTab === 'PENDING') return t.status === 'PENDING';
+    if (activeTab === 'MY_DELIVERIES') return t.assigned_to === user.id && t.status === 'ASSIGNED';
+    if (activeTab === 'COMPLETED') return t.status === 'COMPLETED';
+    return false;
+  });
 
   return (
-    <div className="min-h-screen bg-[#f8fafc] pb-32 font-sans text-slate-900">
-      <header className="bg-white/95 backdrop-blur-md sticky top-0 z-[100] border-b px-6 py-6 flex justify-between items-end shadow-sm">
-        <div className="flex items-center gap-3">
-          <div className="w-12 h-12 bg-slate-900 rounded-2xl flex items-center justify-center text-white text-2xl shadow-xl italic font-black">if<span className="text-blue-500">.</span></div>
+    <div className="space-y-8 animate-reveal pb-20">
+      {/* Header Section */}
+      <div className="bg-slate-900 p-10 md:p-14 rounded-[4rem] text-white shadow-2xl relative overflow-hidden">
+        <div className="absolute top-0 right-0 w-96 h-96 bg-blue-600/10 blur-[120px] rounded-full"></div>
+        <div className="relative z-10 flex flex-col md:flex-row justify-between items-center gap-8">
           <div>
-            <h2 className="text-xl font-black uppercase italic tracking-tighter leading-none">Logistics Terminal</h2>
-            <p className="text-[9px] font-black text-blue-500 uppercase tracking-widest mt-2">{user.name} • {activeView.replace('_', ' ')}</p>
+            <h3 className="text-3xl md:text-5xl font-black uppercase italic tracking-tighter leading-none">লজিস্টিকস টার্মিনাল</h3>
+            <p className="text-[10px] text-blue-400 font-black uppercase mt-4 tracking-[0.4em] italic leading-none">Smart Delivery & Collection Hub</p>
+          </div>
+          <div className="flex bg-white/5 backdrop-blur-xl p-2 rounded-[2rem] border border-white/10">
+             <button onClick={() => setActiveTab('PENDING')} className={`px-8 py-4 rounded-[1.5rem] text-[10px] font-black uppercase transition-all ${activeTab === 'PENDING' ? 'bg-white text-slate-900 shadow-xl' : 'text-slate-400 hover:text-white'}`}>পেন্ডিং মেমো</button>
+             <button onClick={() => setActiveTab('MY_DELIVERIES')} className={`px-8 py-4 rounded-[1.5rem] text-[10px] font-black uppercase transition-all ${activeTab === 'MY_DELIVERIES' ? 'bg-white text-slate-900 shadow-xl' : 'text-slate-400 hover:text-white'}`}>আমার ডেলিভারি</button>
+             <button onClick={() => setActiveTab('COMPLETED')} className={`px-8 py-4 rounded-[1.5rem] text-[10px] font-black uppercase transition-all ${activeTab === 'COMPLETED' ? 'bg-white text-slate-900 shadow-xl' : 'text-slate-400 hover:text-white'}`}>সফল ডেলিভারি</button>
           </div>
         </div>
-        <div className="flex gap-2">
-           {isAdmin && (
-             <div className="bg-slate-100 p-1.5 rounded-2xl flex gap-1">
-                <button onClick={() => setActiveView('PERSONAL')} className={`px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${activeView === 'PERSONAL' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-400'}`}>My Jobs</button>
-                <button onClick={() => setActiveView('ADMIN_CONSOLE')} className={`px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${activeView === 'ADMIN_CONSOLE' ? 'bg-slate-900 text-white shadow-lg' : 'text-slate-400'}`}>Admin Console</button>
-             </div>
-           )}
+      </div>
+
+      {loading ? (
+        <div className="py-40 text-center animate-pulse text-slate-300 font-black uppercase tracking-widest italic text-xl">ডাটা লোড হচ্ছে...</div>
+      ) : filteredTasks.length === 0 ? (
+        <div className="py-40 text-center bg-white rounded-[4rem] border-2 border-dashed border-slate-100 italic font-black text-slate-300 uppercase tracking-widest">এইলিস্টে কোনো ডাটা নেই</div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+          {filteredTasks.map(task => {
+             // Find matching memo amount from market_orders
+             const order = allOrders.find(o => o.customer_id === task.customer_id);
+             const memoAmount = order?.total_amount || 0;
+             const shop = task.customers || {};
+
+             return (
+               <div key={task.id} className="bg-white p-8 rounded-[3.5rem] border border-slate-100 shadow-sm hover:shadow-2xl transition-all group relative flex flex-col justify-between">
+                  <div className="flex justify-between items-start mb-6">
+                    <div className="px-5 py-2 bg-blue-50 text-blue-600 rounded-2xl text-[8px] font-black uppercase tracking-widest border border-blue-100 shadow-sm">{task.company || company}</div>
+                    <div className="text-[9px] font-black text-slate-300 italic">{new Date(task.created_at).toLocaleDateString('bn-BD')}</div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <h4 className="text-xl font-black text-slate-900 uppercase italic leading-tight group-hover:text-blue-600 transition-colors line-clamp-2">{shop.name || 'অজানা দোকান'}</h4>
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tight line-clamp-1">📍 {shop.address || 'ঠিকানা নেই'}</p>
+                  </div>
+
+                  <div className="mt-8 p-6 bg-slate-50 rounded-[2.5rem] border border-slate-100 space-y-4">
+                     <div className="flex justify-between items-center">
+                        <p className="text-[9px] font-black text-slate-400 uppercase">আজকের মেমো</p>
+                        <p className="text-lg font-black text-slate-900 italic">{formatCurrency(memoAmount)}</p>
+                     </div>
+                     
+                     {task.status === 'COMPLETED' ? (
+                        <div className="pt-4 border-t border-slate-200">
+                           <p className="text-[9px] font-black text-emerald-600 uppercase tracking-widest text-center">✅ ডেলিভারি সম্পন্ন</p>
+                        </div>
+                     ) : isAdmin && task.status === 'PENDING' ? (
+                        <div className="pt-4 border-t border-slate-200 space-y-4">
+                           <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1 text-center">ডেলিভারি মেম্বার সিলেক্ট করুন:</p>
+                           <select 
+                             className="w-full p-4 bg-white border border-slate-200 rounded-2xl text-[10px] font-black uppercase outline-none focus:ring-4 focus:ring-blue-500/10 shadow-sm"
+                             onChange={(e) => handleAssignStaff(task.id, e.target.value)}
+                             defaultValue=""
+                           >
+                             <option value="" disabled>সিলেক্ট করুন...</option>
+                             {deliveryStaff.map(s => (
+                               <option key={s.id} value={s.id}>{s.name} ({s.role})</option>
+                             ))}
+                           </select>
+                        </div>
+                     ) : activeTab === 'MY_DELIVERIES' ? (
+                        <div className="pt-4 border-t border-slate-200 space-y-5">
+                           <div>
+                              <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-2 text-center">কত টাকা পাইলেন?</p>
+                              <input 
+                                type="number" 
+                                placeholder="টাকার পরিমাণ..." 
+                                className="w-full p-4 bg-white border border-slate-200 rounded-2xl text-center text-lg font-black outline-none focus:ring-4 focus:ring-blue-600/10 shadow-inner"
+                                value={depositAmount[task.id] || ""}
+                                onChange={(e) => setDepositAmount(prev => ({ ...prev, [task.id]: e.target.value }))}
+                              />
+                           </div>
+                           <button 
+                             onClick={() => handleSubmitCollection(task)}
+                             className="w-full py-5 bg-slate-900 text-white rounded-[2rem] text-[10px] font-black uppercase tracking-[0.2em] shadow-xl hover:bg-blue-600 active:scale-95 transition-all"
+                           >
+                             কালেকশন এন্ট্রি দিন
+                           </button>
+                        </div>
+                     ) : (
+                        <div className="pt-4 border-t border-slate-200">
+                           <p className="text-[8px] font-black text-blue-600 uppercase tracking-widest text-center">অ্যাসাইন করা হয়েছে: {task.users?.name || 'অজানা'}</p>
+                        </div>
+                     )}
+                  </div>
+               </div>
+             );
+          })}
         </div>
-      </header>
-
-      <div className="p-4 space-y-6">
-          <div className="bg-slate-900 p-8 rounded-[3rem] text-white shadow-2xl relative overflow-hidden group">
-             <div className="absolute right-[-20px] bottom-[-20px] text-6xl opacity-10 rotate-12">🏢</div>
-             <div className="relative z-10 flex justify-between items-end">
-                <div>
-                   <h3 className="text-xl font-black uppercase italic tracking-tighter">Daily Dispatch Route</h3>
-                   <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1">Select shops for today's collection</p>
-                </div>
-                <div className="bg-white/10 p-1 rounded-2xl flex gap-1">
-                   <button onClick={() => setFilterMode('ALL')} className={`px-4 py-2 rounded-xl text-[8px] font-black uppercase tracking-widest transition-all ${filterMode === 'ALL' ? 'bg-white text-slate-900' : 'text-white/40'}`}>All Shops</button>
-                   <button onClick={() => setFilterMode('UNMAPPED')} className={`px-4 py-2 rounded-xl text-[8px] font-black uppercase tracking-widest transition-all ${filterMode === 'UNMAPPED' ? 'bg-red-500 text-white' : 'text-white/40'}`}>Missing GPS 📍</button>
-                </div>
-             </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-             <div className="bg-white p-2 rounded-[2rem] border shadow-sm flex gap-2">
-                <select className="p-4 bg-slate-50 border-r rounded-l-[1.8rem] font-black text-[10px] uppercase outline-none min-w-[120px]" value={selectedRoute} onChange={e => setSelectedRoute(e.target.value)}>
-                  <option value="">সকল এরিয়া</option>
-                  {uniqueRoutes.map(route => <option key={route} value={route}>{route}</option>)}
-                </select>
-                <input type="text" placeholder="দোকানের নাম খুঁজুন..." className="flex-1 p-4 bg-transparent font-black text-xs uppercase outline-none" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
-             </div>
-          </div>
-
-          <div className="grid grid-cols-1 gap-6">
-            {filteredShops.map(shop => {
-              const shopDues = allDues[shop.id] || { Transtec: 0, 'SQ Light': 0, 'SQ Cables': 0 };
-              const task = allTasks.find(t => t.customer_id === shop.id && t.user_id === user.id);
-              const marketOrder = allOrders.find(o => o.customer_id === shop.id);
-              const isGoing = activeTripId === shop.id;
-              const hasGPS = shop.lat && shop.lng;
-              const distance = userLocation && hasGPS ? calculateDistance(userLocation.lat, userLocation.lng, shop.lat, shop.lng) : null;
-              
-              const arrivalTime = arrivalTimes[shop.id];
-              const minutesSpent = arrivalTime ? (Date.now() - arrivalTime) / 60000 : 0;
-              const isAtLocation = distance !== null && distance < 30;
-
-              return (
-                <div key={shop.id} className={`bg-white rounded-[3.5rem] border-2 p-8 transition-all shadow-xl relative overflow-hidden ${isGoing ? 'border-blue-500 ring-8 ring-blue-50' : 'border-white'}`}>
-                  <div className="absolute top-6 right-8 flex gap-2">
-                     {!hasGPS && <span className="px-4 py-1.5 bg-red-100 text-red-600 rounded-full font-black text-[9px] uppercase italic animate-pulse">Missing GPS 📍</span>}
-                     {task?.status === 'COMPLETED' ? <span className="px-4 py-1.5 bg-emerald-100 text-emerald-600 rounded-full font-black text-[9px] uppercase italic">Delivered ✅</span> : task?.status === 'PENDING' ? <span className="px-4 py-1.5 bg-orange-100 text-orange-600 rounded-full font-black text-[9px] uppercase italic animate-pulse">Pending 🚚</span> : null}
-                  </div>
-
-                  <div className="flex flex-col md:flex-row justify-between gap-6 mb-8">
-                    <div className="flex-1">
-                      <h4 className="text-2xl font-black uppercase italic tracking-tighter text-slate-900 leading-none mb-2">{shop.name}</h4>
-                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest italic ml-1.5">📍 {shop.address} {distance ? `• ${distance.toFixed(0)}m away` : ''}</p>
-                    </div>
-                  </div>
-
-                  {marketOrder && (
-                    <div className="mb-6 p-6 bg-blue-50 rounded-[2.5rem] border border-blue-100">
-                       <p className="text-[9px] font-black text-blue-600 uppercase tracking-widest mb-1">আজকের মেমো ডিটেইলস:</p>
-                       <p className="text-xl font-black italic text-slate-900">৳{Math.round(marketOrder.total_amount).toLocaleString()}</p>
-                    </div>
-                  )}
-
-                  {!hasGPS && (
-                    <div className="mb-8 p-6 bg-red-50/50 rounded-[2.5rem] border-2 border-dashed border-red-200">
-                       {userLocation && <MiniMap lat={userLocation.lat} lng={userLocation.lng} id={shop.id} />}
-                       <button onClick={() => handleSetShopLocation(shop.id)} className="w-full bg-slate-900 text-white px-10 py-5 rounded-[1.8rem] font-black uppercase text-[10px] tracking-widest shadow-2xl active:scale-95">🎯 Confirm & Set Location</button>
-                    </div>
-                  )}
-
-                  {isGoing && (
-                    <div className="mb-8 p-6 bg-slate-900 rounded-[2.5rem]">
-                       <div className="flex justify-between items-center mb-4">
-                          <div className="flex items-center gap-3">
-                             <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-white font-black shadow-lg ${isAtLocation ? 'bg-emerald-600 animate-bounce' : 'bg-blue-600'}`}>{isAtLocation ? '🎯' : '🚚'}</div>
-                             <div><p className="text-[9px] font-black text-white uppercase italic">{isAtLocation ? 'Reached' : 'Traveling'}</p></div>
-                          </div>
-                          <p className={`text-sm font-black italic ${isAtLocation ? 'text-emerald-400' : 'text-blue-400'}`}>{isAtLocation ? `${Math.max(0, 5 - Math.floor(minutesSpent))}m left` : '...'}</p>
-                       </div>
-                       <div className="h-1.5 w-full bg-white/5 rounded-full overflow-hidden mb-6">
-                          <div className={`h-full transition-all duration-1000 ${isAtLocation ? 'bg-emerald-500' : 'bg-blue-500'}`} style={{ width: isAtLocation ? `${(minutesSpent / 5) * 100}%` : '100%' }}></div>
-                       </div>
-                       
-                       <div className="space-y-4">
-                          <p className="text-[10px] font-black text-white/40 uppercase tracking-widest italic ml-2">কালেকশন এন্ট্রি (জমা):</p>
-                          <input 
-                            type="number" 
-                            placeholder="টাকা জমা দিন..." 
-                            className="w-full p-6 bg-white/5 border border-white/10 rounded-[1.8rem] text-xl font-black text-white outline-none focus:border-blue-500 transition-colors"
-                            value={depositAmount}
-                            onChange={e => setDepositAmount(e.target.value)}
-                          />
-                       </div>
-                    </div>
-                  )}
-
-                  <div className="flex flex-col md:flex-row gap-3">
-                    {!task ? (
-                      <button onClick={() => addToRoute(shop.id)} className="flex-1 py-5 bg-slate-900 text-white rounded-[2.5rem] font-black uppercase text-xs">➕ Add to Route</button>
-                    ) : task.status === 'COMPLETED' ? (
-                      <div className="flex-1 py-5 text-center bg-emerald-50 text-emerald-600 font-black uppercase text-[10px] rounded-[2.5rem]">✅ Delivered</div>
-                    ) : !isGoing ? (
-                      <button disabled={!hasGPS} onClick={() => { setActiveTripId(shop.id); localStorage.setItem('ifza_active_trip', shop.id); }} className="flex-1 py-5 bg-blue-600 text-white rounded-[2.5rem] font-black uppercase text-xs">🚀 Start Trip</button>
-                    ) : (
-                      <div className="flex-1 flex gap-2">
-                         <button onClick={() => setActiveTripId(null)} className="flex-1 bg-slate-100 text-slate-400 py-5 rounded-[2.5rem] font-black text-[10px]">Abort</button>
-                         <button onClick={() => handleConfirmDelivery(shop)} className="flex-[2] bg-emerald-600 text-white py-5 rounded-[2.5rem] font-black text-xs">Complete ✅</button>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      <style>{`.custom-user-icon { background: none !important; border: none !important; }`}</style>
+      )}
     </div>
   );
 };
