@@ -117,16 +117,30 @@ const App: React.FC = () => {
     }
   }, [activeTab, selectedCompany, user, initialized]);
 
-  // 🛰️ Online Pulse (Heartbeat) - Updates last_seen every 1 minute
+  // 🛰️ Online Pulse (Heartbeat) - Updates last_seen & location every 1 minute
   useEffect(() => {
     if (!user || !initialized) return;
 
     const pulse = async () => {
       try {
-        await supabase
-          .from('users')
-          .update({ last_seen: new Date().toISOString() })
-          .eq('id', user.id);
+        // Request current position
+        navigator.geolocation.getCurrentPosition(async (pos) => {
+          const { latitude, longitude } = pos.coords;
+          await supabase
+            .from('users')
+            .update({ 
+               last_seen: new Date().toISOString(),
+               last_lat: latitude,
+               last_lng: longitude
+            })
+            .eq('id', user.id);
+        }, async (err) => {
+          // Fallback if position fails (just update last_seen)
+          await supabase
+            .from('users')
+            .update({ last_seen: new Date().toISOString() })
+            .eq('id', user.id);
+        }, { enableHighAccuracy: true });
       } catch (e) {}
     };
 
