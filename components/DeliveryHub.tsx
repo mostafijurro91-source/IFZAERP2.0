@@ -27,3 +27,5 @@ const processAutoDelivery = async (task: any) => {
     console.error("অটো-ডেলিভারি এরর:", err);
   }
 };
+// ফাইলের একদম শেষে এটি যোগ করুন
+export default DeliveryHub;
