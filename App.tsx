@@ -117,6 +117,24 @@ const App: React.FC = () => {
     }
   }, [activeTab, selectedCompany, user, initialized]);
 
+  // 🛰️ Online Pulse (Heartbeat) - Updates last_seen every 1 minute
+  useEffect(() => {
+    if (!user || !initialized) return;
+
+    const pulse = async () => {
+      try {
+        await supabase
+          .from('users')
+          .update({ last_seen: new Date().toISOString() })
+          .eq('id', user.id);
+      } catch (e) {}
+    };
+
+    pulse(); // Initial pulse
+    const interval = setInterval(pulse, 60000); // Pulse every 60s
+    return () => clearInterval(interval);
+  }, [user, initialized]);
+
   const handleLogin = (u: User) => {
     setUser(u);
     setShowLogin(false);
