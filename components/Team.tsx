@@ -134,7 +134,8 @@ const Team: React.FC = () => {
                 )}
               </div>
           </div>
-        ))}
+           );
+        }) }
       </div>
 
       {showModal && (
