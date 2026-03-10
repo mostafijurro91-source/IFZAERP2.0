@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import Sidebar from './components/Sidebar';
 import Dashboard from './components/Dashboard';
@@ -18,6 +19,8 @@ import MarketingPage from './components/MarketingPage';
 import CustomerPortal from './components/CustomerPortal';
 import Showroom from './components/Showroom';
 import Tracking from './components/Tracking';
+import StaffTracking from './components/StaffTracking';
+import DatabaseExplorer from './components/DatabaseExplorer';
 import { User, Company } from './types';
 import { supabase, checkSupabaseConnection } from './lib/supabase';
 
@@ -29,7 +32,7 @@ const App: React.FC = () => {
   const [initialized, setInitialized] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [dbError, setDbError] = useState(false);
-  const [toast, setToast] = useState<{ title: string, message: string } | null>(null);
+  const [toast, setToast] = useState<{title: string, message: string} | null>(null);
 
   // 🔔 Background & Real-time Notification Engine
   useEffect(() => {
@@ -46,17 +49,17 @@ const App: React.FC = () => {
         .channel(`cust_alerts_v2_${user.customer_id}`)
         .on(
           'postgres_changes',
-          {
-            event: 'INSERT',
-            schema: 'public',
-            table: 'notifications',
-            filter: `customer_id=eq.${user.customer_id}`
+          { 
+            event: 'INSERT', 
+            schema: 'public', 
+            table: 'notifications', 
+            filter: `customer_id=eq.${user.customer_id}` 
           },
           (payload: any) => {
             const { title, message } = payload.new;
-
+            
             // Play sound if possible
-            try { new Audio('https://assets.mixkit.co/active_storage/sfx/2358/2358-preview.mp3').play(); } catch (e) { }
+            try { new Audio('https://assets.mixkit.co/active_storage/sfx/2358/2358-preview.mp3').play(); } catch(e){}
 
             // Show In-App Toast
             setToast({ title, message });
@@ -64,20 +67,19 @@ const App: React.FC = () => {
 
             // Show Browser Push Notification (Works in background/PWA)
             if (Notification.permission === "granted") {
-              if ('serviceWorker' in navigator) {
-                navigator.serviceWorker.ready.then(registration => {
-                  // Fix: Cast options to any to support 'vibrate' and 'badge' properties not included in standard NotificationOptions
-                  registration.showNotification(title, {
-                    body: message,
-                    icon: 'https://r.jina.ai/i/0f7939be338446b5a32b904586927500',
-                    vibrate: [200, 100, 200],
-                    badge: 'https://r.jina.ai/i/0f7939be338446b5a32b904586927500',
-                    tag: 'ifza-alert-' + Date.now()
-                  } as any);
-                });
-              } else {
-                new Notification(title, { body: message });
-              }
+               if ('serviceWorker' in navigator) {
+                  navigator.serviceWorker.ready.then(registration => {
+                    registration.showNotification(title, {
+                      body: message,
+                      icon: 'https://r.jina.ai/i/0f7939be338446b5a32b904586927500',
+                      vibrate: [200, 100, 200],
+                      badge: 'https://r.jina.ai/i/0f7939be338446b5a32b904586927500',
+                      tag: 'ifza-alert-' + Date.now()
+                    } as any);
+                  });
+               } else {
+                  new Notification(title, { body: message });
+               }
             }
           }
         )
@@ -125,7 +127,7 @@ const App: React.FC = () => {
   };
 
   const handleLogout = () => {
-    if (confirm("আপনি কি নিশ্চিতভাবে লগ-আউট করতে চান?")) {
+    if(confirm("আপনি কি নিশ্চিতভাবে লগ-আউট করতে চান?")) {
       localStorage.clear();
       window.location.reload();
     }
@@ -135,8 +137,8 @@ const App: React.FC = () => {
     return (
       <div className="h-screen flex flex-col items-center justify-center bg-[#05070a] text-white">
         <div className="relative mb-8">
-          <div className="w-24 h-24 border-[6px] border-blue-500/10 border-t-blue-600 rounded-full animate-spin"></div>
-          <div className="absolute inset-0 flex items-center justify-center font-black text-2xl italic text-blue-500">if</div>
+            <div className="w-24 h-24 border-[6px] border-blue-500/10 border-t-blue-600 rounded-full animate-spin"></div>
+            <div className="absolute inset-0 flex items-center justify-center font-black text-2xl italic text-blue-500">if</div>
         </div>
         <p className="font-black uppercase text-[12px] tracking-[0.8em] text-blue-500 animate-pulse">IFZA ELECTRONICS</p>
       </div>
@@ -161,32 +163,32 @@ const App: React.FC = () => {
       {/* 🔔 In-App Toast Notification Bubble (Pop-up inside app) */}
       {toast && (
         <div className="fixed top-6 right-6 left-6 md:left-auto md:w-[420px] z-[9000] bg-white border-2 border-blue-600 p-8 rounded-[3rem] shadow-[0_30px_90px_rgba(37,99,235,0.3)] animate-reveal flex items-start gap-5 ring-[12px] ring-blue-50">
-          <div className="w-14 h-14 bg-blue-600 rounded-2xl flex items-center justify-center text-white text-2xl shrink-0 shadow-lg animate-bounce">🔔</div>
-          <div className="flex-1">
-            <h4 className="font-black text-slate-900 uppercase italic text-sm tracking-tighter">{toast.title}</h4>
-            <p className="text-[11px] font-bold text-slate-500 mt-2 leading-relaxed">{toast.message}</p>
-            <div className="mt-4 flex gap-2">
-              <button onClick={() => { setActiveTab(user.role === 'CUSTOMER' ? 'portal_ledger' : 'collections'); setToast(null); }} className="bg-slate-900 text-white px-4 py-2 rounded-xl text-[9px] font-black uppercase">দেখুন ➔</button>
-              <button onClick={() => setToast(null)} className="text-slate-400 font-bold text-[9px] uppercase px-4 py-2">পরে</button>
-            </div>
-          </div>
-          <button onClick={() => setToast(null)} className="text-slate-300 hover:text-red-500 text-2xl font-black">×</button>
+           <div className="w-14 h-14 bg-blue-600 rounded-2xl flex items-center justify-center text-white text-2xl shrink-0 shadow-lg animate-bounce">🔔</div>
+           <div className="flex-1">
+              <h4 className="font-black text-slate-900 uppercase italic text-sm tracking-tighter">{toast.title}</h4>
+              <p className="text-[11px] font-bold text-slate-500 mt-2 leading-relaxed">{toast.message}</p>
+              <div className="mt-4 flex gap-2">
+                 <button onClick={() => { setActiveTab(user.role === 'CUSTOMER' ? 'portal_ledger' : 'collections'); setToast(null); }} className="bg-slate-900 text-white px-4 py-2 rounded-xl text-[9px] font-black uppercase">দেখুন ➔</button>
+                 <button onClick={() => setToast(null)} className="text-slate-400 font-bold text-[9px] uppercase px-4 py-2">পরে</button>
+              </div>
+           </div>
+           <button onClick={() => setToast(null)} className="text-slate-300 hover:text-red-500 text-2xl font-black">×</button>
         </div>
       )}
 
-      <Sidebar
-        activeTab={activeTab}
-        setActiveTab={setActiveTab}
-        onLogout={handleLogout}
-        user={user}
-        selectedCompany={selectedCompany}
-        onCompanyChange={setSelectedCompany}
-        isOpen={isSidebarOpen}
-        onClose={() => setIsSidebarOpen(false)}
+      <Sidebar 
+        activeTab={activeTab} 
+        setActiveTab={setActiveTab} 
+        onLogout={handleLogout} 
+        user={user} 
+        selectedCompany={selectedCompany} 
+        onCompanyChange={setSelectedCompany} 
+        isOpen={isSidebarOpen} 
+        onClose={() => setIsSidebarOpen(false)} 
       />
-
+      
       <main className="flex-1 flex flex-col md:ml-[300px] overflow-hidden relative">
-        <header className="h-20 bg-white/90 backdrop-blur-md border-b border-slate-200 flex justify-between items-center px-6 md:px-10 shrink-0 z-40 shadow-sm sticky top-0">
+        <header className="h-20 bg-white border-b border-slate-200 flex justify-between items-center px-6 md:px-10 shrink-0 z-40 shadow-sm">
           <div className="flex items-center gap-4">
             <button onClick={() => setIsSidebarOpen(true)} className="md:hidden p-2.5 bg-slate-900 text-white rounded-xl shadow-lg">☰</button>
             <div>
@@ -194,7 +196,7 @@ const App: React.FC = () => {
               <p className="text-[8px] font-black text-blue-600 uppercase tracking-[0.2em] mt-1.5 italic">• Node: {selectedCompany}</p>
             </div>
           </div>
-
+          
           <div className="flex items-center gap-4">
             <div className="text-right hidden sm:block">
               <p className="text-[10px] font-black text-slate-900 uppercase italic leading-none">{user.name}</p>
@@ -206,63 +208,30 @@ const App: React.FC = () => {
           </div>
         </header>
 
-        {/* 🚀 Horizontal Sub-Header Navigation */}
-        <div className="bg-white/80 backdrop-blur-md border-b border-slate-200 px-4 md:px-10 py-3 flex gap-2 overflow-x-auto no-scroll-bar z-[35] sticky top-20 shadow-sm shrink-0">
-          {(user.role === 'ADMIN' || user.role === 'STAFF') && [
-            { id: 'dashboard', label: '📊 ড্যাশবোর্ড' },
-            { id: 'collections', label: '💰 কালেকশন' },
-            { id: 'reports', label: '📁 রিপোর্টস' }
-          ].map(item => (
-            <button
-              key={item.id}
-              onClick={() => setActiveTab(item.id)}
-              className={`px-6 py-2.5 rounded-2xl font-black uppercase text-[10px] tracking-widest transition-all whitespace-nowrap ${activeTab === item.id ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/30' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50'}`}
-            >
-              {item.label}
-            </button>
-          ))}
-
-          {user.role === 'CUSTOMER' && [
-            { id: 'portal_dashboard', label: '🏠 হোম' },
-            { id: 'portal_order', label: '🛒 অর্ডার' },
-            { id: 'portal_order_history', label: '📦 ইতিহাস' },
-            { id: 'showroom', label: '💎 শোরুম' },
-            { id: 'portal_booking', label: '📅 বুকিং' },
-            { id: 'portal_ledger', label: '📒 লেজার' },
-            { id: 'portal_catalog', label: '📢 অফার' }
-          ].map(item => (
-            <button
-              key={item.id}
-              onClick={() => setActiveTab(item.id)}
-              className={`px-6 py-2.5 rounded-2xl font-black uppercase text-[10px] tracking-widest transition-all whitespace-nowrap ${activeTab === item.id ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/30' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50'}`}
-            >
-              {item.label}
-            </button>
-          ))}
-        </div>
-
         <div className="flex-1 overflow-y-auto p-4 md:p-8 custom-scroll bg-[#f8fafc]">
           <div className="max-w-7xl mx-auto">
             {activeTab === 'dashboard' && <Dashboard company={selectedCompany} role={user.role} />}
             {activeTab === 'portal_dashboard' && <CustomerPortal type="DASHBOARD" user={user} />}
+            {activeTab === 'portal_ledger' && <CustomerPortal type="LEDGER" user={user} />}
             {activeTab === 'portal_order' && <CustomerPortal type="ORDER" user={user} />}
             {activeTab === 'portal_order_history' && <CustomerPortal type="ORDER_HISTORY" user={user} />}
-            {activeTab === 'portal_booking' && <CustomerPortal type="BOOKING" user={user} />}
-            {activeTab === 'portal_ledger' && <CustomerPortal type="LEDGER" user={user} />}
             {activeTab === 'portal_catalog' && <CustomerPortal type="CATALOG" user={user} />}
+            {activeTab === 'portal_booking' && <CustomerPortal type="BOOKING" user={user} />}
             {activeTab === 'showroom' && <Showroom />}
             {activeTab === 'ad_manager' && <AdManager />}
             {activeTab === 'sales' && <Sales company={selectedCompany} role={user.role} user={user} />}
             {activeTab === 'collections' && <Collections company={selectedCompany} user={user} />}
             {activeTab === 'order_management' && <OrderManagement company={selectedCompany} user={user} />}
             {activeTab === 'bookings' && <Bookings company={selectedCompany} role={user.role} user={user} />}
-            {activeTab === 'replacements' && <Replacements company={selectedCompany} role={user.role} />}
+            {activeTab === 'replacements' && <Replacements company={selectedCompany} role={user.role} user={user} />}
             {activeTab === 'delivery_hub' && <DeliveryHub company={selectedCompany} user={user} />}
             {activeTab === 'inventory' && <Inventory company={selectedCompany} role={user.role} />}
             {activeTab === 'customers' && <Customers company={selectedCompany} role={user.role} userName={user.name} />}
             {activeTab === 'ledger' && <CompanyLedger company={selectedCompany} role={user.role} />}
             {activeTab === 'reports' && <Reports company={selectedCompany} userRole={user.role} userName={user.name} />}
             {activeTab === 'team' && <Team />}
+            {activeTab === 'staff_tracking' && <StaffTracking company={selectedCompany} />}
+            {activeTab === 'db_explorer' && <DatabaseExplorer />}
             {activeTab === 'github_sync' && <Tracking />}
           </div>
         </div>
