@@ -124,9 +124,8 @@ const Team: React.FC = () => {
                 </div>
 
                 <div className="pt-4 border-t border-slate-200">
-                   <p className="text-[8px] font-black text-slate-400 uppercase mb-2 tracking-widest leading-none">বর্তমান অবস্থান:</p>
-                   <p className={`text-[11px] font-black italic leading-tight ${isLive ? 'text-slate-900' : 'text-slate-400 opacity-60'}`}>
-                      📍 {currentArea}
+                   <p className="text-[10px] font-black italic leading-tight text-blue-600">
+                      🛰️ {u.name} এখন {currentArea}
                    </p>
                 </div>
 
