@@ -54,12 +54,15 @@ const DeliveryHub: React.FC<DeliveryHubProps> = ({ company, user }) => {
       const mergedData = data?.map(memo => {
         const memoIdStr = String(memo.id);
         const dLog = deliveryLog?.find(d => String(d.order_id) === memoIdStr);
-        const hasPending = collectionRequests?.some(r => r.meta?.dh_memo_id === memoIdStr);
+        const pendingReq = collectionRequests?.find(r => r.submitted_by?.includes(`[DH-MEMO-${memoIdStr}]`));
+        const hasPending = !!pendingReq;
+        const collectorName = pendingReq ? (pendingReq.submitted_by.includes(']') ? pendingReq.submitted_by.split(']').pop()?.trim() : pendingReq.submitted_by) : '';
         
         return {
           ...memo,
           status: dLog?.status || (hasPending ? 'PENDING_APPROVAL' : 'PENDING'),
-          collected: dLog?.collected_amount || 0
+          collected: dLog?.collected_amount || 0,
+          collectorName: collectorName
         };
       });
 
@@ -85,11 +88,7 @@ const DeliveryHub: React.FC<DeliveryHubProps> = ({ company, user }) => {
         amount: amount,
         company: dbCo,
         status: 'PENDING',
-        submitted_by: user.name || 'Unknown Staff',
-        meta: { 
-          note: `মেমো নং: ${memo.id} (ডেলিভারি হাব)`,
-          dh_memo_id: memo.id.toString()
-        }
+        submitted_by: `[DH-MEMO-${memo.id}] ${user.name || 'Unknown Staff'}`
       }]);
 
       if (error) throw error;
@@ -276,7 +275,10 @@ const DeliveryHub: React.FC<DeliveryHubProps> = ({ company, user }) => {
                             </div>
                           ) : memo.status === 'PENDING_APPROVAL' ? (
                             <div className="flex items-center justify-between px-4 py-3 bg-amber-50 border border-amber-100 rounded-2xl">
-                              <span className="text-[9px] font-black text-amber-600 uppercase tracking-widest italic animate-pulse">Pending Approval</span>
+                              <div className="flex flex-col">
+                                <span className="text-[9px] font-black text-amber-600 uppercase tracking-widest italic animate-pulse">Pending Approval</span>
+                                <span className="text-[8px] font-bold text-slate-400 mt-1 uppercase">Collector: {memo.collectorName || 'Staff'}</span>
+                              </div>
                               <span className="w-8 h-8 rounded-full bg-amber-200 flex items-center justify-center text-amber-700 animate-spin-slow">⏳</span>
                             </div>
                           ) : (
