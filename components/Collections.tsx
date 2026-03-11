@@ -164,7 +164,7 @@ const Collections: React.FC<CollectionsProps> = ({ company, user }) => {
          if (txErr) throw txErr;
 
          // ১. ডেলিভারি হাব মেমো লিংক চেক করা (DH-MEMO-XXX ট্যাগ খুঁজে বের করা)
-         const dhMatch = req.note?.match(/\[DH-MEMO-(\d+)\]/);
+         const dhMatch = req.note?.match(/\[DH-MEMO-([^\]]+)\]/);
          if (dhMatch) {
             const memoId = dhMatch[1];
             await supabase.from('delivery_tasks').upsert([{
