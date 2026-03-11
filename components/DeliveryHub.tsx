@@ -45,15 +45,16 @@ const DeliveryHub: React.FC<DeliveryHubProps> = ({ company, user }) => {
       const { data, error } = await query;
       if (error) throw error;
 
-      // ডেলিভারি টাস্ক এবং কালকেশন রিকোয়েস্ট উভয়ই চেক করা
+      // আজকের ডেলিভারি টাস্ক এবং কালকেশন রিকোয়েস্ট ফিল্টার করে আনা (limit সমস্যা এড়াতে)
       const [{ data: deliveryLog }, { data: collectionRequests }] = await Promise.all([
-        supabase.from('delivery_tasks').select('*'),
-        supabase.from('collection_requests').select('*')
+        supabase.from('delivery_tasks').select('*').gte('created_at', startOfDay).lte('created_at', endOfDay),
+        supabase.from('collection_requests').select('*').eq('status', 'PENDING').gte('created_at', startOfDay).lte('created_at', endOfDay)
       ]);
 
       const mergedData = data?.map(memo => {
-        const dLog = deliveryLog?.find(d => d.order_id === memo.id.toString());
-        const hasPending = collectionRequests?.some(r => r.note?.includes(`[DH-MEMO-${memo.id}]`));
+        const memoIdStr = String(memo.id);
+        const dLog = deliveryLog?.find(d => String(d.order_id) === memoIdStr);
+        const hasPending = collectionRequests?.some(r => r.note?.includes(`[DH-MEMO-${memoIdStr}]`));
         
         return {
           ...memo,
@@ -79,16 +80,19 @@ const DeliveryHub: React.FC<DeliveryHubProps> = ({ company, user }) => {
       const dbCo = mapToDbCompany(memo.company);
 
       // ১. কালেকশন রিকোয়েস্টে পাঠানো (DH-MEMO ট্যাগ সহ)
-      await supabase.from('collection_requests').insert([{
+      const { error } = await supabase.from('collection_requests').insert([{
         customer_id: memo.customer_id,
         amount: amount,
         company: dbCo,
         status: 'PENDING',
-        submitted_by: user.name,
+        submitted_by: user.name || 'Unknown Staff',
         note: `মেমো নং: ${memo.id} [DH-MEMO-${memo.id}] (ডেলিভারি হাব)`
       }]);
 
+      if (error) throw error;
+
       alert("কালেকশন রিকোয়েস্ট পাঠানো হয়েছে! অ্যাডমিন এটি আপলোড করলে সাকসেসফুল হবে। ✅");
+      setDepositAmount(prev => ({ ...prev, [memo.id]: "" }));
       fetchReportStyleData();
     } catch (err: any) {
       alert(err.message);
