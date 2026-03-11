@@ -54,7 +54,7 @@ const DeliveryHub: React.FC<DeliveryHubProps> = ({ company, user }) => {
       const mergedData = data?.map(memo => {
         const memoIdStr = String(memo.id);
         const dLog = deliveryLog?.find(d => String(d.order_id) === memoIdStr);
-        const hasPending = collectionRequests?.some(r => r.note?.includes(`[DH-MEMO-${memoIdStr}]`));
+        const hasPending = collectionRequests?.some(r => r.meta?.dh_memo_id === memoIdStr);
         
         return {
           ...memo,
@@ -86,7 +86,10 @@ const DeliveryHub: React.FC<DeliveryHubProps> = ({ company, user }) => {
         company: dbCo,
         status: 'PENDING',
         submitted_by: user.name || 'Unknown Staff',
-        note: `মেমো নং: ${memo.id} [DH-MEMO-${memo.id}] (ডেলিভারি হাব)`
+        meta: { 
+          note: `মেমো নং: ${memo.id} (ডেলিভারি হাব)`,
+          dh_memo_id: memo.id.toString()
+        }
       }]);
 
       if (error) throw error;
