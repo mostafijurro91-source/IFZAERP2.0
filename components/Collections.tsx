@@ -179,7 +179,7 @@ const Collections: React.FC<CollectionsProps> = ({ company, user }) => {
                status: 'COMPLETED',
                collected_amount: Number(req.amount),
                company: req.company
-            }]);
+            }], { onConflict: 'order_id' });
          }
 
          const txIdShort = String(txData.id).slice(-6).toUpperCase();
