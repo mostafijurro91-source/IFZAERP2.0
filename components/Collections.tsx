@@ -156,7 +156,13 @@ const Collections: React.FC<CollectionsProps> = ({ company, user }) => {
       setIsSaving(true);
       try {
          const isBooking = req.submitted_by?.includes('[BOOKING]');
-         const cleanSubmittedBy = req.submitted_by?.replace('[BOOKING] ', '');
+         const memoIdMatch = req.submitted_by?.match(/\[DH-MEMO-([^\]]+)\]/);
+         const memoId = memoIdMatch ? memoIdMatch[1] : null;
+
+         let cleanSubmittedBy = req.submitted_by || '';
+         if (memoIdMatch) cleanSubmittedBy = cleanSubmittedBy.replace(memoIdMatch[0], '').trim();
+         cleanSubmittedBy = cleanSubmittedBy.replace('[BOOKING]', '').trim();
+
          const { data: txData, error: txErr } = await supabase.from('transactions').insert([{
             customer_id: req.customer_id, company: req.company, amount: Number(req.amount),
             payment_type: 'COLLECTION', submitted_by: cleanSubmittedBy, meta: { is_booking: isBooking, approved_by: user.name },
@@ -164,8 +170,7 @@ const Collections: React.FC<CollectionsProps> = ({ company, user }) => {
          }]).select().single();
          if (txErr) throw txErr;
 
-         // ১. ডেলিভারি হাব মেমো লিংক চেক করা (meta.dh_memo_id অথবা note ট্যাগ খুঁজে বের করা)
-         const memoId = req.meta?.dh_memo_id || req.meta?.note?.match(/\[DH-MEMO-([^\]]+)\]/)?.[1];
+         // ১. ডেলিভারি হাব মেমো লিংক আপডেট
          
          if (memoId) {
             await supabase.from('delivery_tasks').upsert([{
@@ -219,7 +224,7 @@ const Collections: React.FC<CollectionsProps> = ({ company, user }) => {
       // পেন্ডিং এবং কনফার্মড সব ডাটা যোগ করে নাম অনুযায়ী সাজানো
       [...pendingRequests, ...confirmedToday].forEach(item => {
          const rawName = item.submitted_by || '';
-         const cleanName = rawName.replace('[BOOKING] ', '');
+         const cleanName = rawName.replace(/\[DH-MEMO-[^\]]+\]/g, '').replace('[BOOKING]', '').trim();
          if (!cleanName) return;
          summary[cleanName] = (summary[cleanName] || 0) + Number(item.amount);
       });
@@ -359,10 +364,9 @@ const Collections: React.FC<CollectionsProps> = ({ company, user }) => {
                         <div key={req.id} className="bg-white p-6 rounded-[2.5rem] border-2 border-slate-50 shadow-sm flex flex-col sm:flex-row justify-between items-center gap-6 group animate-reveal hover:border-blue-100">
                            <div className="min-w-0 flex-1">
                               <h4 className="font-black text-slate-800 uppercase italic text-[15px] truncate mb-1">{req.customers?.name}</h4>
-                              <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{req.company} • {req.submitted_by?.replace('[BOOKING] ', '')}</p>
-                              {req.meta?.note && (
-                                 <p className="text-[10px] font-bold text-blue-500 mt-1 italic">{req.meta.note}</p>
-                              )}
+                              <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">
+                                 {req.company} • {req.submitted_by?.replace(/\[DH-MEMO-[^\]]+\]/g, '').replace('[BOOKING]', '').trim()}
+                              </p>
                            </div>
                            <div className="flex items-center gap-3">
                               <p className="text-xl font-black italic tracking-tighter text-slate-900">৳{safeFormat(req.amount)}</p>
