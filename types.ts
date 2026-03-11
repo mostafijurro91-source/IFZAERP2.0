@@ -1,6 +1,7 @@
 
 export type Company = 'Transtec' | 'SQ Light' | 'SQ Cables';
 export type UserRole = 'ADMIN' | 'STAFF' | 'DELIVERY' | 'CUSTOMER';
+export type OrderAction = 'SALE' | 'RETURN' | 'REPLACE';
 
 export enum Type {
   TYPE_UNSPECIFIED = 'TYPE_UNSPECIFIED',
@@ -74,6 +75,65 @@ export interface Advertisement {
   image_url?: string;
   external_url?: string;
   created_at: string;
+}
+
+export interface TransactionItem {
+  id?: string;
+  name: string;
+  qty: number;
+  price: number;
+  note?: string;
+  action?: 'SALE' | 'RETURN';
+}
+
+export interface Transaction {
+  id: string;
+  customer_id: string;
+  amount: number;
+  payment_type: 'DUE' | 'COLLECTION' | 'CASH';
+  company: string;
+  meta?: any;
+  items?: TransactionItem[];
+  created_at: string;
+  customers?: Customer;
+}
+
+export interface MarketOrderItem {
+  name: string;
+  qty: number;
+  action: OrderAction;
+}
+
+export interface MarketOrder {
+  id: string;
+  customer_id: string;
+  status: 'PENDING' | 'ACCEPTED' | 'PROCESSING' | 'SHIPPED' | 'DELIVERED' | 'CANCELLED';
+  total_amount: number;
+  items: MarketOrderItem[];
+  created_at: string;
+}
+
+export interface CustomerFinancials {
+  regularDue: number;
+  bookingAdvance: number;
+  totalSales: number;
+  totalPaid: number;
+}
+
+export interface CompanyStats {
+  regularDue: number;
+  bookingAdvance: number;
+  totalBill: number;
+  totalPaid: number;
+}
+
+export interface OrderItem {
+  id: string;
+  name: string;
+  mrp: number;
+  qty: number;
+  company: string;
+  action: OrderAction;
 }
 
 export const formatCurrency = (amount: number | string) => {
