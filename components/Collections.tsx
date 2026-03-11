@@ -162,6 +162,20 @@ const Collections: React.FC<CollectionsProps> = ({ company, user }) => {
             items: [{ note: isBooking ? `📅 বুকিং অগ্রিম জমা (${cleanSubmittedBy})` : `💰 নগদ আদায় অনুমোদন (${cleanSubmittedBy})` }]
          }]).select().single();
          if (txErr) throw txErr;
+
+         // ১. ডেলিভারি হাব মেমো লিংক চেক করা (DH-MEMO-XXX ট্যাগ খুঁজে বের করা)
+         const dhMatch = req.note?.match(/\[DH-MEMO-(\d+)\]/);
+         if (dhMatch) {
+            const memoId = dhMatch[1];
+            await supabase.from('delivery_tasks').upsert([{
+               order_id: memoId,
+               customer_id: req.customer_id,
+               status: 'COMPLETED',
+               collected_amount: Number(req.amount),
+               company: req.company
+            }]);
+         }
+
          const txIdShort = String(txData.id).slice(-6).toUpperCase();
          await supabase.from('notifications').insert([{
             customer_id: req.customer_id, title: isBooking ? `বুকিং জমা #${txIdShort}` : `কালেকশন জমা #${txIdShort}`,
