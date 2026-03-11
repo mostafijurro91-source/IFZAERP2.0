@@ -45,10 +45,11 @@ const DeliveryHub: React.FC<DeliveryHubProps> = ({ company, user }) => {
       const { data, error } = await query;
       if (error) throw error;
 
-      // আজকের ডেলিভারি টাস্ক এবং কালকেশন রিকোয়েস্ট ফিল্টার করে আনা (limit সমস্যা এড়াতে)
+      // আজকের ডেলিভারি টাস্ক এবং কালকেশন রিকোয়েস্ট ফিল্টার করে আনা
+      const memoIds = data?.map(m => m.id) || [];
       const [{ data: deliveryLog }, { data: collectionRequests }] = await Promise.all([
-        supabase.from('delivery_tasks').select('*').gte('created_at', startOfDay).lte('created_at', endOfDay),
-        supabase.from('collection_requests').select('*').eq('status', 'PENDING').gte('created_at', startOfDay).lte('created_at', endOfDay)
+        supabase.from('delivery_tasks').select('*').in('order_id', memoIds),
+        supabase.from('collection_requests').select('*').eq('status', 'PENDING').in('customer_id', data?.map(m => m.customer_id) || [])
       ]);
 
       const mergedData = data?.map(memo => {
@@ -257,18 +258,18 @@ const DeliveryHub: React.FC<DeliveryHubProps> = ({ company, user }) => {
                         </td>
                         <td className="p-5">
                           {memo.status === 'PENDING' ? (
-                            <div className="flex gap-2 bg-slate-100 p-2 rounded-2xl border-2 border-slate-200">
+                            <div className="flex flex-col sm:flex-row gap-2 bg-slate-100 p-2 rounded-2xl border-2 border-slate-200">
                               <input 
                                 type="number" 
                                 placeholder="টাকা লিখুন" 
-                                className="w-full p-3 bg-white border border-slate-300 rounded-xl font-black text-sm text-emerald-600 outline-none focus:border-emerald-500 shadow-inner"
+                                className="w-full p-4 sm:p-3 bg-white border border-slate-300 rounded-xl font-black text-sm text-emerald-600 outline-none focus:border-emerald-500 shadow-inner"
                                 value={depositAmount[memo.id] || ""}
                                 onChange={(e) => setDepositAmount({...depositAmount, [memo.id]: e.target.value})}
                               />
                               <button 
                                 onClick={() => handleDeposit(memo)}
                                 disabled={isSaving}
-                                className="bg-slate-900 hover:bg-blue-600 text-white px-6 rounded-xl font-black uppercase text-[10px] italic shadow-lg active:scale-95 transition-all whitespace-nowrap"
+                                className="w-full sm:w-auto bg-slate-900 hover:bg-blue-600 text-white px-8 py-4 sm:py-0 rounded-xl font-black uppercase text-[11px] sm:text-[10px] italic shadow-lg active:scale-95 transition-all whitespace-nowrap min-h-[50px] sm:min-h-0"
                               >
                                 {isSaving ? '...' : 'জমা দিন'}
                               </button>
