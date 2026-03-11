@@ -143,7 +143,8 @@ const Collections: React.FC<CollectionsProps> = ({ company, user }) => {
          const submissionTag = collectionType === 'BOOKING' ? `[BOOKING] ${user.name}` : user.name;
          const { error } = await supabase.from('collection_requests').insert([{
             customer_id: selectedCust.id, company: mapToDbCompany(targetCompany),
-            amount: Number(amount), submitted_by: submissionTag, status: 'PENDING'
+            amount: Number(amount), submitted_by: submissionTag, status: 'PENDING',
+            meta: collectionType === 'BOOKING' ? { note: '📅 বুকিং অগ্রিম কালেকশন' } : {}
          }]);
          if (error) throw error;
          setAmount(""); alert("কালেকশন রিকোয়েস্ট পাঠানো হয়েছে! ✅"); fetchData();
@@ -163,10 +164,10 @@ const Collections: React.FC<CollectionsProps> = ({ company, user }) => {
          }]).select().single();
          if (txErr) throw txErr;
 
-         // ১. ডেলিভারি হাব মেমো লিংক চেক করা (DH-MEMO-XXX ট্যাগ খুঁজে বের করা)
-         const dhMatch = req.note?.match(/\[DH-MEMO-([^\]]+)\]/);
-         if (dhMatch) {
-            const memoId = dhMatch[1];
+         // ১. ডেলিভারি হাব মেমো লিংক চেক করা (meta.dh_memo_id অথবা note ট্যাগ খুঁজে বের করা)
+         const memoId = req.meta?.dh_memo_id || req.meta?.note?.match(/\[DH-MEMO-([^\]]+)\]/)?.[1];
+         
+         if (memoId) {
             await supabase.from('delivery_tasks').upsert([{
                order_id: memoId,
                customer_id: req.customer_id,
@@ -359,6 +360,9 @@ const Collections: React.FC<CollectionsProps> = ({ company, user }) => {
                            <div className="min-w-0 flex-1">
                               <h4 className="font-black text-slate-800 uppercase italic text-[15px] truncate mb-1">{req.customers?.name}</h4>
                               <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{req.company} • {req.submitted_by?.replace('[BOOKING] ', '')}</p>
+                              {req.meta?.note && (
+                                 <p className="text-[10px] font-bold text-blue-500 mt-1 italic">{req.meta.note}</p>
+                              )}
                            </div>
                            <div className="flex items-center gap-3">
                               <p className="text-xl font-black italic tracking-tighter text-slate-900">৳{safeFormat(req.amount)}</p>
