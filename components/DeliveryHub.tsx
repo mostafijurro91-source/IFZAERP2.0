@@ -63,6 +63,7 @@ const DeliveryHub: React.FC<DeliveryHubProps> = ({ company, user }) => {
           ...memo,
           status: dLog?.status || (hasPending ? 'PENDING_APPROVAL' : 'PENDING'),
           collected: dLog?.collected_amount || 0,
+          pendingAmount: pendingReq?.amount || 0,
           collectorName: collectorName
         };
       });
@@ -105,16 +106,21 @@ const DeliveryHub: React.FC<DeliveryHubProps> = ({ company, user }) => {
   };
 
   const stats = useMemo(() => {
-    const total = tasks.reduce((sum, t) => sum + (t.status === 'COMPLETED' ? Number(t.collected) : 0), 0);
-    const coStats = {
-      'Transtec': tasks.filter(t => mapToDbCompany(t.company) === 'Transtec' && t.status === 'COMPLETED').reduce((s, t) => s + Number(t.collected), 0),
-      'SQ Light': tasks.filter(t => mapToDbCompany(t.company) === 'SQ Light' && t.status === 'COMPLETED').reduce((s, t) => s + Number(t.collected), 0),
-      'SQ Cables': tasks.filter(t => mapToDbCompany(t.company) === 'SQ Cables' && t.status === 'COMPLETED').reduce((s, t) => s + Number(t.collected), 0)
-    };
-    const completed = tasks.filter(t => t.status === 'COMPLETED').length;
-    const progress = tasks.length > 0 ? (completed / tasks.length) * 100 : 0;
+    const sortedTasks = [...tasks];
+    const totalHandled = tasks.reduce((sum, t) => sum + Number(t.collected || 0) + Number(t.pendingAmount || 0), 0);
     
-    return { total, coStats, completed, totalCount: tasks.length, progress };
+    // কোম্পানি ভিত্তিক 
+    const coStats = {
+      'Transtec': tasks.filter(t => mapToDbCompany(t.company) === 'Transtec').reduce((s, t) => s + Number(t.collected || 0) + Number(t.pendingAmount || 0), 0),
+      'SQ Light': tasks.filter(t => mapToDbCompany(t.company) === 'SQ Light').reduce((s, t) => s + Number(t.collected || 0) + Number(t.pendingAmount || 0), 0),
+      'SQ Cables': tasks.filter(t => mapToDbCompany(t.company) === 'SQ Cables').reduce((s, t) => s + Number(t.collected || 0) + Number(t.pendingAmount || 0), 0)
+    };
+
+    const doneCount = tasks.filter(t => t.status === 'COMPLETED' || t.status === 'PENDING_APPROVAL').length;
+    const totalCount = tasks.length;
+    const progress = totalCount > 0 ? (doneCount / totalCount) * 100 : 0;
+    
+    return { total: totalHandled, coStats, completed: doneCount, totalCount, progress };
   }, [tasks]);
 
   return (
@@ -228,9 +234,9 @@ const DeliveryHub: React.FC<DeliveryHubProps> = ({ company, user }) => {
                   </tr>
                 </thead>
                 <tbody className="text-[12px] font-bold italic">
-                  {tasks.length > 0 ? (
-                    tasks.map((memo, idx) => (
-                      <tr key={memo.id} className={`border-b border-slate-100 hover:bg-slate-50 transition-all ${memo.status === 'COMPLETED' ? 'bg-emerald-50/30' : ''}`}>
+                  {tasks.filter(t => t.status !== 'COMPLETED').length > 0 ? (
+                    tasks.filter(t => t.status !== 'COMPLETED').map((memo, idx) => (
+                      <tr key={memo.id} className="border-b border-slate-100 hover:bg-slate-50 transition-all">
                         <td className="p-5 text-center font-black border-r border-slate-100">
                           {(idx + 1).toString().padStart(2, '0')}
                         </td>
@@ -282,16 +288,6 @@ const DeliveryHub: React.FC<DeliveryHubProps> = ({ company, user }) => {
                               </div>
                               <span className="w-8 h-8 rounded-full bg-amber-200 flex items-center justify-center text-amber-700 animate-spin-slow">⏳</span>
                             </div>
-                          ) : (
-                            <div className="flex items-center justify-between px-4 py-3 bg-emerald-50 border border-emerald-100 rounded-2xl ring-4 ring-emerald-50">
-                              <div className="flex flex-col">
-                                <span className="text-[10px] font-black text-emerald-600 uppercase tracking-widest italic leading-none">Successful (সাকসেস)</span>
-                                <span className="text-[8px] font-bold text-slate-400 uppercase mt-1">Uploaded & Confirmed</span>
-                              </div>
-                              <span className="text-lg font-black text-emerald-700 italic">
-                                ৳{(memo.collected || 0).toLocaleString()}
-                              </span>
-                            </div>
                           )}
                         </td>
                       </tr>
@@ -299,10 +295,10 @@ const DeliveryHub: React.FC<DeliveryHubProps> = ({ company, user }) => {
                   ) : (
                     <tr>
                       <td colSpan={5} className="p-32 text-center">
-                        <div className="flex flex-col items-center space-y-4 opacity-20">
-                          <span className="text-6xl grayscale">🚚</span>
-                          <p className="text-xl font-black uppercase italic tracking-widest text-slate-800">No Data Synchronized</p>
-                          <p className="text-[10px] font-bold text-slate-500 uppercase">অন্য তারিখ বা কোম্পানি পরিবর্তন করে দেখুন</p>
+                        <div className="flex flex-col items-center space-y-4">
+                          <span className="text-6xl animate-bounce">✅</span>
+                          <p className="text-xl font-black uppercase italic tracking-widest text-slate-800">Mission Accomplished</p>
+                          <p className="text-[10px] font-bold text-slate-500 uppercase">সবগুলো কালেকশন সম্পন্ন হয়েছে অথবা কোনো ডাটা নেই</p>
                         </div>
                       </td>
                     </tr>
