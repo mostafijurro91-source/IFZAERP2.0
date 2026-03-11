@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Company, UserRole, formatCurrency } from '../types';
+import { Company, UserRole, formatCurrency, Transaction, Customer, CustomerFinancials } from '../types';
 import { supabase, mapToDbCompany } from '../lib/supabase';
 import { jsPDF } from 'jspdf';
 import * as html2canvasModule from 'html2canvas';
@@ -14,7 +14,7 @@ interface CustomerProps {
 }
 
 const Customers: React.FC<CustomerProps> = ({ company, role, userName }) => {
-  const [customers, setCustomers] = useState<any[]>([]);
+  const [customers, setCustomers] = useState<Customer[]>([]);
   const [regularDues, setRegularDues] = useState<Record<string, number>>({});
   const [bookingAdvances, setBookingAdvances] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
@@ -24,15 +24,15 @@ const Customers: React.FC<CustomerProps> = ({ company, role, userName }) => {
   const [uniqueAreas, setUniqueAreas] = useState<string[]>([]);
   const [showModal, setShowModal] = useState(false);
   const [showLedger, setShowLedger] = useState(false);
-  const [selectedLedgerCust, setSelectedLedgerCust] = useState<any>(null);
-  const [ledgerHistory, setLedgerHistory] = useState<any[]>([]);
+  const [selectedLedgerCust, setSelectedLedgerCust] = useState<Customer | null>(null);
+  const [ledgerHistory, setLedgerHistory] = useState<Transaction[]>([]);
   const [isSaving, setIsSaving] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
-  const [selectedMemo, setSelectedMemo] = useState<any>(null);
+  const [selectedMemo, setSelectedMemo] = useState<Transaction | null>(null);
   const [showMemoModal, setShowMemoModal] = useState(false);
 
-  const [currentLedgerStats, setCurrentLedgerStats] = useState({ reg: 0, book: 0 });
-  const [editingCustomer, setEditingCustomer] = useState<any>(null);
+  const [currentLedgerStats, setCurrentLedgerStats] = useState<CustomerFinancials>({ regularDue: 0, bookingAdvance: 0, totalSales: 0, totalPaid: 0 });
+  const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
 
   const [areaSearch, setAreaSearch] = useState("");
   const [showAreaDropdown, setShowAreaDropdown] = useState(false);
@@ -81,7 +81,7 @@ const Customers: React.FC<CustomerProps> = ({ company, role, userName }) => {
       const regMap: Record<string, number> = {};
       const bookMap: Record<string, number> = {};
 
-      txData?.forEach(tx => {
+      (txData as unknown as Transaction[])?.forEach(tx => {
         const amt = Number(tx.amount) || 0;
         const cid = tx.customer_id;
         const isBooking = tx.meta?.is_booking === true || tx.items?.[0]?.note?.includes('বুকিং');
@@ -100,7 +100,7 @@ const Customers: React.FC<CustomerProps> = ({ company, role, userName }) => {
       setCustomers(custData || []);
       setRegularDues(regMap);
       setBookingAdvances(bookMap);
-      setUniqueAreas(Array.from(new Set(custData?.map(c => c.address?.trim()).filter(Boolean) || [])).sort() as string[]);
+      setUniqueAreas(Array.from(new Set(custData?.map((c: Customer) => c.address?.trim()).filter(Boolean) || [])).sort() as string[]);
     } catch (err) { console.error(err); } finally { setLoading(false); }
   };
 
@@ -178,11 +178,11 @@ const Customers: React.FC<CustomerProps> = ({ company, role, userName }) => {
     }
   };
 
-  const fetchCustomerLedger = async (cust: any) => {
+  const fetchCustomerLedger = async (cust: Customer) => {
     setSelectedLedgerCust(cust);
     setShowLedger(true);
     setLedgerHistory([]); // Clear previous ledger
-    setCurrentLedgerStats({ reg: 0, book: 0 }); // Clear previous stats
+    setCurrentLedgerStats({ regularDue: 0, bookingAdvance: 0, totalSales: 0, totalPaid: 0 }); // Clear previous stats
 
     try {
       const dbCo = mapToDbCompany(company); // Use 'company' from props
@@ -199,17 +199,29 @@ const Customers: React.FC<CustomerProps> = ({ company, role, userName }) => {
       // Calculate totals
       let totalR = 0;
       let totalB = 0;
-      data?.forEach(tx => {
+      let lifetimeSales = 0;
+      let lifetimePaid = 0;
+
+      (data as unknown as Transaction[])?.forEach(tx => {
         const amt = Number(tx.amount);
         const isBooking = tx.meta?.is_booking === true || tx.items?.[0]?.note?.includes('বুকিং');
+        
         if (tx.payment_type === 'COLLECTION') {
-          if (isBooking) totalB += amt;
-          else totalR -= amt;
-        } else { // DUE
+          lifetimePaid += amt;
+          if (isBooking) {
+            totalB += amt;
+          } else {
+            totalR -= amt;
+          }
+        } else if (tx.payment_type === 'DUE') {
           totalR += amt;
+          const returnItem = tx.items?.find((it: any) => it.action === 'RETURN');
+          if (!returnItem) {
+            lifetimeSales += amt;
+          }
         }
       });
-      setCurrentLedgerStats({ reg: totalR, book: totalB });
+      setCurrentLedgerStats({ regularDue: totalR, bookingAdvance: totalB, totalSales: lifetimeSales, totalPaid: lifetimePaid });
     } catch (err: any) {
       console.error('Error fetching ledger:', err);
     }
@@ -278,7 +290,7 @@ const Customers: React.FC<CustomerProps> = ({ company, role, userName }) => {
     }
   };
 
-  const filtered = customers.filter(c => (!search || c.name.toLowerCase().includes(search.toLowerCase()) || (c.phone && c.phone.includes(search))) && (!selectedArea || c.address === selectedArea));
+  const filtered = customers.filter((c: Customer) => (!search || c.name.toLowerCase().includes(search.toLowerCase()) || (c.phone && c.phone.includes(search))) && (!selectedArea || c.address === selectedArea));
 
   return (
     <div className="space-y-6 pb-40 relative text-slate-900">
@@ -476,14 +488,22 @@ const Customers: React.FC<CustomerProps> = ({ company, role, userName }) => {
             <div className="flex-1 overflow-y-auto custom-scroll p-1" ref={ledgerRef}>
               <div className="p-10 text-black">
                 {/* 📊 LEDGER STATS */}
-                <div className="grid grid-cols-2 gap-4 mb-8">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+                  <div className="bg-blue-50 p-6 rounded-[2.5rem] border border-blue-100 shadow-sm text-center">
+                    <p className="text-[10px] font-black text-blue-600 uppercase tracking-widest mb-2 italic">মোট ক্রয় (Lifetime Sales)</p>
+                    <p className="text-2xl font-black italic tracking-tighter text-blue-700">৳{currentLedgerStats.totalSales.toLocaleString()}</p>
+                  </div>
+                  <div className="bg-emerald-50 p-6 rounded-[2.5rem] border border-emerald-100 shadow-sm text-center">
+                    <p className="text-[10px] font-black text-emerald-600 uppercase tracking-widest mb-2 italic">মোট জমা (Lifetime Paid)</p>
+                    <p className="text-2xl font-black italic tracking-tighter text-emerald-700">৳{currentLedgerStats.totalPaid.toLocaleString()}</p>
+                  </div>
                   <div className="bg-slate-900 p-6 rounded-[2.5rem] border border-white/5 shadow-xl text-center">
                     <p className="text-[10px] font-black text-rose-400 uppercase tracking-widest mb-2 italic">বকেয়া (Regular Due)</p>
-                    <p className="text-2xl font-black italic tracking-tighter text-rose-400">৳{currentLedgerStats.reg.toLocaleString()}</p>
+                    <p className="text-2xl font-black italic tracking-tighter text-rose-400">৳{currentLedgerStats.regularDue.toLocaleString()}</p>
                   </div>
                   <div className="bg-slate-900 p-6 rounded-[2.5rem] border border-white/5 shadow-xl text-center">
                     <p className="text-[10px] font-black text-indigo-400 uppercase tracking-widest mb-2 italic">বুকিং জমা (Booking)</p>
-                    <p className="text-2xl font-black italic tracking-tighter text-indigo-400">৳{currentLedgerStats.book.toLocaleString()}</p>
+                    <p className="text-2xl font-black italic tracking-tighter text-indigo-400">৳{currentLedgerStats.bookingAdvance.toLocaleString()}</p>
                   </div>
                 </div>
 

@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { User, Advertisement, Company, Product, Booking } from '../types';
+import { User, Advertisement, Company, Product, Booking, Transaction, MarketOrder, MarketOrderItem, OrderAction, CompanyStats, OrderItem, TransactionItem } from '../types';
 import { supabase, mapToDbCompany } from '../lib/supabase';
 
 interface PortalProps {
@@ -8,30 +8,14 @@ interface PortalProps {
    user: User;
 }
 
-interface CompanyStats {
-   regularDue: number;
-   bookingAdvance: number;
-   totalBill: number;
-   totalPaid: number;
-}
 
-type OrderAction = 'SALE' | 'RETURN' | 'REPLACE';
 
-interface OrderItem {
-   id: string;
-   name: string;
-   mrp: number;
-   qty: number;
-   company: string;
-   action: OrderAction;
-}
-
-const CustomerPortal: React.FC<PortalProps> = ({ type, user }) => {
+const CustomerPortal: React.FC<PortalProps> = ({ type, user }: PortalProps) => {
    const [activeCompany, setActiveCompany] = useState<Company>('Transtec');
    const [ads, setAds] = useState<Advertisement[]>([]);
-   const [ledger, setLedger] = useState<any[]>([]);
+   const [ledger, setLedger] = useState<Transaction[]>([]);
    const [bookings, setBookings] = useState<Booking[]>([]);
-   const [marketOrders, setMarketOrders] = useState<any[]>([]);
+   const [marketOrders, setMarketOrders] = useState<MarketOrder[]>([]);
    const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
    const [products, setProducts] = useState<Product[]>([]);
    const [loading, setLoading] = useState(true);
@@ -45,7 +29,7 @@ const CustomerPortal: React.FC<PortalProps> = ({ type, user }) => {
    const detailsRef = useRef<HTMLDivElement>(null);
 
    // Details View States
-   const [selectedTxDetails, setSelectedTxDetails] = useState<any>(null);
+   const [selectedTxDetails, setSelectedTxDetails] = useState<Transaction | null>(null);
 
    const [multiStats, setMultiStats] = useState<Record<string, CompanyStats>>({
       'Transtec': { regularDue: 0, bookingAdvance: 0, totalBill: 0, totalPaid: 0 },
@@ -134,7 +118,7 @@ const CustomerPortal: React.FC<PortalProps> = ({ type, user }) => {
             .order('created_at', { ascending: false });
 
          if (error) throw error;
-         setMarketOrders(data || []);
+         setMarketOrders((data as unknown as MarketOrder[]) || []);
       } catch (err) {
          setMarketOrders([]);
       } finally {
@@ -156,21 +140,24 @@ const CustomerPortal: React.FC<PortalProps> = ({ type, user }) => {
             'SQ Cables': { regularDue: 0, bookingAdvance: 0, totalBill: 0, totalPaid: 0 }
          };
 
-         (allTxs || []).forEach(tx => {
+         (allTxs as unknown as Transaction[] || []).forEach(tx => {
             const dbCo = mapToDbCompany(tx.company);
             if (stats[dbCo]) {
                const amt = Number(tx.amount) || 0;
                const isBooking = tx.meta?.is_booking === true || (tx.items && tx.items[0]?.note?.includes('বুকিং'));
 
                if (tx.payment_type === 'COLLECTION') {
+                  stats[dbCo].totalPaid += amt;
                   if (isBooking) {
                      stats[dbCo].bookingAdvance += amt;
                   } else {
-                     stats[dbCo].totalPaid += amt;
                      stats[dbCo].regularDue -= amt;
                   }
                } else if (tx.payment_type === 'DUE') {
-                  stats[dbCo].totalBill += amt;
+                  const hasReturn = tx.items?.some((it: any) => it.action === 'RETURN');
+                  if (!hasReturn) {
+                     stats[dbCo].totalBill += amt;
+                  }
                   stats[dbCo].regularDue += amt;
                }
             }
@@ -195,22 +182,22 @@ const CustomerPortal: React.FC<PortalProps> = ({ type, user }) => {
    }, [type, activeCompany, user.customer_id, fetchProducts, fetchLedgerForCompany, fetchBookingsForCompany, fetchOrderHistory]);
 
    const addToCart = (p: Product) => {
-      setOrderCart(prev => {
-         const existing = prev.find(item => item.id === p.id && item.action === 'SALE');
-         if (existing) return prev.map(item => (item.id === p.id && item.action === 'SALE') ? { ...item, qty: item.qty + 1 } : item);
+      setOrderCart((prev: OrderItem[]) => {
+         const existing = prev.find((item: OrderItem) => item.id === p.id && item.action === 'SALE');
+         if (existing) return prev.map((item: OrderItem) => (item.id === p.id && item.action === 'SALE') ? { ...item, qty: item.qty + 1 } : item);
          return [...prev, { id: p.id, name: p.name, mrp: p.mrp, qty: 1, company: p.company, action: 'SALE' }];
       });
    };
 
    const updateCartItem = (idx: number, updates: Partial<OrderItem>) => {
-      setOrderCart(prev => {
+      setOrderCart((prev: OrderItem[]) => {
          const next = [...prev];
          next[idx] = { ...next[idx], ...updates };
-         return next.filter(item => item.qty > 0 || (item.qty === 0 && updates.qty === undefined));
+         return next.filter((item: OrderItem) => item.qty > 0 || (item.qty === 0 && updates.qty === undefined));
       });
    };
 
-   const calculateTotal = () => orderCart.reduce((sum, i) => {
+   const calculateTotal = () => orderCart.reduce((sum: number, i: OrderItem) => {
       if (i.action === 'REPLACE') return sum;
       const lineTotal = i.mrp * i.qty;
       return sum + (i.action === 'RETURN' ? -lineTotal : lineTotal);
@@ -287,9 +274,9 @@ const CustomerPortal: React.FC<PortalProps> = ({ type, user }) => {
    };
 
    // Filter ads for the current brand
-   const brandAds = ads.filter(ad => ad.company === activeCompany);
-   const offerAds = brandAds.filter(ad => ad.type === 'OFFER');
-   const catalogAds = brandAds.filter(ad => ad.type !== 'OFFER');
+   const brandAds = ads.filter((ad: Advertisement) => ad.company === activeCompany);
+   const offerAds = brandAds.filter((ad: Advertisement) => ad.type === 'OFFER');
+   const catalogAds = brandAds.filter((ad: Advertisement) => ad.type !== 'OFFER');
 
    return (
       <div className="space-y-4 animate-reveal font-sans text-slate-900 pb-20">
@@ -323,12 +310,12 @@ const CustomerPortal: React.FC<PortalProps> = ({ type, user }) => {
                                  <p className="text-[9px] font-black text-slate-400 uppercase italic">বকেয়া:</p>
                                  <p className={`text-xl font-black italic mt-1 ${stat.regularDue > 0 ? 'text-rose-600' : 'text-emerald-600'}`}>৳{safeFormat(stat.regularDue)}</p>
                               </div>
-                              <div className="border-l pl-4 border-slate-100">
-                                 <p className="text-[9px] font-black text-indigo-400 uppercase italic">বুকিং:</p>
-                                 <p className="text-xl font-black italic mt-1 text-indigo-600">৳{safeFormat(stat.bookingAdvance)}</p>
-                              </div>
-                           </div>
-                        </div>
+                               <div className="border-l pl-4 border-slate-100">
+                                  <p className="text-[9px] font-black text-emerald-500 uppercase italic">মোট জমা:</p>
+                                  <p className="text-xl font-black italic mt-1 text-emerald-600">৳{safeFormat(stat.totalPaid)}</p>
+                               </div>
+                            </div>
+                         </div>
                      )
                   })}
                </div>
@@ -346,16 +333,24 @@ const CustomerPortal: React.FC<PortalProps> = ({ type, user }) => {
                            </div>
                         </div>
 
-                        <div className="flex gap-4">
-                           <div className="bg-white/60 backdrop-blur-md p-4 rounded-2xl border border-white shadow-sm text-center min-w-[120px]">
-                              <p className="text-[8px] font-black text-slate-400 uppercase mb-1">মোট কেনাকাটা</p>
-                              <p className="text-lg font-black italic text-slate-900 leading-none">৳{safeFormat(multiStats[activeCompany]?.totalBill)}</p>
-                           </div>
-                           <div className="bg-white/60 backdrop-blur-md p-4 rounded-2xl border border-white shadow-sm text-center min-w-[120px]">
-                              <p className="text-[8px] font-black text-emerald-500 uppercase mb-1">মোট পরিশোধ</p>
-                              <p className="text-lg font-black italic text-emerald-600 leading-none">৳{safeFormat(multiStats[activeCompany]?.totalPaid)}</p>
-                           </div>
-                        </div>
+                        <div className="grid grid-cols-2 md:flex gap-3 md:gap-4 shrink-0">
+                            <div className="bg-white/60 backdrop-blur-md p-3 md:p-4 rounded-2xl border border-white shadow-sm text-center min-w-[100px] md:min-w-[120px]">
+                               <p className="text-[8px] font-black text-slate-400 uppercase mb-1">মোট মাল নিয়েছেন</p>
+                               <p className="text-sm md:text-lg font-black italic text-slate-900 leading-none">৳{safeFormat(multiStats[activeCompany]?.totalBill)}</p>
+                            </div>
+                            <div className="bg-white/60 backdrop-blur-md p-3 md:p-4 rounded-2xl border border-white shadow-sm text-center min-w-[100px] md:min-w-[120px]">
+                               <p className="text-[8px] font-black text-emerald-500 uppercase mb-1">মোট জমা</p>
+                               <p className="text-sm md:text-lg font-black italic text-emerald-600 leading-none">৳{safeFormat(multiStats[activeCompany]?.totalPaid)}</p>
+                            </div>
+                            <div className="bg-white/60 backdrop-blur-md p-3 md:p-4 rounded-2xl border border-white shadow-sm text-center min-w-[100px] md:min-w-[120px]">
+                               <p className="text-[8px] font-black text-rose-500 uppercase mb-1">বকেয়া</p>
+                               <p className="text-sm md:text-lg font-black italic text-rose-600 leading-none">৳{safeFormat(multiStats[activeCompany]?.regularDue)}</p>
+                            </div>
+                            <div className="bg-white/60 backdrop-blur-md p-3 md:p-4 rounded-2xl border border-white shadow-sm text-center min-w-[100px] md:min-w-[120px]">
+                               <p className="text-[8px] font-black text-indigo-500 uppercase mb-1">বুকিং জমা</p>
+                               <p className="text-sm md:text-lg font-black italic text-indigo-600 leading-none">৳{safeFormat(multiStats[activeCompany]?.bookingAdvance)}</p>
+                            </div>
+                         </div>
                      </div>
 
                      <div className="p-2 overflow-x-auto">
@@ -373,9 +368,9 @@ const CustomerPortal: React.FC<PortalProps> = ({ type, user }) => {
                                  <tr><td colSpan={4} className="p-20 text-center animate-pulse text-slate-300 font-black italic uppercase tracking-widest">ডাটা ফেচ হচ্ছে...</td></tr>
                               ) : ledger.length === 0 ? (
                                  <tr><td colSpan={4} className="p-24 text-center text-slate-300 italic uppercase font-black tracking-widest opacity-40">কোনো রেকর্ড পাওয়া যায়নি</td></tr>
-                              ) : ledger.slice(0, 10).map((tx, idx) => {
-                                 const isBooking = tx.meta?.is_booking === true || (tx.items && tx.items[0]?.note?.includes('বুকিং'));
-                                 const hasReturns = tx.payment_type === 'DUE' && tx.items?.some((it: any) => it.action === 'RETURN');
+                              ) : (ledger as Transaction[]).slice(0, 10).map((tx: Transaction, idx: number) => {
+                                 const isBooking = (tx.meta as any)?.is_booking === true || (tx.items && tx.items[0]?.note?.includes('বুকিং'));
+                                 const hasReturns = tx.payment_type === 'DUE' && tx.items?.some((it: TransactionItem) => it.action === 'RETURN');
 
                                  return (
                                     <tr key={tx.id} className="hover:bg-slate-50/50 transition-colors group animate-reveal" style={{ animationDelay: `${idx * 0.05}s` }}>
@@ -423,7 +418,7 @@ const CustomerPortal: React.FC<PortalProps> = ({ type, user }) => {
                         Special Offers & Rewards
                      </h3>
                      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                        {offerAds.map((ad, idx) => (
+                        {offerAds.map((ad: Advertisement, idx: number) => (
                            <div
                               key={ad.id}
                               onClick={() => setSelectedOffer(ad)}
@@ -472,7 +467,7 @@ const CustomerPortal: React.FC<PortalProps> = ({ type, user }) => {
                         <div className="col-span-full py-20 text-center opacity-10">
                            <p className="text-sm font-black uppercase tracking-[0.5em] italic">No catalog entries for {activeCompany}</p>
                         </div>
-                     ) : catalogAds.map((ad, idx) => (
+                     ) : catalogAds.map((ad: Advertisement, idx: number) => (
                         <div
                            key={ad.id}
                            onClick={() => setSelectedOffer(ad)}
@@ -687,7 +682,7 @@ const CustomerPortal: React.FC<PortalProps> = ({ type, user }) => {
                      <div className="py-20 text-center animate-pulse text-slate-300 font-black italic">লোড হচ্ছে...</div>
                   ) : marketOrders.length === 0 ? (
                      <div className="py-20 text-center opacity-30 font-black uppercase italic border border-dashed rounded-3xl">কোনো অর্ডার পাওয়া যায়নি</div>
-                  ) : marketOrders.map((order) => (
+                  ) : marketOrders.map((order: MarketOrder) => (
                      <div key={order.id} className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm flex flex-col gap-3">
                         <div className="flex justify-between items-start">
                            <div>
@@ -697,7 +692,7 @@ const CustomerPortal: React.FC<PortalProps> = ({ type, user }) => {
                            <p className="text-xl font-black italic text-slate-900 tracking-tighter">৳{order.total_amount.toLocaleString()}</p>
                         </div>
                         <div className="pt-3 border-t">
-                           {order.items?.map((it: any, i: number) => (
+                           {order.items?.map((it: MarketOrderItem, i: number) => (
                               <p key={i} className="text-[10px] font-bold text-slate-500 uppercase italic">• {it.name} ({it.qty} পিস) - <span className={`text-[8px] uppercase font-black ${it.action === 'RETURN' ? 'text-rose-500' : it.action === 'REPLACE' ? 'text-cyan-500' : 'text-slate-400'}`}>{it.action || 'SALE'}</span></p>
                            ))}
                         </div>
@@ -722,7 +717,7 @@ const CustomerPortal: React.FC<PortalProps> = ({ type, user }) => {
                      <div className="py-20 text-center bg-white rounded-3xl border border-dashed border-slate-200 opacity-30 flex flex-col items-center">
                         <p className="text-sm font-black uppercase italic">বর্তমানে আপনার কোনো বুকিং রেকর্ড নেই</p>
                      </div>
-                  ) : bookings.map((b) => (
+                  ) : bookings.map((b: Booking) => (
                      <div key={b.id} onClick={() => setSelectedBooking(b)} className="bg-white p-6 rounded-[2.5rem] border border-slate-100 shadow-sm flex flex-col md:flex-row justify-between items-center gap-4 cursor-pointer relative overflow-hidden">
                         <div className={`absolute left-0 top-0 bottom-0 w-1.5 ${b.status === 'COMPLETED' ? 'bg-emerald-50' : 'bg-indigo-50'}`}></div>
                         <div className="flex-1 text-center md:text-left">
