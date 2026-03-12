@@ -18,7 +18,7 @@ interface CartItem extends Product {
 
 interface SalesProps {
   company: Company;
-  role: UserRole;
+  role: string; // Changed from UserRole to string
   user: User;
 }
 
@@ -106,6 +106,22 @@ const Sales: React.FC<SalesProps> = ({ company, role, user }) => {
     } catch (err) { }
   };
 
+  const fetchTxItems = async (tx: any) => {
+    try {
+      const start = `${historyDate}T00:00:00.000Z`;
+      const end = `${historyDate}T23:59:59.999Z`;
+      const { data } = await supabase
+        .from('transactions')
+        .select('*, customers(name, address)')
+        .eq('company', dbCo)
+        .eq('payment_type', 'DUE')
+        .gte('created_at', start)
+        .lte('created_at', end)
+        .order('created_at', { ascending: false });
+      setRecentMemos(data || []);
+    } catch (err) { }
+  };
+
   const fetchCustomerStats = async (customerId: string) => {
     try {
       const { data } = await supabase
@@ -168,11 +184,11 @@ const Sales: React.FC<SalesProps> = ({ company, role, user }) => {
   };
 
   const removeItem = (idx: number) => {
-    setCart(prev => prev.filter((_, i) => i !== idx));
+    setCart((prev: CartItem[]) => prev.filter((_, i) => i !== idx));
   };
 
   const totals = useMemo(() => {
-    const subtotal = cart.reduce((sum, i) => {
+    const subtotal = cart.reduce((sum: number, i: CartItem) => {
       if (i.action === 'REPLACE') return sum;
       const itemPrice = Number(i.editedPrice);
       const itemDisc = (itemPrice * Number(i.discountPercent)) / 100;
@@ -193,7 +209,7 @@ const Sales: React.FC<SalesProps> = ({ company, role, user }) => {
 
     setIsSaving(true);
     try {
-      const itemsToSave = cart.map(i => {
+      const itemsToSave = cart.map((i: CartItem) => {
         const isReplace = i.action === 'REPLACE';
         const price = isReplace ? 0 : Number(i.editedPrice);
         const discount = isReplace ? 0 : Number(i.discountPercent);
@@ -211,8 +227,8 @@ const Sales: React.FC<SalesProps> = ({ company, role, user }) => {
         amount: totals.netTotal,
         payment_type: 'DUE',
         items: itemsToSave,
-        submitted_by: user.name,
-        meta: { global_discount: globalDiscount, prev_due: prevDue }
+        submitted_by: user.name
+        // meta removed for hotfix
       }]).select().single();
 
       if (txError) throw txError;
@@ -325,7 +341,7 @@ const Sales: React.FC<SalesProps> = ({ company, role, user }) => {
   };
 
   const filteredCustomers = useMemo(() => {
-    return customers.filter(c => {
+    return customers.filter((c: any) => {
       const q = (custSearch || "").toLowerCase().trim();
       const name = (c.name || "").toLowerCase();
       const phone = (c.phone || "");

@@ -6,6 +6,10 @@ interface CollectionsProps {
    company: Company;
    user: User;
 }
+interface CollectionsProps {
+  company: Company;
+  user: User;
+}
 
 interface MultiBalance {
    reg: number;
@@ -19,15 +23,15 @@ const Collections: React.FC<CollectionsProps> = ({ company, user }) => {
    const [loading, setLoading] = useState(true);
    const [isSaving, setIsSaving] = useState(false);
 
-   const [selectedArea, setSelectedArea] = useState("");
+   const [selectedArea, setSelectedArea] = useState<string>("");
    const [selectedCust, setSelectedCust] = useState<Customer | null>(null);
-   const [targetCompany, setTargetCompany] = useState<Company>(user.role === 'STAFF' ? user.company : 'SQ Cables');
+   const [targetCompany, setTargetCompany] = useState<Company>(company);
    const [amount, setAmount] = useState<string>("");
    const [collectionType, setCollectionType] = useState<'REGULAR' | 'BOOKING'>('REGULAR');
-   const [showAreaDropdown, setShowAreaDropdown] = useState(false);
-   const [areaSearch, setAreaSearch] = useState("");
-   const [showCustDropdown, setShowCustDropdown] = useState(false);
-   const [custSearch, setCustSearch] = useState("");
+   const [showAreaDropdown, setShowAreaDropdown] = useState<boolean>(false);
+   const [areaSearch, setAreaSearch] = useState<string>("");
+   const [showCustDropdown, setShowCustDropdown] = useState<boolean>(false);
+   const [custSearch, setCustSearch] = useState<string>("");
    const dropdownRef = useRef<HTMLDivElement>(null);
 
    const [custBalances, setCustBalances] = useState<Record<string, MultiBalance>>({
@@ -42,10 +46,13 @@ const Collections: React.FC<CollectionsProps> = ({ company, user }) => {
       pendingTotal: 0
    });
 
-   const isAdmin = user.role === 'ADMIN';
-   const isStaff = user.role === 'STAFF';
+   const isAdmin: boolean = user.role === 'ADMIN';
+   const isStaff: boolean = user.role === 'STAFF';
 
-   useEffect(() => { fetchData(); }, [user.company]);
+   useEffect(() => { fetchData(); }, [user.company, company]);
+   useEffect(() => {
+      if (isAdmin) setTargetCompany(company);
+   }, [company, isAdmin]);
    useEffect(() => {
       if (selectedCust) fetchCustomerBalances(selectedCust.id);
       else setCustBalances({
@@ -53,7 +60,7 @@ const Collections: React.FC<CollectionsProps> = ({ company, user }) => {
          'SQ Light': { reg: 0, book: 0 },
          'SQ Cables': { reg: 0, book: 0 }
       });
-   }, [selectedCust]);
+   }, [selectedCust, targetCompany]);
 
    useEffect(() => {
       const handleClickOutside = (event: MouseEvent) => {
@@ -69,8 +76,8 @@ const Collections: React.FC<CollectionsProps> = ({ company, user }) => {
    const fetchData = async () => {
       setLoading(true);
       try {
-         const today = new Date().toISOString().split('T')[0];
-         const dbUserCompany = mapToDbCompany(user.company);
+         const today: string = new Date().toISOString().split('T')[0];
+         const dbUserCompany: string = mapToDbCompany(user.company);
          const [custRes, reqRes, txRes] = await Promise.all([
             db.getCustomers(),
             supabase.from('collection_requests').select('*, customers(name, address, phone)').eq('status', 'PENDING').order('created_at', { ascending: false }),
@@ -78,20 +85,20 @@ const Collections: React.FC<CollectionsProps> = ({ company, user }) => {
          ]);
 
          setCustomers(custRes || []);
-         let filteredRequests = reqRes.data || [];
+         let filteredRequests: any[] = reqRes.data || [];
          if (isStaff) filteredRequests = filteredRequests.filter((r: any) => r.company === dbUserCompany);
          setPendingRequests(filteredRequests);
 
-         let confirmed = (txRes.data || []).filter((tx: any) => tx.payment_type === 'COLLECTION');
+         let confirmed: any[] = (txRes.data || []).filter((tx: any) => tx.payment_type === 'COLLECTION');
          if (isStaff) confirmed = confirmed.filter((tx: any) => tx.company === dbUserCompany);
          setConfirmedToday(confirmed);
 
-         let t_tr = 0, t_sl = 0, t_sc = 0;
-         let s_tr = 0, s_sl = 0, s_sc = 0;
+         let t_tr: number = 0, t_sl: number = 0, t_sc: number = 0;
+         let s_tr: number = 0, s_sl: number = 0, s_sc: number = 0;
 
          txRes.data?.forEach((tx: any) => {
-            const amt = Number(tx.amount) || 0;
-            const co = mapToDbCompany(tx.company);
+            const amt: number = Number(tx.amount) || 0;
+            const co: string = mapToDbCompany(tx.company);
 
             if (tx.payment_type === 'COLLECTION') {
                if (co === 'Transtec') t_tr += amt;
@@ -114,7 +121,7 @@ const Collections: React.FC<CollectionsProps> = ({ company, user }) => {
 
    const fetchCustomerBalances = async (customerId: string) => {
       try {
-         const dbUserCompany = mapToDbCompany(user.company);
+         const dbUserCompany: string = mapToDbCompany(user.company);
          let query = supabase.from('transactions').select('amount, company, payment_type, meta, items').eq('customer_id', customerId);
          if (isStaff) query = query.eq('company', dbUserCompany);
          const { data: txs } = await query;
@@ -122,9 +129,9 @@ const Collections: React.FC<CollectionsProps> = ({ company, user }) => {
             'Transtec': { reg: 0, book: 0 }, 'SQ Light': { reg: 0, book: 0 }, 'SQ Cables': { reg: 0, book: 0 }
          };
          txs?.forEach((tx: any) => {
-            const amt = Number(tx.amount);
-            const dbCo = mapToDbCompany(tx.company);
-            const isBooking = tx.meta?.is_booking === true || tx.items?.[0]?.note?.includes('বুকিং');
+            const amt: number = Number(tx.amount);
+            const dbCo: string = mapToDbCompany(tx.company);
+            const isBooking: boolean = tx.meta?.is_booking === true || tx.items?.[0]?.note?.includes('বুকিং');
             if (newBalances[dbCo]) {
                if (tx.payment_type === 'COLLECTION') {
                   if (isBooking) newBalances[dbCo].book += amt;
@@ -137,14 +144,18 @@ const Collections: React.FC<CollectionsProps> = ({ company, user }) => {
    };
 
    const handleManualSubmit = async () => {
-      if (!selectedCust || !amount || Number(amount) <= 0) return alert("দোকান এবং সঠিক অ্যামাউন্ট দিন!");
+      const amountNum: number = parseFloat(amount);
+      if (!selectedCust || isNaN(amountNum) || amountNum <= 0) return alert("দোকান এবং সঠিক অ্যামাউন্ট দিন!");
       setIsSaving(true);
       try {
-         const submissionTag = collectionType === 'BOOKING' ? `[BOOKING] ${user.name}` : user.name;
+         const submissionTag: string = collectionType === 'BOOKING' ? `[BOOKING] ${user.name}` : user.name;
          const { error } = await supabase.from('collection_requests').insert([{
-            customer_id: selectedCust.id, company: mapToDbCompany(targetCompany),
-            amount: Number(amount), submitted_by: submissionTag, status: 'PENDING',
-            meta: collectionType === 'BOOKING' ? { note: '📅 বুকিং অগ্রিম কালেকশন' } : {}
+            customer_id: selectedCust.id, 
+            company: mapToDbCompany(targetCompany),
+            amount: amountNum, 
+            submitted_by: submissionTag, 
+            status: 'PENDING'
+            // meta ketch removed for hotfix
          }]);
          if (error) throw error;
          setAmount(""); alert("কালেকশন রিকোয়েস্ট পাঠানো হয়েছে! ✅"); fetchData();
@@ -155,17 +166,20 @@ const Collections: React.FC<CollectionsProps> = ({ company, user }) => {
       if (!isAdmin || isSaving) return;
       setIsSaving(true);
       try {
-         const isBooking = req.submitted_by?.includes('[BOOKING]');
-         const memoIdMatch = req.submitted_by?.match(/\[DH-MEMO-([^\]]+)\]/);
-         const memoId = memoIdMatch ? memoIdMatch[1] : null;
+         const isBooking: boolean = req.submitted_by?.includes('[BOOKING]');
+         const memoIdMatch: RegExpMatchArray | null = req.submitted_by?.match(/\[DH-MEMO-([^\]]+)\]/);
+         const memoId: string | null = memoIdMatch ? memoIdMatch[1] : null;
 
-         let cleanSubmittedBy = req.submitted_by || '';
+         let cleanSubmittedBy: string = req.submitted_by || '';
          if (memoIdMatch) cleanSubmittedBy = cleanSubmittedBy.replace(memoIdMatch[0], '').trim();
          cleanSubmittedBy = cleanSubmittedBy.replace('[BOOKING]', '').trim();
 
          const { data: txData, error: txErr } = await supabase.from('transactions').insert([{
-            customer_id: req.customer_id, company: req.company, amount: Number(req.amount),
-            payment_type: 'COLLECTION', submitted_by: cleanSubmittedBy, meta: { is_booking: isBooking, approved_by: user.name },
+            customer_id: req.customer_id, 
+            company: req.company, 
+            amount: Number(req.amount),
+            payment_type: 'COLLECTION', 
+            submitted_by: cleanSubmittedBy,
             items: [{ note: isBooking ? `📅 বুকিং অগ্রিম জমা (${cleanSubmittedBy})` : `💰 নগদ আদায় অনুমোদন (${cleanSubmittedBy})` }]
          }]).select().single();
          if (txErr) throw txErr;
@@ -182,7 +196,7 @@ const Collections: React.FC<CollectionsProps> = ({ company, user }) => {
             }], { onConflict: 'order_id' });
          }
 
-         const txIdShort = String(txData.id).slice(-6).toUpperCase();
+         const txIdShort: string = String(txData.id).slice(-6).toUpperCase();
          await supabase.from('notifications').insert([{
             customer_id: req.customer_id, title: isBooking ? `বুকিং জমা #${txIdShort}` : `কালেকশন জমা #${txIdShort}`,
             message: `৳${Number(req.amount).toLocaleString()} ${isBooking ? 'বুকিং জমা' : 'হিসেবে গ্রহণ'} হয়েছে। (${req.company})`,
@@ -205,7 +219,7 @@ const Collections: React.FC<CollectionsProps> = ({ company, user }) => {
 
    const handleDeleteTransaction = async (tx: any) => {
       if (!isAdmin && !isStaff) return;
-      const txIdShort = String(tx.id).slice(-6).toUpperCase();
+      const txIdShort: string = String(tx.id).slice(-6).toUpperCase();
       if (!confirm(`আপনি কি নিশ্চিত এই জমার এন্ট্রিটি (#${txIdShort}) ডিলিট করতে চান?`)) return;
       setIsSaving(true);
       try {
@@ -216,29 +230,29 @@ const Collections: React.FC<CollectionsProps> = ({ company, user }) => {
       } catch (err: any) { alert("ত্রুটি: " + err.message); } finally { setIsSaving(false); }
    };
 
-   const safeFormat = (val: any) => Number(val || 0).toLocaleString();
+   const safeFormat = (val: any): string => Number(val || 0).toLocaleString();
 
    // কে কত টাকা জমা দিল তার হিসাব (Staff-wise totals)
    const staffSummary = useMemo(() => {
       const summary: Record<string, number> = {};
       // পেন্ডিং এবং কনফার্মড সব ডাটা যোগ করে নাম অনুযায়ী সাজানো
-      [...pendingRequests, ...confirmedToday].forEach(item => {
-         const rawName = item.submitted_by || '';
-         const cleanName = rawName.replace(/\[DH-MEMO-[^\]]+\]/g, '').replace('[BOOKING]', '').trim();
+      [...pendingRequests, ...confirmedToday].forEach((item: any) => {
+         const rawName: string = item.submitted_by || '';
+         const cleanName: string = rawName.replace(/\[DH-MEMO-[^\]]+\]/g, '').replace('[BOOKING]', '').trim();
          if (!cleanName) return;
          summary[cleanName] = (summary[cleanName] || 0) + Number(item.amount);
       });
-      return Object.entries(summary).sort((a, b) => b[1] - a[1]);
+      return Object.entries(summary).sort((a: [string, number], b: [string, number]) => b[1] - a[1]);
    }, [pendingRequests, confirmedToday]);
 
    const currentBalances = useMemo(() => {
-      const dbCo = mapToDbCompany(targetCompany);
+      const dbCo: string = mapToDbCompany(targetCompany);
       return custBalances[dbCo] || { reg: 0, book: 0 };
    }, [targetCompany, custBalances]);
 
-   const uniqueAreas = useMemo(() => Array.from(new Set(customers.map(c => c.address?.trim()).filter(Boolean))).sort(), [customers]);
-   const filteredAreas = useMemo(() => uniqueAreas.filter((a: any) => a.toLowerCase().includes(areaSearch.toLowerCase())), [uniqueAreas, areaSearch]);
-   const filteredCustomers = useMemo(() => customers.filter(c => !selectedArea || c.address === selectedArea), [customers, selectedArea]);
+   const uniqueAreas = useMemo(() => Array.from(new Set(customers.map((c: Customer) => c.address?.trim()).filter(Boolean))).sort(), [customers]);
+   const filteredAreas = useMemo(() => uniqueAreas.filter((a: string) => a.toLowerCase().includes(areaSearch.toLowerCase())), [uniqueAreas, areaSearch]);
+   const filteredCustomers = useMemo(() => customers.filter((c: Customer) => !selectedArea || c.address === selectedArea), [customers, selectedArea]);
    const searchedCustomers = useMemo(() => filteredCustomers.filter((c: Customer) =>
       c.name.toLowerCase().includes(custSearch.toLowerCase()) || (c.phone && c.phone.includes(custSearch))
    ), [filteredCustomers, custSearch]);
@@ -248,7 +262,7 @@ const Collections: React.FC<CollectionsProps> = ({ company, user }) => {
 
          {/* 👤 STAFF SUMMARY CARDS (কে কত জমা দিল) */}
          <div className="flex overflow-x-auto gap-4 pb-4 custom-scroll no-scrollbar">
-            {staffSummary.map(([name, total]) => (
+            {staffSummary.map(([name, total]: [string, number]) => (
                <div key={name} className="min-w-[180px] bg-white p-6 rounded-[2rem] border border-blue-50 shadow-md flex flex-col items-center group hover:border-blue-500 transition-all">
                   <div className="w-10 h-10 bg-blue-50 rounded-full flex items-center justify-center text-blue-600 font-black mb-2 text-xs uppercase italic">{name.slice(0, 2)}</div>
                   <p className="text-[9px] font-black uppercase text-slate-400 tracking-widest text-center">{name}</p>
@@ -292,7 +306,7 @@ const Collections: React.FC<CollectionsProps> = ({ company, user }) => {
                         </button>
                         {showAreaDropdown && (
                            <div className="absolute top-[85px] left-0 right-0 z-[600] bg-white border-2 border-slate-100 rounded-3xl shadow-2xl overflow-hidden">
-                              <input className="w-full p-4 border-b-2 border-slate-100 font-bold text-xs outline-none bg-slate-50" placeholder="এরিয়া সার্চ..." value={areaSearch} onChange={(e: any) => setAreaSearch(e.target.value)} />
+                              <input className="w-full p-4 border-b-2 border-slate-100 font-bold text-xs outline-none bg-slate-50" placeholder="এরিয়া সার্চ..." value={areaSearch} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setAreaSearch(e.target.value)} />
                               <div className="max-h-60 overflow-y-auto">
                                  <div onClick={() => { setSelectedArea(""); setShowAreaDropdown(false); setAreaSearch(""); setSelectedCust(null); }} className="p-4 hover:bg-blue-50 cursor-pointer font-bold text-xs uppercase text-slate-400 italic">সকল এরিয়া</div>
                                  {filteredAreas.map((a: string) => <div key={a} onClick={() => { setSelectedArea(a); setShowAreaDropdown(false); setAreaSearch(""); setSelectedCust(null); setShowCustDropdown(true); }} className="p-4 hover:bg-blue-50 cursor-pointer font-black text-xs uppercase">{a}</div>)}
@@ -308,7 +322,7 @@ const Collections: React.FC<CollectionsProps> = ({ company, user }) => {
                         </button>
                         {showCustDropdown && (
                            <div className="absolute top-[85px] left-0 right-0 z-[500] bg-white border-2 border-slate-100 rounded-3xl shadow-2xl overflow-hidden">
-                              <input className="w-full p-4 border-b-2 border-slate-100 font-bold text-xs outline-none bg-slate-50" placeholder="দোকান সার্চ..." value={custSearch} onChange={(e: any) => setCustSearch(e.target.value)} />
+                              <input className="w-full p-4 border-b-2 border-slate-100 font-bold text-xs outline-none bg-slate-50" placeholder="দোকান সার্চ..." value={custSearch} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setCustSearch(e.target.value)} />
                               <div className="max-h-60 overflow-y-auto">
                                  {searchedCustomers.map((c: Customer) => (
                                     <div key={c.id} onClick={() => { setSelectedCust(c); setShowCustDropdown(false); setCustSearch(""); }} className="p-4 hover:bg-blue-50 cursor-pointer font-black text-xs uppercase flex justify-between">
@@ -333,14 +347,14 @@ const Collections: React.FC<CollectionsProps> = ({ company, user }) => {
                         <p className={`text-4xl font-black italic tracking-tighter ${currentBalances.reg > 1 ? 'text-rose-400' : 'text-emerald-400'}`}>৳{safeFormat(currentBalances.reg)}</p>
                      </div>
                      <div className="flex gap-2 mt-4">
-                        {['Transtec', 'SQ Light', 'SQ Cables'].map(co => (
-                           <button key={co} disabled={isStaff && user.company !== co} onClick={() => setTargetCompany(co as Company)} className={`flex-1 py-3.5 rounded-2xl font-black uppercase text-[9px] border ${targetCompany === co ? 'bg-blue-600 border-blue-500 text-white shadow-lg' : 'bg-white/5 border-white/5 text-slate-500'} ${isStaff && user.company !== co ? 'hidden' : ''}`}>{co}</button>
+                        {(['Transtec', 'SQ Light', 'SQ Cables'] as Company[]).map((co: Company) => (
+                           <button key={co} disabled={isStaff && user.company !== co} onClick={() => setTargetCompany(co)} className={`flex-1 py-3.5 rounded-2xl font-black uppercase text-[9px] border ${targetCompany === co ? 'bg-blue-600 border-blue-500 text-white shadow-lg' : 'bg-white/5 border-white/5 text-slate-500'} ${isStaff && user.company !== co ? 'hidden' : ''}`}>{co}</button>
                         ))}
                      </div>
                   </div>
 
                   <div className="relative">
-                     <input type="number" className="w-full p-10 bg-blue-50 border-none rounded-[3.5rem] text-center text-6xl font-black italic text-blue-600 outline-none shadow-inner" placeholder="0.00" value={amount} onChange={e => setAmount(e.target.value)} />
+                     <input type="number" className="w-full p-10 bg-blue-50 border-none rounded-[3.5rem] text-center text-6xl font-black italic text-blue-600 outline-none shadow-inner" placeholder="0.00" value={amount} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setAmount(e.target.value)} />
                      <div className="absolute left-10 top-1/2 -translate-y-1/2 text-4xl font-black text-blue-200">৳</div>
                   </div>
 
@@ -360,7 +374,7 @@ const Collections: React.FC<CollectionsProps> = ({ company, user }) => {
                   </div>
 
                   <div className="flex-1 overflow-y-auto p-8 space-y-4">
-                     {pendingRequests.map(req => (
+                     {pendingRequests.map((req: any) => (
                         <div key={req.id} className="bg-white p-6 rounded-[2.5rem] border-2 border-slate-50 shadow-sm flex flex-col sm:flex-row justify-between items-center gap-6 group animate-reveal hover:border-blue-100">
                            <div className="min-w-0 flex-1">
                               <h4 className="font-black text-slate-800 uppercase italic text-[15px] truncate mb-1">{req.customers?.name}</h4>
@@ -387,7 +401,7 @@ const Collections: React.FC<CollectionsProps> = ({ company, user }) => {
                   <div className="p-10 border-t bg-emerald-50/30">
                      <h4 className="text-[11px] font-black text-emerald-600 uppercase italic tracking-widest mb-6">আজকের কনফার্মড আদায়</h4>
                      <div className="space-y-4">
-                        {confirmedToday.map(tx => (
+                        {confirmedToday.map((tx: any) => (
                            <div key={tx.id} className="p-5 rounded-[2rem] border-2 bg-white border-emerald-100 flex justify-between items-center group">
                               <div className="min-w-0 flex-1">
                                  <h4 className="font-black text-slate-700 uppercase italic text-[13px] truncate mb-1">{tx.customers?.name}</h4>
