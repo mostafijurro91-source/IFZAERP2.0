@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { User, Company } from '../types';
+import { User, Company, CompanyRecord } from '../types';
 import { supabase, mapToDbCompany } from '../lib/supabase';
 
 interface SidebarProps {
@@ -8,6 +8,7 @@ interface SidebarProps {
   setActiveTab: (tab: string) => void;
   onLogout: () => void;
   user: User;
+  companies: CompanyRecord[];
   selectedCompany: Company;
   onCompanyChange: (company: Company) => void;
   isOpen: boolean;
@@ -19,6 +20,7 @@ const Sidebar: React.FC<SidebarProps> = ({
   setActiveTab, 
   onLogout, 
   user, 
+  companies,
   selectedCompany, 
   onCompanyChange,
   isOpen,
@@ -122,6 +124,7 @@ const Sidebar: React.FC<SidebarProps> = ({
     { id: 'customers', label: '👥 কাস্টমার ডাটা', roles: ['ADMIN', 'STAFF', 'DELIVERY'] },
     { id: 'ledger', label: '📒 কোম্পানি লেজার', roles: ['ADMIN'] },
     { id: 'db_explorer', label: '🗄️ ডেটাবেজ এক্সপ্লোরার', roles: ['ADMIN'] },
+    { id: 'company_settings', label: '⚙️ কোম্পানি সেটিংস', roles: ['ADMIN'] },
     { id: 'reports', label: '📁 অল রিপোর্টস', roles: ['ADMIN', 'STAFF'] },
     { id: 'team', label: '🛡️ টিম মনিটরিং', roles: ['ADMIN'] }
   ].filter(m => m.roles.includes(user.role));
@@ -156,15 +159,15 @@ const Sidebar: React.FC<SidebarProps> = ({
           {!isCustomer && (
             <div className="space-y-1.5 pt-2">
               {canSwitch ? (
-                (['Transtec', 'SQ Light', 'SQ Cables'] as Company[]).map((co, idx) => (
+                companies.map((co, idx) => (
                   <button 
-                    key={co} 
-                    onClick={() => { onCompanyChange(co); if(window.innerWidth < 768) onClose(); }}
+                    key={co.id} 
+                    onClick={() => { onCompanyChange(co.name); if(window.innerWidth < 768) onClose(); }}
                     className={`w-full flex items-center gap-3 p-3 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all hover:translate-x-1 animate-reveal`}
-                    style={{ animationDelay: `${idx * 0.1}s`, backgroundColor: selectedCompany === co ? '#0f172a' : '#f8fafc', color: selectedCompany === co ? 'white' : '#64748b' }}
+                    style={{ animationDelay: `${idx * 0.1}s`, backgroundColor: selectedCompany === co.name ? '#0f172a' : '#f8fafc', color: selectedCompany === co.name ? 'white' : '#64748b' }}
                   >
-                    <div className={`w-1.5 h-1.5 rounded-full ${selectedCompany === co ? 'bg-blue-400 active-pulse' : 'bg-slate-300'}`}></div>
-                    {co}
+                    <div className={`w-1.5 h-1.5 rounded-full ${selectedCompany === co.name ? 'bg-blue-400 active-pulse' : 'bg-slate-300'}`}></div>
+                    {co.name}
                   </button>
                 ))
               ) : (
