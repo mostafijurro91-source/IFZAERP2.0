@@ -382,7 +382,7 @@ const Customers: React.FC<CustomerProps> = ({ company, role, userName }) => {
                         setEditingCustomer(c);
                         setFormData({
                           name: c.name,
-                          phone: c.phone,
+                          phone: c.phone || '',
                           address: c.address || '',
                           money_amount: tx ? tx.amount.toString() : '',
                           portal_username: c.portal_username || '',
@@ -524,7 +524,7 @@ const Customers: React.FC<CustomerProps> = ({ company, role, userName }) => {
                         <tr><td colSpan={6} className="py-20 text-center opacity-30 font-black uppercase italic">কোনো লেনদেন রেকর্ড পাওয়া যায়নি</td></tr>
                       ) : ledgerHistory.map((tx) => {
                         const returnItem = tx.items?.find((it: any) => it.action === 'RETURN');
-                        const returnAmount = returnItem ? Math.abs(tx.items.reduce((s: number, it: any) => it.action === 'RETURN' ? s + (Number(it.total) || 0) : s, 0)) : 0;
+                        const returnAmount = returnItem ? Math.abs(tx.items?.reduce((s: number, it: any) => it.action === 'RETURN' ? s + (Number(it.total) || 0) : s, 0) || 0) : 0;
 
                         return (
                           <tr key={tx.id} className="group hover:bg-slate-50/50 transition-colors">
