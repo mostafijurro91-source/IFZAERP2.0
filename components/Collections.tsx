@@ -1,14 +1,11 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Company, User, Customer, formatCurrency } from '../types';
+import { Company, User, Customer, CompanyRecord, formatCurrency } from '../types';
 import { supabase, mapToDbCompany, db } from '../lib/supabase';
 
 interface CollectionsProps {
    company: Company;
    user: User;
-}
-interface CollectionsProps {
-  company: Company;
-  user: User;
+   companies: CompanyRecord[];
 }
 
 interface MultiBalance {
@@ -16,7 +13,7 @@ interface MultiBalance {
    book: number;
 }
 
-const Collections: React.FC<CollectionsProps> = ({ company, user }) => {
+const Collections: React.FC<CollectionsProps> = ({ company, user, companies }) => {
    const [pendingRequests, setPendingRequests] = useState<any[]>([]);
    const [confirmedToday, setConfirmedToday] = useState<any[]>([]);
    const [customers, setCustomers] = useState<Customer[]>([]);
@@ -34,15 +31,12 @@ const Collections: React.FC<CollectionsProps> = ({ company, user }) => {
    const [custSearch, setCustSearch] = useState<string>("");
    const dropdownRef = useRef<HTMLDivElement>(null);
 
-   const [custBalances, setCustBalances] = useState<Record<string, MultiBalance>>({
-      'Transtec': { reg: 0, book: 0 },
-      'SQ Light': { reg: 0, book: 0 },
-      'SQ Cables': { reg: 0, book: 0 }
-   });
+   const [custBalances, setCustBalances] = useState<Record<string, MultiBalance>>({});
 
-   const [globalStats, setGlobalStats] = useState({
-      todayTotal: 0, transtec: 0, sqLight: 0, sqCables: 0,
-      salesTotal: 0, salesTranstec: 0, salesSqLight: 0, salesSqCables: 0,
+   const [globalStats, setGlobalStats] = useState<any>({
+      todayTotal: 0,
+      coTotals: {}, // Dynamic map for company totals
+      salesTotal: 0,
       pendingTotal: 0
    });
 
@@ -55,11 +49,11 @@ const Collections: React.FC<CollectionsProps> = ({ company, user }) => {
    }, [company, isAdmin]);
    useEffect(() => {
       if (selectedCust) fetchCustomerBalances(selectedCust.id);
-      else setCustBalances({
-         'Transtec': { reg: 0, book: 0 },
-         'SQ Light': { reg: 0, book: 0 },
-         'SQ Cables': { reg: 0, book: 0 }
-      });
+      else {
+         const initial: Record<string, MultiBalance> = {};
+         companies.forEach(co => { initial[co.name] = { reg: 0, book: 0 }; });
+         setCustBalances(initial);
+      }
    }, [selectedCust, targetCompany]);
 
    useEffect(() => {
@@ -93,27 +87,28 @@ const Collections: React.FC<CollectionsProps> = ({ company, user }) => {
          if (isStaff) confirmed = confirmed.filter((tx: any) => tx.company === dbUserCompany);
          setConfirmedToday(confirmed);
 
-         let t_tr: number = 0, t_sl: number = 0, t_sc: number = 0;
-         let s_tr: number = 0, s_sl: number = 0, s_sc: number = 0;
+         let totalCollection: number = 0;
+         const coTotals: Record<string, { collected: number, sales: number }> = {};
+         
+         companies.forEach(co => { coTotals[co.name] = { collected: 0, sales: 0 }; });
 
          txRes.data?.forEach((tx: any) => {
             const amt: number = Number(tx.amount) || 0;
             const co: string = mapToDbCompany(tx.company);
+            if (!coTotals[co]) coTotals[co] = { collected: 0, sales: 0 };
 
             if (tx.payment_type === 'COLLECTION') {
-               if (co === 'Transtec') t_tr += amt;
-               else if (co === 'SQ Light') t_sl += amt;
-               else if (co === 'SQ Cables') t_sc += amt;
+               coTotals[co].collected += amt;
+               totalCollection += amt;
             } else if (tx.payment_type === 'DUE') {
-               if (co === 'Transtec') s_tr += amt;
-               else if (co === 'SQ Light') s_sl += amt;
-               else if (co === 'SQ Cables') s_sc += amt;
+               coTotals[co].sales += amt;
             }
          });
 
          setGlobalStats({
-            todayTotal: t_tr + t_sl + t_sc, transtec: t_tr, sqLight: t_sl, sqCables: t_sc,
-            salesTotal: s_tr + s_sl + s_sc, salesTranstec: s_tr, salesSqLight: s_sl, salesSqCables: s_sc,
+            todayTotal: totalCollection,
+            coTotals,
+            salesTotal: Object.values(coTotals).reduce((sum, c) => sum + c.sales, 0),
             pendingTotal: filteredRequests.reduce((sum: number, r: any) => sum + Number(r.amount), 0)
          });
       } finally { setLoading(false); }
@@ -125,9 +120,8 @@ const Collections: React.FC<CollectionsProps> = ({ company, user }) => {
          let query = supabase.from('transactions').select('amount, company, payment_type, meta, items').eq('customer_id', customerId);
          if (isStaff) query = query.eq('company', dbUserCompany);
          const { data: txs } = await query;
-         const newBalances: Record<string, MultiBalance> = {
-            'Transtec': { reg: 0, book: 0 }, 'SQ Light': { reg: 0, book: 0 }, 'SQ Cables': { reg: 0, book: 0 }
-         };
+         const newBalances: Record<string, MultiBalance> = {};
+         companies.forEach(co => { newBalances[co.name] = { reg: 0, book: 0 }; });
          txs?.forEach((tx: any) => {
             const amt: number = Number(tx.amount);
             const dbCo: string = mapToDbCompany(tx.company);
@@ -346,9 +340,16 @@ const Collections: React.FC<CollectionsProps> = ({ company, user }) => {
                         <p className="text-[10px] font-black text-rose-400 uppercase tracking-[0.4em] mb-2 italic">মালের বকেয়া</p>
                         <p className={`text-4xl font-black italic tracking-tighter ${currentBalances.reg > 1 ? 'text-rose-400' : 'text-emerald-400'}`}>৳{safeFormat(currentBalances.reg)}</p>
                      </div>
-                     <div className="flex gap-2 mt-4">
-                        {(['Transtec', 'SQ Light', 'SQ Cables'] as Company[]).map((co: Company) => (
-                           <button key={co} disabled={isStaff && user.company !== co} onClick={() => setTargetCompany(co)} className={`flex-1 py-3.5 rounded-2xl font-black uppercase text-[9px] border ${targetCompany === co ? 'bg-blue-600 border-blue-500 text-white shadow-lg' : 'bg-white/5 border-white/5 text-slate-500'} ${isStaff && user.company !== co ? 'hidden' : ''}`}>{co}</button>
+                     <div className="flex flex-wrap gap-2 mt-4">
+                        {companies.map((co) => (
+                           <button 
+                             key={co.id} 
+                             disabled={isStaff && user.company !== co.name} 
+                             onClick={() => setTargetCompany(co.name)} 
+                             className={`flex-1 min-w-[30%] py-3.5 px-2 rounded-2xl font-black uppercase text-[9px] border transition-all ${targetCompany === co.name ? 'bg-blue-600 border-blue-500 text-white shadow-lg' : 'bg-white/5 border-white/5 text-slate-500'} ${isStaff && user.company !== co.name ? 'hidden' : ''}`}
+                           >
+                              {co.name}
+                           </button>
                         ))}
                      </div>
                   </div>
