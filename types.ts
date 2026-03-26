@@ -151,3 +151,5 @@ export const formatCurrency = (amount: number | string) => {
     style: 'currency',
     currency: 'BDT',
     minimumFractionDigits: 0
+  }).format(value).replace('BDT', '৳');
+};
