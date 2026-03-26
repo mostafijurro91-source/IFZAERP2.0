@@ -36,6 +36,8 @@ export interface Customer {
   address: string;
   phone?: string;
   area?: string;
+  portal_username?: string;
+  portal_password?: string;
 }
 
 export interface Product {
@@ -149,5 +151,3 @@ export const formatCurrency = (amount: number | string) => {
     style: 'currency',
     currency: 'BDT',
     minimumFractionDigits: 0
-  }).format(value).replace('BDT', '৳');
-};
