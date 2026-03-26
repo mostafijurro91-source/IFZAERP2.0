@@ -1,13 +1,14 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { supabase, mapToDbCompany } from '../lib/supabase';
-import { Company, User } from '../types';
+import { Company, User, CompanyRecord } from '../types';
 
 interface DeliveryHubProps {
   company: Company;
   user: User;
+  companies: CompanyRecord[];
 }
 
-const DeliveryHub: React.FC<DeliveryHubProps> = ({ company, user }) => {
+const DeliveryHub: React.FC<DeliveryHubProps> = ({ company, user, companies }) => {
   const [tasks, setTasks] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [depositAmount, setDepositAmount] = useState<Record<string, string>>({});
@@ -53,15 +54,27 @@ const DeliveryHub: React.FC<DeliveryHubProps> = ({ company, user }) => {
       ]);
 
       const mergedData = data?.map(memo => {
-        const memoIdStr = String(memo.id);
-        const dLog = deliveryLog?.find(d => String(d.order_id) === memoIdStr);
-        const pendingReq = collectionRequests?.find(r => r.submitted_by?.includes(`[DH-MEMO-${memoIdStr}]`));
+        const memoIdStr = String(memo.id).toLowerCase();
+        
+        // Match delivery log using case-insensitive ID comparison
+        const dLog = deliveryLog?.find(d => String(d.order_id).toLowerCase() === memoIdStr);
+        
+        // Match pending collection requests using tag search
+        const pendingReq = collectionRequests?.find(r => 
+          r.submitted_by?.toLowerCase().includes(`[dh-memo-${memoIdStr}]`)
+        );
+        
         const hasPending = !!pendingReq;
         const collectorName = pendingReq ? (pendingReq.submitted_by.includes(']') ? pendingReq.submitted_by.split(']').pop()?.trim() : pendingReq.submitted_by) : '';
         
+        // If dLog says COMPLETED, then it's finished. Otherwise check if it's pending approval.
+        let status = 'PENDING';
+        if (dLog?.status === 'COMPLETED') status = 'COMPLETED';
+        else if (hasPending) status = 'PENDING_APPROVAL';
+        
         return {
           ...memo,
-          status: dLog?.status || (hasPending ? 'PENDING_APPROVAL' : 'PENDING'),
+          status,
           collected: dLog?.collected_amount || 0,
           pendingAmount: pendingReq?.amount || 0,
           collectorName: collectorName
@@ -109,12 +122,12 @@ const DeliveryHub: React.FC<DeliveryHubProps> = ({ company, user }) => {
     const sortedTasks = [...tasks];
     const totalHandled = tasks.reduce((sum, t) => sum + Number(t.collected || 0) + Number(t.pendingAmount || 0), 0);
     
-    // কোম্পানি ভিত্তিক 
-    const coStats = {
-      'Transtec': tasks.filter(t => mapToDbCompany(t.company) === 'Transtec').reduce((s, t) => s + Number(t.collected || 0) + Number(t.pendingAmount || 0), 0),
-      'SQ Light': tasks.filter(t => mapToDbCompany(t.company) === 'SQ Light').reduce((s, t) => s + Number(t.collected || 0) + Number(t.pendingAmount || 0), 0),
-      'SQ Cables': tasks.filter(t => mapToDbCompany(t.company) === 'SQ Cables').reduce((s, t) => s + Number(t.collected || 0) + Number(t.pendingAmount || 0), 0)
-    };
+    // Dynamic company-based stats
+    const coStats: Record<string, number> = {};
+    tasks.forEach(t => {
+      const coName = mapToDbCompany(t.company);
+      coStats[coName] = (coStats[coName] || 0) + Number(t.collected || 0) + Number(t.pendingAmount || 0);
+    });
 
     const doneCount = tasks.filter(t => t.status === 'COMPLETED' || t.status === 'PENDING_APPROVAL').length;
     const totalCount = tasks.length;
@@ -142,9 +155,9 @@ const DeliveryHub: React.FC<DeliveryHubProps> = ({ company, user }) => {
             onChange={(e) => setSelectedCompany(e.target.value)}
           >
             <option value="ALL" className="text-black">সবগুলো কোম্পানি (All)</option>
-            <option value="Transtec" className="text-black">Transtec</option>
-            <option value="SQ Light" className="text-black">SQ Light</option>
-            <option value="SQ Cables" className="text-black">SQ Cables</option>
+            {companies.map(co => (
+              <option key={co.id} value={co.name} className="text-black">{co.name}</option>
+            ))}
           </select>
           
           <input 
@@ -180,37 +193,33 @@ const DeliveryHub: React.FC<DeliveryHubProps> = ({ company, user }) => {
                 </div>
               </div>
               
-              <div className="grid grid-cols-1 gap-4 lg:col-span-3">
-                 <div className="flex flex-wrap gap-8 items-center bg-white/5 p-4 rounded-3xl border border-white/5">
-                    <div className="space-y-1">
-                      <p className="text-[9px] font-black text-slate-400 uppercase">Transtec</p>
-                      <p className="text-lg font-black italic">৳{stats.coStats['Transtec'].toLocaleString()}</p>
-                    </div>
-                    <div className="w-px h-10 bg-white/10"></div>
-                    <div className="space-y-1">
-                      <p className="text-[9px] font-black text-slate-400 uppercase">SQ Light</p>
-                      <p className="text-lg font-black italic">৳{stats.coStats['SQ Light'].toLocaleString()}</p>
-                    </div>
-                    <div className="w-px h-10 bg-white/10"></div>
-                    <div className="space-y-1">
-                      <p className="text-[9px] font-black text-slate-400 uppercase">SQ Cables</p>
-                      <p className="text-lg font-black italic">৳{stats.coStats['SQ Cables'].toLocaleString()}</p>
-                    </div>
-                    <div className="ml-auto flex items-center gap-4">
-                      <div className="text-right">
-                        <p className="text-[9px] font-black text-slate-400 uppercase">Delivery Progress</p>
-                        <p className="text-base font-black italic text-emerald-400">{stats.completed}/{stats.totalCount} <span className="text-[10px] text-slate-500">Memos</span></p>
-                      </div>
-                      <div className="w-12 h-12 rounded-full border-4 border-emerald-500/20 flex items-center justify-center relative">
-                        <svg className="w-full h-full transform -rotate-90">
-                          <circle cx="24" cy="24" r="20" stroke="currentColor" strokeWidth="4" fill="transparent" className="text-white/5" />
-                          <circle cx="24" cy="24" r="20" stroke="currentColor" strokeWidth="4" fill="transparent" className="text-emerald-500" strokeDasharray={126} strokeDashoffset={126 - (126 * stats.progress) / 100} />
-                        </svg>
-                        <span className="absolute text-[8px] font-black">✔</span>
-                      </div>
-                    </div>
-                 </div>
-              </div>
+               <div className="grid grid-cols-1 gap-4 lg:col-span-3">
+                  <div className="flex flex-wrap gap-8 items-center bg-white/5 p-4 rounded-3xl border border-white/5">
+                     {Object.entries(stats.coStats).map(([coName, total]) => (
+                       <React.Fragment key={coName}>
+                         <div className="space-y-1">
+                           <p className="text-[9px] font-black text-slate-400 uppercase">{coName}</p>
+                           <p className="text-lg font-black italic">৳{total.toLocaleString()}</p>
+                         </div>
+                         <div className="w-px h-10 bg-white/10 last:hidden"></div>
+                       </React.Fragment>
+                     ))}
+                     
+                     <div className="ml-auto flex items-center gap-4">
+                       <div className="text-right">
+                         <p className="text-[9px] font-black text-slate-400 uppercase">Delivery Progress</p>
+                         <p className="text-base font-black italic text-emerald-400">{stats.completed}/{stats.totalCount} <span className="text-[10px] text-slate-500">Memos</span></p>
+                       </div>
+                       <div className="w-12 h-12 rounded-full border-4 border-emerald-500/20 flex items-center justify-center relative">
+                         <svg className="w-full h-full transform -rotate-90">
+                           <circle cx="24" cy="24" r="20" stroke="currentColor" strokeWidth="4" fill="transparent" className="text-white/5" />
+                           <circle cx="24" cy="24" r="20" stroke="currentColor" strokeWidth="4" fill="transparent" className="text-emerald-500" strokeDasharray={126} strokeDashoffset={126 - (126 * stats.progress) / 100} />
+                         </svg>
+                         <span className="absolute text-[8px] font-black">✔</span>
+                       </div>
+                     </div>
+                  </div>
+               </div>
             </div>
           </div>
         )}
