@@ -288,7 +288,7 @@ const DeliveryHub: React.FC<DeliveryHubProps> = ({ company, user }) => {
                               </div>
                               <span className="w-8 h-8 rounded-full bg-amber-200 flex items-center justify-center text-amber-700 animate-spin-slow">⏳</span>
                             </div>
-                          )}
+                          ) : null}
                         </td>
                       </tr>
                     ))
