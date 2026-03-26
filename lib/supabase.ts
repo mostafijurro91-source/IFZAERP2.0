@@ -7,14 +7,11 @@ const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 export const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
 /**
- * Normalizes company names to match the strict 'Company' type.
- * Ensures consistent plural naming for SQ Cables.
+ * Normalizes company names.
+ * In the new dynamic system, it mostly cleans up whitespace.
  */
 export const mapToDbCompany = (company: string): string => {
-  const c = company.trim().toLowerCase();
-  if (c.includes('light')) return 'SQ Light';
-  if (c.includes('cable') || c.includes('cables')) return 'SQ Cables';
-  return 'Transtec';
+  return company.trim();
 };
 
 export const checkSupabaseConnection = async (): Promise<boolean> => {
@@ -39,6 +36,20 @@ export const db = {
   async getMarketOrders(company: string) {
     const dbCo = mapToDbCompany(company);
     const { data, error } = await supabase.from('market_orders').select('*, customers(name, address, phone)').eq('company', dbCo).order('created_at', { ascending: false });
+    if (error) throw error;
+    return data || [];
+  },
+  async getCompanies() {
+    const { data, error } = await supabase
+      .from('companies')
+      .select('*')
+      .eq('is_active', true)
+      .order('name');
+    if (error) throw error;
+    return data || [];
+  },
+  async getAllCompanies() {
+    const { data, error } = await supabase.from('companies').select('*').order('name');
     if (error) throw error;
     return data || [];
   }
