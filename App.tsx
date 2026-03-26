@@ -20,13 +20,15 @@ import CustomerPortal from './components/CustomerPortal';
 import Showroom from './components/Showroom';
 import Tracking from './components/Tracking';
 import DatabaseExplorer from './components/DatabaseExplorer';
-import { User, Company } from './types';
-import { supabase, checkSupabaseConnection } from './lib/supabase';
+import { User, Company, CompanyRecord } from './types';
+import { supabase, checkSupabaseConnection, db } from './lib/supabase';
+import CompanySettings from './components/CompanySettings';
 
 const App: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
   const [showLogin, setShowLogin] = useState(false);
   const [activeTab, setActiveTab] = useState(() => localStorage.getItem('ifza_active_tab') || 'dashboard');
+  const [companies, setCompanies] = useState<CompanyRecord[]>([]);
   const [selectedCompany, setSelectedCompany] = useState<Company>(() => (localStorage.getItem('ifza_company') as Company) || 'Transtec');
   const [initialized, setInitialized] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -99,6 +101,18 @@ const App: React.FC = () => {
           const parsed = JSON.parse(saved);
           if (parsed?.id) {
             setUser(parsed);
+          }
+        }
+
+        // Fetch Companies
+        const cos = await db.getCompanies();
+        setCompanies(cos);
+        
+        // Ensure selected company is valid
+        const savedCo = localStorage.getItem('ifza_company');
+        if (cos.length > 0) {
+          if (!savedCo || !cos.find(c => c.name === savedCo)) {
+            setSelectedCompany(cos[0].name);
           }
         }
       } catch (e) {
@@ -212,6 +226,7 @@ const App: React.FC = () => {
         setActiveTab={setActiveTab} 
         onLogout={handleLogout} 
         user={user} 
+        companies={companies}
         selectedCompany={selectedCompany} 
         onCompanyChange={setSelectedCompany} 
         isOpen={isSidebarOpen} 
@@ -263,6 +278,7 @@ const App: React.FC = () => {
             {activeTab === 'team' && <Team />}
             {activeTab === 'db_explorer' && <DatabaseExplorer />}
             {activeTab === 'github_sync' && <Tracking />}
+            {activeTab === 'company_settings' && <CompanySettings onUpdate={() => db.getCompanies().then(setCompanies)} />}
           </div>
         </div>
       </main>

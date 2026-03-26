@@ -1,5 +1,12 @@
 
-export type Company = 'Transtec' | 'SQ Light' | 'SQ Cables';
+export interface CompanyRecord {
+  id: string;
+  name: string;
+  is_active: boolean;
+  created_at: string;
+}
+
+export type Company = string; // Was: 'Transtec' | 'SQ Light' | 'SQ Cables'
 export type UserRole = 'ADMIN' | 'STAFF' | 'DELIVERY' | 'CUSTOMER';
 export type OrderAction = 'SALE' | 'RETURN' | 'REPLACE';
 
