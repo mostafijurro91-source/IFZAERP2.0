@@ -63,10 +63,11 @@ const Dashboard: React.FC<DashboardProps> = ({ company, role }) => {
 
         if (cid) {
           if (!customerStatsMap[cid]) {
+            const cust = Array.isArray(tx.customers) ? tx.customers[0] : tx.customers;
             customerStatsMap[cid] = {
-              name: tx.customers?.name || 'Unknown',
-              phone: tx.customers?.phone || '',
-              address: tx.customers?.address || '',
+              name: cust?.name || 'Unknown',
+              phone: cust?.phone || '',
+              address: cust?.address || '',
               due: 0,
               lastTxDate: new Date(0)
             };
@@ -91,7 +92,10 @@ const Dashboard: React.FC<DashboardProps> = ({ company, role }) => {
           if (cid) customerStatsMap[cid].due += amt;
           if (monthlyMap[txMonth]) monthlyMap[txMonth].sales += amt;
         }
-        if (txDateStr === todayStr) recent.push({ name: tx.customers?.name || 'Unknown', amount: amt, date: tx.created_at, type: tx.payment_type === 'COLLECTION' ? 'C' : 'S' });
+        if (txDateStr === todayStr) {
+          const cust = Array.isArray(tx.customers) ? tx.customers[0] : tx.customers;
+          recent.push({ name: cust?.name || 'Unknown', amount: amt, date: tx.created_at, type: tx.payment_type === 'COLLECTION' ? 'C' : 'S' });
+        }
       });
 
       const defaulters = Object.values(customerStatsMap)
