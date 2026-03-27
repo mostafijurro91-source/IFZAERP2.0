@@ -331,13 +331,33 @@ const Sales: React.FC<SalesProps> = ({ company, role, user }) => {
     setIsDownloading(true);
     try {
       const canvas = await html2canvas(invoiceRef.current, { scale: 3, useCORS: true, backgroundColor: '#ffffff' });
-      const imgData = canvas.toDataURL('image/jpeg', 1.0);
+      const imgData = canvas.toDataURL('image/jpeg', 0.95);
       const pdf = new jsPDF('p', 'mm', 'a5');
       const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pdfHeight = pdf.internal.pageSize.getHeight();
       const imgHeight = (canvas.height * pdfWidth) / canvas.width;
-      pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, imgHeight);
-      pdf.save(`IFZA_Memo_${selectedCust?.name}.pdf`);
-    } catch (e) { alert("PDF তৈরি করা যায়নি।"); } finally { setIsDownloading(false); }
+      
+      let heightLeft = imgHeight;
+      let position = 0;
+
+      // Add first page
+      pdf.addImage(imgData, 'JPEG', 0, position, pdfWidth, imgHeight);
+      heightLeft -= pdfHeight;
+
+      // Add subsequent pages if needed
+      while (heightLeft > 0) {
+        position = heightLeft - imgHeight;
+        pdf.addPage();
+        pdf.addImage(imgData, 'JPEG', 0, position, pdfWidth, imgHeight);
+        heightLeft -= pdfHeight;
+      }
+
+      pdf.save(`IFZA_Memo_${selectedCust?.name}_${new Date().toLocaleDateString('bn-BD')}.pdf`);
+    } catch (e) { 
+      alert("PDF তৈরি করা যায়নি।"); 
+    } finally { 
+      setIsDownloading(false); 
+    }
   };
 
   const filteredCustomers = useMemo(() => {
