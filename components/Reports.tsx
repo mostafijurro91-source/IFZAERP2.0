@@ -259,36 +259,39 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName }) => {
     if (!memoRef.current || isDownloading) return;
     setIsDownloading(true);
     try {
-      const canvas = await html2canvas(memoRef.current, { scale: 3, useCORS: true, backgroundColor: '#ffffff' });
-      const imgData = canvas.toDataURL('image/jpeg', 1.0);
+      const canvas = await html2canvas(memoRef.current, { 
+        scale: 3, 
+        useCORS: true, 
+        backgroundColor: '#ffffff' 
+      });
+      const imgData = canvas.toDataURL('image/jpeg', 0.95);
       const pdf = new jsPDF('p', 'mm', 'a5');
 
       const pdfWidth = pdf.internal.pageSize.getWidth();
       const pdfHeight = pdf.internal.pageSize.getHeight();
       const imgHeight = (canvas.height * pdfWidth) / canvas.width;
 
-      const itemCount = selectedMemo?.items?.length || 0;
-      const shouldScaleStore = itemCount > 25 && imgHeight > pdfHeight && imgHeight < pdfHeight * 1.5;
+      let heightLeft = imgHeight;
+      let position = 0;
 
-      if (shouldScaleStore) {
-        pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, pdfHeight);
-      } else {
-        let heightLeft = imgHeight;
-        let position = 0;
+      // Add first page
+      pdf.addImage(imgData, 'JPEG', 0, position, pdfWidth, imgHeight);
+      heightLeft -= pdfHeight;
 
+      // Add subsequent pages if needed
+      while (heightLeft > 0) {
+        position = heightLeft - imgHeight;
+        pdf.addPage();
         pdf.addImage(imgData, 'JPEG', 0, position, pdfWidth, imgHeight);
         heightLeft -= pdfHeight;
-
-        while (heightLeft > 0) {
-          position -= pdfHeight;
-          pdf.addPage();
-          pdf.addImage(imgData, 'JPEG', 0, position, pdfWidth, imgHeight);
-          heightLeft -= pdfHeight;
-        }
       }
 
-      pdf.save(`Old_Memo_${selectedMemo?.customers?.name || 'Unknown'}.pdf`);
-    } catch (e) { alert("PDF তৈরি করা যায়নি।"); } finally { setIsDownloading(false); }
+      pdf.save(`Old_Memo_${selectedMemo?.customers?.name || 'Unknown'}_${new Date().toLocaleDateString('bn-BD')}.pdf`);
+    } catch (e) { 
+      alert("PDF তৈরি করা যায়নি।"); 
+    } finally { 
+      setIsDownloading(false); 
+    }
   };
 
   const filteredData = useMemo(() => {
