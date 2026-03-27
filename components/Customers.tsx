@@ -247,19 +247,47 @@ const Customers: React.FC<CustomerProps> = ({ company, role, userName }) => {
     if (!ledgerRef.current || isDownloading) return;
     setIsDownloading(true);
     try {
+      // Temporarily remove constraints for full capture
+      const originalStyle = ledgerRef.current.style.cssText;
+      ledgerRef.current.style.height = 'auto';
+      ledgerRef.current.style.maxHeight = 'none';
+      ledgerRef.current.style.overflow = 'visible';
+
       const canvas = await html2canvas(ledgerRef.current, {
         scale: 2,
         useCORS: true,
         backgroundColor: '#ffffff',
-        logging: false
+        logging: false,
+        windowWidth: ledgerRef.current.scrollWidth,
+        windowHeight: ledgerRef.current.scrollHeight
       });
+
+      // Restore style
+      ledgerRef.current.style.cssText = originalStyle;
+
       const imgData = canvas.toDataURL('image/jpeg', 0.95);
       const pdf = new jsPDF('p', 'mm', 'a4');
       const pdfWidth = pdf.internal.pageSize.getWidth();
-      const imgHeight = (canvas.height * pdfWidth) / canvas.width;
+      const pdfHeight = pdf.internal.pageSize.getHeight();
+      const imgWidth = canvas.width;
+      const imgHeight = (canvas.height * pdfWidth) / imgWidth;
+      
+      let heightLeft = imgHeight;
+      let position = 0;
 
-      pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, imgHeight);
-      pdf.save(`Statement_${selectedLedgerCust?.name}_${new Date().toLocaleDateString()}.pdf`);
+      // Add first page
+      pdf.addImage(imgData, 'JPEG', 0, position, pdfWidth, imgHeight);
+      heightLeft -= pdfHeight;
+
+      // Add subsequent pages if needed
+      while (heightLeft > 0) {
+        position = heightLeft - imgHeight;
+        pdf.addPage();
+        pdf.addImage(imgData, 'JPEG', 0, position, pdfWidth, imgHeight);
+        heightLeft -= pdfHeight;
+      }
+
+      pdf.save(`Statement_${selectedLedgerCust?.name}_${new Date().toLocaleDateString('bn-BD')}.pdf`);
     } catch (e) {
       console.error(e);
       alert("PDF তৈরি করা যায়নি।");
@@ -277,11 +305,25 @@ const Customers: React.FC<CustomerProps> = ({ company, role, userName }) => {
         useCORS: true,
         backgroundColor: '#ffffff'
       });
-      const imgData = canvas.toDataURL('image/jpeg', 1.0);
+      const imgData = canvas.toDataURL('image/jpeg', 0.95);
       const pdf = new jsPDF('p', 'mm', 'a5');
       const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pdfHeight = pdf.internal.pageSize.getHeight();
       const imgHeight = (canvas.height * pdfWidth) / canvas.width;
-      pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, imgHeight);
+
+      let heightLeft = imgHeight;
+      let position = 0;
+
+      pdf.addImage(imgData, 'JPEG', 0, position, pdfWidth, imgHeight);
+      heightLeft -= pdfHeight;
+
+      while (heightLeft > 0) {
+        position = heightLeft - imgHeight;
+        pdf.addPage();
+        pdf.addImage(imgData, 'JPEG', 0, position, pdfWidth, imgHeight);
+        heightLeft -= pdfHeight;
+      }
+
       pdf.save(`Memo_${selectedLedgerCust?.name}_${selectedMemo?.id?.slice(-6)}.pdf`);
     } catch (e) {
       alert("PDF তৈরি করা যায়নি।");
