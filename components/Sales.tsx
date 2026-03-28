@@ -35,7 +35,7 @@ const Sales: React.FC<SalesProps> = ({ company, role, user }) => {
   const [areaSearch, setAreaSearch] = useState("");
   const [showAreaDropdown, setShowAreaDropdown] = useState(false);
 
-  const [globalDiscount, setGlobalDiscount] = useState<number>(0);
+  const [globalCommission, setGlobalCommission] = useState<number>(0);
   const [cashReceived, setCashReceived] = useState<number>(0);
   const [prevDue, setPrevDue] = useState<number>(0);
   const [lastPaymentFromDb, setLastPaymentFromDb] = useState<number>(0);
@@ -47,6 +47,9 @@ const Sales: React.FC<SalesProps> = ({ company, role, user }) => {
   // New state for History tracking
   const [recentMemos, setRecentMemos] = useState<any[]>([]);
   const [historyDate, setHistoryDate] = useState(new Date().toISOString().split('T')[0]);
+
+  // New states for Commission & Deadline
+  const [deadlineDate, setDeadlineDate] = useState<string>(""); 
 
   const invoiceRef = useRef<HTMLDivElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -91,22 +94,6 @@ const Sales: React.FC<SalesProps> = ({ company, role, user }) => {
   };
 
   const fetchRecentMemos = async () => {
-    try {
-      const start = `${historyDate}T00:00:00.000Z`;
-      const end = `${historyDate}T23:59:59.999Z`;
-      const { data } = await supabase
-        .from('transactions')
-        .select('*, customers(name, address)')
-        .eq('company', dbCo)
-        .eq('payment_type', 'DUE')
-        .gte('created_at', start)
-        .lte('created_at', end)
-        .order('created_at', { ascending: false });
-      setRecentMemos(data || []);
-    } catch (err) { }
-  };
-
-  const fetchTxItems = async (tx: any) => {
     try {
       const start = `${historyDate}T00:00:00.000Z`;
       const end = `${historyDate}T23:59:59.999Z`;
@@ -188,20 +175,30 @@ const Sales: React.FC<SalesProps> = ({ company, role, user }) => {
   };
 
   const totals = useMemo(() => {
-    const subtotal = cart.reduce((sum: number, i: CartItem) => {
+    const subtotalBeforeCommission = cart.reduce((sum: number, i: CartItem) => {
       if (i.action === 'REPLACE') return sum;
-      const itemPrice = Number(i.editedPrice);
-      const itemDisc = (itemPrice * Number(i.discountPercent)) / 100;
-      const lineTotal = (itemPrice - itemDisc) * i.qty;
+      const itemPrice = Number(i.editedPrice); // This is TP in our case
+      const lineTotal = itemPrice * i.qty;
       return sum + (i.action === 'RETURN' ? -lineTotal : lineTotal);
     }, 0);
 
-    const globalDiscAmount = (subtotal > 0) ? (subtotal * globalDiscount) / 100 : 0;
-    const netTotal = subtotal - globalDiscAmount;
+    // 1. Calculate Item-specific commissions
+    const itemCommissionTotal = cart.reduce((sum: number, i: CartItem) => {
+      if (i.action !== 'SALE') return sum;
+      const itemPrice = Number(i.editedPrice);
+      const commission = (itemPrice * Number(i.discountPercent)) / 100;
+      return sum + (commission * i.qty);
+    }, 0);
+
+    // 2. Calculate Global commission (on subtotal after item discounts or before? Let's do before as per user preference)
+    const globalCommissionAmount = (subtotalBeforeCommission > 0) ? (subtotalBeforeCommission * globalCommission) / 100 : 0;
+
+    const totalCommission = itemCommissionTotal + globalCommissionAmount;
+    const netTotal = subtotalBeforeCommission - totalCommission;
     const finalTotalBalance = prevDue + netTotal - cashReceived;
 
-    return { subtotal, globalDiscAmount, netTotal, finalTotalBalance };
-  }, [cart, globalDiscount, cashReceived, prevDue]);
+    return { subtotal: subtotalBeforeCommission, totalCommission, netTotal, finalTotalBalance };
+  }, [cart, globalCommission, cashReceived, prevDue]);
 
   const handleFinalSave = async () => {
     if (!selectedCust || cart.length === 0) return alert("দোকান এবং পণ্য নির্বাচন করুন!");
@@ -221,14 +218,23 @@ const Sales: React.FC<SalesProps> = ({ company, role, user }) => {
         };
       });
 
+      const expiryDate = deadlineDate ? new Date(deadlineDate).toISOString() : null;
+
       const { data: txData, error: txError } = await supabase.from('transactions').insert([{
         customer_id: selectedCust.id,
         company: dbCo,
         amount: totals.netTotal,
         payment_type: 'DUE',
         items: itemsToSave,
-        submitted_by: user.name
-        // meta removed for hotfix
+        submitted_by: user.name,
+        meta: {
+          total_commission: totals.totalCommission,
+          commission_percent_global: globalCommission,
+          commission_percent_item: cart.map(it => it.discountPercent),
+          commission_type: deadlineDate ? 'CONDITIONAL' : 'IMMEDIATE',
+          expiry_date: expiryDate,
+          commission_status: deadlineDate ? 'PENDING' : 'COMPLETED'
+        }
       }]).select().single();
 
       if (txError) throw txError;
@@ -280,7 +286,7 @@ const Sales: React.FC<SalesProps> = ({ company, role, user }) => {
       setShowInvoicePreview(false);
       setCart([]);
       setSelectedCust(null);
-      setGlobalDiscount(0);
+      setGlobalCommission(0);
       setCashReceived(0);
       loadData();
       fetchRecentMemos();
@@ -454,7 +460,7 @@ const Sales: React.FC<SalesProps> = ({ company, role, user }) => {
           <div className="bg-slate-900 text-white rounded-[2.5rem] shadow-xl flex flex-col h-[700px] sticky top-6 overflow-hidden">
             <div className="p-8 border-b border-white/5 flex justify-between items-center">
               <h3 className="font-black uppercase italic text-sm">মেমো কার্ট (POS)</h3>
-              <button onClick={() => { setCart([]); setGlobalDiscount(0); setCashReceived(0); }} className="text-[9px] font-black uppercase text-rose-400">রিসেট</button>
+              <button onClick={() => { setCart([]); setGlobalCommission(0); setCashReceived(0); }} className="text-[9px] font-black uppercase text-rose-400">রিসেট</button>
             </div>
 
             <div className="flex-1 overflow-y-auto p-4 space-y-3 custom-scroll">
@@ -474,7 +480,7 @@ const Sales: React.FC<SalesProps> = ({ company, role, user }) => {
                       <input type="number" className="w-full bg-black/40 p-2 rounded-xl text-center text-[10px] font-bold text-white outline-none" value={item.qty} onChange={e => updateCartItem(idx, { qty: Number(e.target.value) })} />
                     </div>
                     <div className="space-y-1">
-                      <label className="text-[7px] font-black uppercase text-slate-500 block text-center italic">রেট (ETP)</label>
+                      <label className="text-[7px] font-black uppercase text-slate-500 block text-center italic">রেট (TP)</label>
                       <input
                         type="number"
                         disabled={item.action === 'REPLACE'}
@@ -506,18 +512,29 @@ const Sales: React.FC<SalesProps> = ({ company, role, user }) => {
             <div className="p-8 bg-black/40 border-t border-white/10 space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1">
-                  <label className="text-[8px] font-black text-slate-500 uppercase ml-2 italic">গ্লোবাল ছাড় %</label>
-                  <input type="number" placeholder="0" className="w-full bg-white/5 p-4 rounded-2xl text-center font-black text-white text-lg" value={globalDiscount || ""} onChange={e => setGlobalDiscount(Number(e.target.value))} />
+                  <label className="text-[8px] font-black text-slate-500 uppercase ml-2 italic">গ্লোবাল কমিশন %</label>
+                  <input type="number" placeholder="0" className="w-full bg-white/5 p-4 rounded-2xl text-center font-black text-white text-lg" value={globalCommission || ""} onChange={e => setGlobalCommission(Number(e.target.value))} />
                 </div>
                 <div className="space-y-1">
-                  <label className="text-[8px] font-black text-emerald-500 uppercase ml-2 italic">আজকের জমা (নগদ)</label>
-                  <input type="number" placeholder="0" className="w-full bg-white/5 p-4 rounded-2xl text-center font-black text-emerald-400 text-lg shadow-inner" value={cashReceived || ""} onChange={e => setCashReceived(Number(e.target.value))} />
+                  <label className="text-[8px] font-black text-blue-500 uppercase ml-2 italic">পেমেন্ট ডেডলাইন (শর্ত)</label>
+                  <input 
+                    type="date"
+                    className="w-full bg-white/5 p-4 rounded-2xl text-center font-black text-white text-[11px] outline-none border border-white/5 focus:border-blue-500" 
+                    value={deadlineDate} 
+                    onChange={e => setDeadlineDate(e.target.value)}
+                  />
+                  {!deadlineDate && <p className="text-[7px] text-slate-500 text-center uppercase font-bold mt-1">নগদ (Instant)</p>}
                 </div>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[8px] font-black text-emerald-500 uppercase ml-2 italic">আজকের জমা (নগদ)</label>
+                <input type="number" placeholder="0" className="w-full bg-white/5 p-4 rounded-2xl text-center font-black text-emerald-400 text-lg shadow-inner" value={cashReceived || ""} onChange={e => setCashReceived(Number(e.target.value))} />
               </div>
 
               <div className="flex justify-between items-end pt-4">
                 <div>
-                  <p className="text-[9px] font-black text-slate-500 uppercase italic mb-1 tracking-widest">Grand Total</p>
+                  <p className="text-[9px] font-black text-slate-500 uppercase italic mb-1 tracking-widest">Grand Total (Commission subtract)</p>
                   <p className="text-4xl font-black italic tracking-tighter text-white">{formatCurrency(totals.netTotal)}</p>
                 </div>
                 <button disabled={cart.length === 0 || !selectedCust} onClick={() => setShowInvoicePreview(true)} className="bg-blue-600 text-white px-10 py-6 rounded-3xl font-black uppercase text-xs shadow-2xl active:scale-95 transition-all">মেমো প্রিভিউ ➔</button>
@@ -640,6 +657,14 @@ const Sales: React.FC<SalesProps> = ({ company, role, user }) => {
                 <p className="text-[9px] font-black uppercase text-black mb-2">তারিখ: {new Date().toLocaleDateString('bn-BD')}</p>
                 <p className="flex justify-between font-bold text-[11px] text-black"><span>পূর্বের বাকি:</span> <span className="text-red-600">৳{Math.round(prevDue).toLocaleString()}</span></p>
                 <p className="flex justify-between font-black text-[14px] border-t border-black pt-1 text-black"><span>মোট বাকি:</span> <span className="text-red-600">৳{Math.round(totals.finalTotalBalance).toLocaleString()}</span></p>
+                {deadlineDate && (
+                  <div className="mt-2 p-2 bg-rose-50 border border-rose-100 rounded-lg">
+                    <p className="text-[7px] font-black text-rose-600 uppercase leading-tight">পেমেন্ট ডেডলাইন (কমিশন শর্ত):</p>
+                    <p className="text-[10px] font-black text-rose-700 italic">
+                      {new Date(deadlineDate).toLocaleDateString('bn-BD')}
+                    </p>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -660,13 +685,18 @@ const Sales: React.FC<SalesProps> = ({ company, role, user }) => {
                       <td className="py-2">{idx + 1}</td>
                       <td className="py-2 uppercase">
                         <span>{it.name}</span>
-                        <span className="ml-2 text-[7px] font-black">MRP: ৳{it.mrp}</span>
-                        {it.action !== 'SALE' && <span className="ml-2 text-[7px] border border-black px-1 rounded uppercase">[{it.action}]</span>}
+                        <div className="flex gap-2 items-center mt-0.5 opacity-60">
+                          <span className="text-[7px] font-black">MRP: ৳{it.mrp}</span>
+                          {it.discountPercent > 0 && it.action === 'SALE' && (
+                            <span className="text-[7px] font-black text-blue-600">COMM: {it.discountPercent}%</span>
+                          )}
+                          {it.action !== 'SALE' && <span className="text-[7px] border border-black px-1 rounded uppercase">[{it.action}]</span>}
+                        </div>
                       </td>
                       <td className="py-2 text-center">৳{it.action === 'REPLACE' ? '0' : it.editedPrice}</td>
                       <td className="py-2 text-center">{it.qty}</td>
                       <td className="py-2 text-right">
-                        {it.action === 'REPLACE' ? '৳0' : (it.action === 'RETURN' ? '-' : '') + '৳' + Math.round(((it.editedPrice - (it.editedPrice * it.discountPercent / 100)) * it.qty)).toLocaleString()}
+                        {it.action === 'REPLACE' ? '৳0' : (it.action === 'RETURN' ? '-' : '') + '৳' + Math.round((it.editedPrice * it.qty)).toLocaleString()}
                       </td>
                     </tr>
                   ))}
@@ -676,12 +706,22 @@ const Sales: React.FC<SalesProps> = ({ company, role, user }) => {
 
             <div className="mt-8 flex justify-end">
               <div className="w-56 space-y-1 font-black italic text-[10px] text-black">
-                <div className="flex justify-between"><span>SUB-TOTAL:</span><span>৳{Math.round(totals.subtotal).toLocaleString()}</span></div>
-                {globalDiscount > 0 && <div className="flex justify-between text-red-600"><span>DISC ({globalDiscount}%):</span><span>-৳{Math.round(totals.globalDiscAmount).toLocaleString()}</span></div>}
+                <div className="flex justify-between"><span>SUB-TOTAL (TP):</span><span>৳{Math.round(totals.subtotal).toLocaleString()}</span></div>
+                {totals.totalCommission > 0 && (
+                  <div className="flex justify-between text-blue-600">
+                    <span>TOTAL COMMISSION 
+                      {globalCommission > 0 ? ` (${globalCommission}% Global)` : ''}:
+                    </span>
+                    <span>-৳{Math.round(totals.totalCommission).toLocaleString()}</span>
+                  </div>
+                )}
                 <div className="flex justify-between border-t-2 border-black pt-2 text-[15px] text-blue-600">
-                  <span className="uppercase">নিট বিল:</span>
+                  <span className="uppercase">নিট বিল (Payable):</span>
                   <span>৳{Math.round(totals.netTotal).toLocaleString()}</span>
                 </div>
+                {deadlineDate && (
+                  <p className="text-[7px] text-rose-600 font-black mt-2 leading-tight">* শর্ত: আগামী {new Date(deadlineDate).toLocaleDateString('bn-BD')} তারিখের মধ্যে মোট বকেয়া পরিশোধ করলে উপরের কমিশন কার্যকর হবে।</p>
+                )}
               </div>
             </div>
 
