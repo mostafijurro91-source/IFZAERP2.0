@@ -28,12 +28,16 @@ const Customers: React.FC<CustomerProps> = ({ company, role, userName }) => {
   const [ledgerHistory, setLedgerHistory] = useState<Transaction[]>([]);
   const [isSaving, setIsSaving] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
-  const [selectedMemo, setSelectedMemo] = useState<Transaction | null>(null);
   const [showMemoModal, setShowMemoModal] = useState(false);
+  const [showPolicyModal, setShowPolicyModal] = useState(false);
+  const [selectedPolicyTx, setSelectedPolicyTx] = useState<Transaction | null>(null);
+  const [newPolicyDate, setNewPolicyDate] = useState<string>("");
+  const [newPolicyStatus, setNewPolicyStatus] = useState<string>('PENDING');
 
   const [currentLedgerStats, setCurrentLedgerStats] = useState<CustomerFinancials>({ regularDue: 0, bookingAdvance: 0, totalSales: 0, totalPaid: 0 });
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
 
+  const [selectedMemo, setSelectedMemo] = useState<any>(null);
   const [areaSearch, setAreaSearch] = useState("");
   const [showAreaDropdown, setShowAreaDropdown] = useState(false);
   const areaDropdownRef = useRef<HTMLDivElement>(null);
@@ -224,6 +228,91 @@ const Customers: React.FC<CustomerProps> = ({ company, role, userName }) => {
       setCurrentLedgerStats({ regularDue: totalR, bookingAdvance: totalB, totalSales: lifetimeSales, totalPaid: lifetimePaid });
     } catch (err: any) {
       console.error('Error fetching ledger:', err);
+    }
+  };
+
+  const handleCompleteCommission = async (tx: Transaction) => {
+    if (!isAdmin || isSaving) return;
+    if (!confirm("কমিশনটি সম্পন্ন (COMPLETED) হিসেবে মার্ক করতে চান?")) return;
+
+    setIsSaving(true);
+    try {
+      const updatedMeta = { ...tx.meta, commission_status: 'COMPLETED' };
+      const { error } = await supabase.from('transactions').update({ meta: updatedMeta }).eq('id', tx.id);
+      if (error) throw error;
+      alert("কমিশন সফলভাবে সম্পন্ন হয়েছে! ✅");
+      if (selectedLedgerCust) fetchCustomerLedger(selectedLedgerCust);
+    } catch (err: any) {
+      alert("ত্রুটি: " + err.message);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleUpdatePolicy = async () => {
+    if (!selectedPolicyTx || isSaving || !isAdmin) return;
+    setIsSaving(true);
+    try {
+      const updatedMeta = {
+        ...(selectedPolicyTx.meta || {}),
+        commission_type: newPolicyDate ? 'CONDITIONAL' : 'IMMEDIATE',
+        expiry_date: newPolicyDate ? new Date(newPolicyDate).toISOString() : null,
+        commission_status: newPolicyStatus
+      };
+
+      const { error } = await supabase
+        .from('transactions')
+        .update({ meta: updatedMeta })
+        .eq('id', selectedPolicyTx.id);
+
+      if (error) throw error;
+      alert("পলিসি সফলভাবে আপডেট করা হয়েছে! ✅");
+      setShowPolicyModal(false);
+      if (selectedLedgerCust) fetchCustomerLedger(selectedLedgerCust);
+    } catch (err: any) {
+      alert("ত্রুটি: " + err.message);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleRevokeCommission = async (tx: Transaction) => {
+    if (!isAdmin || isSaving) return;
+    const memoIdShort = String(tx.id).slice(-6).toUpperCase();
+    const commAmt = Number(tx.meta?.total_commission) || 0;
+
+    if (!confirm(`কমিশন বাতিল নিশ্চিত? এতে কাস্টমারের বকেয়া ৳${commAmt.toLocaleString()} বেড়ে যাবে (মেমো #${memoIdShort})।`)) return;
+
+    setIsSaving(true);
+    try {
+      const dbCo = mapToDbCompany(company);
+      
+      // 1. Create adjustment transaction to add back the commission
+      const { error: txErr } = await supabase.from('transactions').insert([{
+        customer_id: tx.customer_id,
+        company: dbCo,
+        amount: commAmt,
+        payment_type: 'DUE',
+        items: [{ note: `কমিশন বাতিল (মেমো #${memoIdShort} সময়মতো বিল না দেওয়ার কারণে)` }],
+        submitted_by: userName,
+        meta: { 
+          related_tx_id: tx.id,
+          adjustment_type: 'COMMISSION_REVOCATION'
+        }
+      }]);
+      if (txErr) throw txErr;
+
+      // 2. Update the original transaction status
+      const updatedMeta = { ...tx.meta, commission_status: 'REVOKED' };
+      const { error: upErr } = await supabase.from('transactions').update({ meta: updatedMeta }).eq('id', tx.id);
+      if (upErr) throw upErr;
+
+      alert("কমিশন সফলভাবে বাতিল করা হয়েছে! ✅");
+      if (selectedLedgerCust) fetchCustomerLedger(selectedLedgerCust);
+    } catch (err: any) { 
+      alert("ত্রুটি: " + err.message); 
+    } finally { 
+      setIsSaving(false); 
     }
   };
 
@@ -591,7 +680,56 @@ const Customers: React.FC<CustomerProps> = ({ company, role, userName }) => {
                               ) : '-'}
                             </td>
                             <td className="py-4 text-center pr-4">
-                              <div className="flex gap-1 justify-center">
+                              <div className="flex gap-1 justify-center items-center">
+                                {tx.meta?.total_commission > 0 && (
+                                  <div className="flex flex-col items-center mr-2">
+                                    <div className="flex items-center gap-1">
+                                      <span className={`text-[8px] font-black uppercase px-2 py-0.5 rounded-full ${
+                                        tx.meta.commission_status === 'REVOKED' ? 'bg-rose-100 text-rose-600' : 
+                                        tx.meta.commission_status === 'COMPLETED' ? 'bg-emerald-100 text-emerald-600' : 'bg-blue-100 text-blue-600'
+                                      }`}>
+                                        Com: ৳{Math.round(tx.meta.total_commission).toLocaleString()}
+                                      </span>
+                                      {isAdmin && (
+                                        <button 
+                                          onClick={() => {
+                                            setSelectedPolicyTx(tx);
+                                            setNewPolicyDate(tx.meta.expiry_date ? new Date(tx.meta.expiry_date).toISOString().split('T')[0] : "");
+                                            setNewPolicyStatus(tx.meta.commission_status || 'PENDING');
+                                            setShowPolicyModal(true);
+                                          }}
+                                          className="text-[10px] opacity-40 hover:opacity-100 transition-opacity"
+                                          title="পলিসি পরিবর্তন"
+                                        >
+                                          ⚙️
+                                        </button>
+                                      )}
+                                    </div>
+                                    {tx.meta.commission_status === 'PENDING' && (
+                                      <div className="flex flex-col gap-1 mt-2">
+                                        <div className="flex gap-1">
+                                          <button 
+                                            onClick={() => handleCompleteCommission(tx)}
+                                            className="bg-emerald-600 text-white text-[7px] font-black px-2 py-1.5 rounded shadow-lg hover:bg-emerald-700 transition-all flex-1"
+                                          >
+                                            COMPLETE (সম্পন্ন)
+                                          </button>
+                                          <button 
+                                            onClick={() => handleRevokeCommission(tx)}
+                                            className="bg-rose-600 text-white text-[7px] font-black px-2 py-1.5 rounded shadow-lg hover:bg-rose-700 transition-all flex-1"
+                                          >
+                                            REVOKE (বাতিল)
+                                          </button>
+                                        </div>
+                                        {tx.meta.expiry_date && (
+                                          <p className={`text-[7px] font-black italic uppercase text-center ${new Date(tx.meta.expiry_date) < new Date() ? 'text-rose-600 animate-pulse' : 'text-slate-400'}`}>
+                                            Deadline: {new Date(tx.meta.expiry_date).toLocaleDateString('bn-BD')}
+                                          </p>
+                                        )}
+                                      </div>
+                                    )}
+                                  </div>
+                                )}
                                 {tx.items && tx.items.length > 0 && (
                                   <button
                                     onClick={() => { setSelectedMemo(tx); setShowMemoModal(true); }}
@@ -699,6 +837,50 @@ const Customers: React.FC<CustomerProps> = ({ company, role, userName }) => {
 
             <div className="text-center mt-auto pt-10">
               <p className="text-[7px] font-bold uppercase italic tracking-[0.2em] text-black">POWERED BY IFZAERP.COM</p>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* ⚙️ COMMISSION POLICY EDIT MODAL */}
+      {showPolicyModal && selectedPolicyTx && (
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-[6000] flex items-center justify-center p-4">
+          <div className="bg-white rounded-[3rem] w-full max-w-sm shadow-2xl overflow-hidden animate-reveal border border-white/20">
+            <div className="p-6 bg-slate-900 text-white flex justify-between items-center">
+              <h3 className="text-sm font-black uppercase italic tracking-tighter">কমিশন পলিসি পরিবর্তন</h3>
+              <button onClick={() => setShowPolicyModal(false)} className="text-xl font-black">✕</button>
+            </div>
+            <div className="p-8 space-y-6">
+              <div className="space-y-2">
+                <label className="text-[9px] font-black text-slate-400 uppercase italic ml-2">পেমেন্ট ডেডলাইন (শর্ত)</label>
+                <input 
+                  type="date"
+                  className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none font-bold text-sm"
+                  value={newPolicyDate}
+                  onChange={e => setNewPolicyDate(e.target.value)}
+                />
+                {!newPolicyDate && <p className="text-[8px] text-slate-500 italic mt-1 uppercase text-center">নগদ (Instant / Immediate)</p>}
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-[9px] font-black text-slate-400 uppercase italic ml-2">বর্তমান স্থিতি (Status)</label>
+                <select 
+                  className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none font-bold text-sm"
+                  value={newPolicyStatus}
+                  onChange={e => setNewPolicyStatus(e.target.value)}
+                >
+                  <option value="PENDING">বাকি (Pending)</option>
+                  <option value="COMPLETED">পরিশোধিত (Completed)</option>
+                  <option value="REVOKED">বাতিল (Revoked)</option>
+                </select>
+              </div>
+
+              <button 
+                onClick={handleUpdatePolicy}
+                disabled={isSaving}
+                className="w-full bg-blue-600 text-white py-5 rounded-2xl font-black uppercase text-[10px] tracking-widest shadow-xl active:scale-95 transition-all"
+              >
+                {isSaving ? 'আপডেট হচ্ছে...' : 'পরিবর্তন সেভ করুন ➔'}
+              </button>
             </div>
           </div>
         </div>
