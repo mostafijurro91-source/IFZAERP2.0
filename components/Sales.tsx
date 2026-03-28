@@ -154,10 +154,12 @@ const Sales: React.FC<SalesProps> = ({ company, role, user }) => {
 
   const addToCart = (p: Product) => {
     const existing = cart.find(i => i.id === p.id && i.action === 'SALE');
+    const defaultComm = p.commission_percent || 0;
+    
     if (existing) {
       setCart(cart.map(i => (i.id === p.id && i.action === 'SALE') ? { ...i, qty: i.qty + 1 } : i));
     } else {
-      setCart([...cart, { ...p, qty: 1, editedPrice: p.tp, discountPercent: 0, action: 'SALE' }]);
+      setCart([...cart, { ...p, qty: 1, editedPrice: p.tp, discountPercent: defaultComm, action: 'SALE' }]);
     }
     setProdSearch("");
   };
