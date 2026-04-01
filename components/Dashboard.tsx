@@ -141,6 +141,7 @@ const Dashboard: React.FC<DashboardProps> = ({ company, role }) => {
         regularDue: reg_due,
         bookingAdvance: book_adv,
         stockValue: sValue,
+        currentMonthSales: currSales,
         avgMonthSales: avgSales,
         avgMonthCollection: avgCollection,
         currentMonthTP: currMonthTP,
@@ -293,3 +294,23 @@ const Dashboard: React.FC<DashboardProps> = ({ company, role }) => {
                       </td>
                       <td className="px-8 py-5 text-slate-600 font-black italic text-[11px]">📱 {c.phone}</td>
                       <td className="px-8 py-5 text-right">
+                        <p className="font-black text-slate-700 italic">{c.lastTxDate.toLocaleDateString('bn-BD')}</p>
+                        <p className="text-[9px] text-rose-500 uppercase tracking-widest mt-1">[{daysInactive} days ago]</p>
+                      </td>
+                      <td className="px-8 py-5 text-right">
+                        <span className="font-black text-rose-600 italic text-xl tracking-tighter bg-rose-50 px-4 py-2 rounded-xl inline-block">{Math.round(c.due).toLocaleString()}৳</span>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+    </div>
+  );
+};
+
+export default Dashboard;
