@@ -10,7 +10,8 @@ interface DashboardProps {
 
 const Dashboard: React.FC<DashboardProps> = ({ company, role }) => {
   const [stats, setStats] = useState({
-    todaySales: 0, todayCollection: 0, regularDue: 0, bookingAdvance: 0, stockValue: 0, currentMonthSales: 0, avgMonthSales: 0, avgMonthCollection: 0
+    todaySales: 0, todayCollection: 0, regularDue: 0, bookingAdvance: 0, stockValue: 0, currentMonthSales: 0, avgMonthSales: 0, avgMonthCollection: 0,
+    currentMonthTP: 0, currentMonthMemo: 0, currentMonthOffer: 0
   });
   const [loading, setLoading] = useState(true);
   const [recentActivity, setRecentActivity] = useState<any[]>([]);
@@ -106,8 +107,22 @@ const Dashboard: React.FC<DashboardProps> = ({ company, role }) => {
       let totalSales = 0;
       let totalCollection = 0;
       let activeMonths = 0;
+      
+      let currMonthTP = 0, currMonthMemo = 0, currMonthOffer = 0;
 
       const currentMonthKey = `${today.getFullYear()}-${(today.getMonth() + 1).toString().padStart(2, '0')}`;
+      
+      txRes.data?.forEach(tx => {
+        const txMonth = tx.created_at.slice(0, 7);
+        if (txMonth === currentMonthKey && tx.payment_type === 'DUE') {
+          const amt = Number(tx.amount) || 0;
+          const comm = Number(tx.meta?.total_commission) || 0;
+          currMonthMemo += amt;
+          currMonthOffer += comm;
+          currMonthTP += (amt + comm);
+        }
+      });
+
       if (monthlyMap[currentMonthKey]) currSales = monthlyMap[currentMonthKey].sales;
 
       Object.values(monthlyMap).forEach(m => {
@@ -126,9 +141,11 @@ const Dashboard: React.FC<DashboardProps> = ({ company, role }) => {
         regularDue: reg_due,
         bookingAdvance: book_adv,
         stockValue: sValue,
-        currentMonthSales: currSales,
         avgMonthSales: avgSales,
-        avgMonthCollection: avgCollection
+        avgMonthCollection: avgCollection,
+        currentMonthTP: currMonthTP,
+        currentMonthMemo: currMonthMemo,
+        currentMonthOffer: currMonthOffer
       });
       setRecentActivity(recent.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).slice(0, 10));
       setMonthlyData(Object.values(monthlyMap));
@@ -163,7 +180,7 @@ const Dashboard: React.FC<DashboardProps> = ({ company, role }) => {
       </div>
 
       {/* 📊 Stat Cards Grid */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-8 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
         {[
           { label: 'আজকের বিক্রি', val: stats.todaySales, color: 'text-blue-600', icon: '🛒', bg: 'bg-blue-50' },
           { label: 'আজকের আদায়', val: stats.todayCollection, color: 'text-emerald-600', icon: '💰', bg: 'bg-emerald-50' },
@@ -172,12 +189,15 @@ const Dashboard: React.FC<DashboardProps> = ({ company, role }) => {
           { label: 'স্টক ভ্যালু', val: stats.stockValue, color: 'text-slate-900', icon: '📦', bg: 'bg-slate-100' },
           { label: 'চলতি মাসের সেল', val: stats.currentMonthSales, color: 'text-fuchsia-600', icon: '📈', bg: 'bg-fuchsia-50' },
           { label: 'গড় মাসিক সেল', val: stats.avgMonthSales, color: 'text-violet-600', icon: '📊', bg: 'bg-violet-50' },
-          { label: 'গড় মাসিক আদায়', val: stats.avgMonthCollection, color: 'text-teal-600', icon: '💸', bg: 'bg-teal-50' }
+          { label: 'গড় মাসিক আদায়', val: stats.avgMonthCollection, color: 'text-teal-600', icon: '💸', bg: 'bg-teal-50' },
+          { label: 'চলতি মাসের টিপিরেট', val: stats.currentMonthTP, color: 'text-blue-700', icon: '📉', bg: 'bg-blue-100' },
+          { label: 'চলতি মাসের ম্যামো', val: stats.currentMonthMemo, color: 'text-amber-600', icon: '📝', bg: 'bg-amber-50' },
+          { label: 'চলতি মাসের অফার', val: stats.currentMonthOffer, color: 'text-emerald-500', icon: '🏷️', bg: 'bg-emerald-100' }
         ].map((card, i) => (
-          <div key={i} className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-md hover:shadow-xl transition-all duration-700 hover:-translate-y-1 animate-reveal relative overflow-hidden group" style={{ animationDelay: `${i * 0.1}s` }}>
-            <div className={`absolute top-0 right-0 w-16 h-16 ${card.bg} rounded-bl-[2.5rem] -z-0 opacity-40 group-hover:scale-125 transition-transform`}></div>
-            <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-3 italic relative z-10 leading-none">{card.label}</p>
-            <p className={`text-lg md:text-xl font-black italic tracking-tighter ${card.color} leading-none relative z-10`}>{formatCurrency(card.val)}</p>
+          <div key={i} className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-md hover:shadow-2xl transition-all duration-700 hover:-translate-y-1 animate-reveal relative overflow-hidden group" style={{ animationDelay: `${i * 0.1}s` }}>
+            <div className={`absolute top-0 right-0 w-24 h-24 ${card.bg} rounded-bl-[4rem] -z-0 opacity-40 group-hover:scale-125 transition-transform`}></div>
+            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4 italic relative z-10 leading-none">{card.label}</p>
+            <p className={`text-xl md:text-2xl font-black italic tracking-tighter ${card.color} leading-none relative z-10`}>{formatCurrency(card.val)}</p>
           </div>
         ))}
       </div>
@@ -273,23 +293,3 @@ const Dashboard: React.FC<DashboardProps> = ({ company, role }) => {
                       </td>
                       <td className="px-8 py-5 text-slate-600 font-black italic text-[11px]">📱 {c.phone}</td>
                       <td className="px-8 py-5 text-right">
-                        <p className="font-black text-slate-700 italic">{c.lastTxDate.toLocaleDateString('bn-BD')}</p>
-                        <p className="text-[9px] text-rose-500 uppercase tracking-widest mt-1">[{daysInactive} days ago]</p>
-                      </td>
-                      <td className="px-8 py-5 text-right">
-                        <span className="font-black text-rose-600 italic text-xl tracking-tighter bg-rose-50 px-4 py-2 rounded-xl inline-block">{Math.round(c.due).toLocaleString()}৳</span>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-
-    </div>
-  );
-};
-
-export default Dashboard;
