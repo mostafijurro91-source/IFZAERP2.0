@@ -38,11 +38,11 @@ const Dashboard: React.FC<DashboardProps> = ({ company, role }) => {
       let dueTxCount = 0; // For temporary debugging
 
       const recent: any[] = [];
-      const monthlyMap: Record<string, { month: string, sales: number, collection: number, returns: number }> = {};
+      const monthlyMap: Record<string, { month: string, sales: number, tpSales: number, collection: number, returns: number }> = {};
       const monthNames = ["জানুয়ারি", "ফেব্রুয়ারি", "মার্চ", "এপ্রিল", "মে", "জুন", "জুলাই", "আগস্ট", "সেপ্টেম্বর", "অক্টোবর", "নভেম্বর", "ডিসেম্বর"];
       monthNames.forEach((name, idx) => {
         const key = `${today.getFullYear()}-${(idx + 1).toString().padStart(2, '0')}`;
-        monthlyMap[key] = { month: name, sales: 0, collection: 0, returns: 0 };
+        monthlyMap[key] = { month: name, sales: 0, tpSales: 0, collection: 0, returns: 0 };
       });
 
       const customerStatsMap: Record<string, { name: string, phone: string, address: string, due: number, lastTxDate: Date }> = {};
@@ -91,7 +91,11 @@ const Dashboard: React.FC<DashboardProps> = ({ company, role }) => {
           if (txDateStr === todayStr) t_sales += amt;
           reg_due += amt;
           if (cid) customerStatsMap[cid].due += amt;
-          if (monthlyMap[txMonth]) monthlyMap[txMonth].sales += amt;
+          if (monthlyMap[txMonth]) {
+            monthlyMap[txMonth].sales += amt;
+            const comm = Number(tx.meta?.total_commission) || 0;
+            monthlyMap[txMonth].tpSales += (amt + comm);
+          }
         }
         if (txDateStr === todayStr) {
           const cust = Array.isArray(tx.customers) ? tx.customers[0] : tx.customers;
@@ -214,17 +218,21 @@ const Dashboard: React.FC<DashboardProps> = ({ company, role }) => {
             <table className="w-full text-left">
               <thead>
                 <tr className="text-[8px] font-black text-slate-300 uppercase tracking-widest border-b border-slate-50">
-                  <th className="px-6 py-4">Month Index</th>
-                  <th className="px-6 py-4 text-center">Sales Vol.</th>
-                  <th className="px-6 py-4 text-center">Returns</th>
-                  <th className="px-6 py-4 text-right">Collection</th>
+                  <th className="px-6 py-4">মাস (Month Index)</th>
+                  <th className="px-6 py-4 text-center">টিপিরেট (TP)</th>
+                  <th className="px-6 py-4 text-center">ম্যামো (Memo)</th>
+                  <th className="px-6 py-4 text-center">অফার (Offer)</th>
+                  <th className="px-6 py-4 text-center">রিটার্ন</th>
+                  <th className="px-6 py-4 text-right">আদায়</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50 text-[11px] font-bold uppercase italic">
                 {monthlyData.map((d, i) => (
                   <tr key={i} className="hover:bg-indigo-50/20 transition-all group">
                     <td className="px-6 py-4 text-slate-700 font-black">{d.month}</td>
+                    <td className="px-6 py-4 text-center text-blue-600 font-black">{Math.round(d.tpSales).toLocaleString()}৳</td>
                     <td className="px-6 py-4 text-center text-slate-900">{Math.round(d.sales).toLocaleString()}৳</td>
+                    <td className="px-6 py-4 text-center text-emerald-500">{Math.round(d.tpSales - d.sales).toLocaleString()}৳</td>
                     <td className="px-6 py-4 text-center text-rose-500">{d.returns > 0 ? `-${Math.round(d.returns).toLocaleString()}৳` : '-'}</td>
                     <td className="px-6 py-4 text-right text-emerald-600 font-black">+{Math.round(d.collection).toLocaleString()}৳</td>
                   </tr>
