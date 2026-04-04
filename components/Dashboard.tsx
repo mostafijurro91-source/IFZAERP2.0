@@ -11,7 +11,7 @@ interface DashboardProps {
 const Dashboard: React.FC<DashboardProps> = ({ company, role }) => {
   const [stats, setStats] = useState({
     todaySales: 0, todayCollection: 0, regularDue: 0, bookingAdvance: 0, stockValue: 0, currentMonthSales: 0, avgMonthSales: 0, avgMonthCollection: 0,
-    currentMonthTP: 0, currentMonthMemo: 0, currentMonthOffer: 0
+    currentMonthTP: 0, currentMonthMemo: 0, currentMonthOffer: 0, currentMonthGift: 0
   });
   const [loading, setLoading] = useState(true);
   const [recentActivity, setRecentActivity] = useState<any[]>([]);
@@ -112,7 +112,7 @@ const Dashboard: React.FC<DashboardProps> = ({ company, role }) => {
       let totalCollection = 0;
       let activeMonths = 0;
       
-      let currMonthTP = 0, currMonthMemo = 0, currMonthOffer = 0;
+      let currMonthTP = 0, currMonthMemo = 0, currMonthOffer = 0, currMonthGift = 0;
 
       const currentMonthKey = `${today.getFullYear()}-${(today.getMonth() + 1).toString().padStart(2, '0')}`;
       
@@ -121,8 +121,10 @@ const Dashboard: React.FC<DashboardProps> = ({ company, role }) => {
         if (txMonth === currentMonthKey && tx.payment_type === 'DUE') {
           const amt = Number(tx.amount) || 0;
           const comm = Number(tx.meta?.total_commission) || 0;
+          const gift = Number(tx.meta?.total_gift) || 0;
           currMonthMemo += amt;
           currMonthOffer += comm;
+          currMonthGift += gift;
           currMonthTP += (amt + comm);
         }
       });
@@ -150,7 +152,8 @@ const Dashboard: React.FC<DashboardProps> = ({ company, role }) => {
         avgMonthCollection: avgCollection,
         currentMonthTP: currMonthTP,
         currentMonthMemo: currMonthMemo,
-        currentMonthOffer: currMonthOffer
+        currentMonthOffer: currMonthOffer,
+        currentMonthGift: currMonthGift
       });
       setRecentActivity(recent.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).slice(0, 10));
       setMonthlyData(Object.values(monthlyMap));
@@ -197,7 +200,8 @@ const Dashboard: React.FC<DashboardProps> = ({ company, role }) => {
           { label: 'গড় মাসিক আদায়', val: stats.avgMonthCollection, color: 'text-teal-600', icon: '💸', bg: 'bg-teal-50' },
           { label: 'চলতি মাসের টিপিরেট', val: stats.currentMonthTP, color: 'text-blue-700', icon: '📉', bg: 'bg-blue-100' },
           { label: 'চলতি মাসের ম্যামো', val: stats.currentMonthMemo, color: 'text-amber-600', icon: '📝', bg: 'bg-amber-50' },
-          { label: 'চলতি মাসের অফার', val: stats.currentMonthOffer, color: 'text-emerald-500', icon: '🏷️', bg: 'bg-emerald-100' }
+          { label: 'চলতি মাসের কমিশন', val: stats.currentMonthOffer, color: 'text-emerald-500', icon: '🏷️', bg: 'bg-emerald-100' },
+          { label: 'চলতি মাসের মোট গিফট', val: stats.currentMonthGift, color: 'text-pink-500', icon: '🎁', bg: 'bg-pink-50' }
         ].map((card, i) => (
           <div key={i} className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-md hover:shadow-2xl transition-all duration-700 hover:-translate-y-1 animate-reveal relative overflow-hidden group" style={{ animationDelay: `${i * 0.1}s` }}>
             <div className={`absolute top-0 right-0 w-24 h-24 ${card.bg} rounded-bl-[4rem] -z-0 opacity-40 group-hover:scale-125 transition-transform`}></div>
@@ -221,7 +225,7 @@ const Dashboard: React.FC<DashboardProps> = ({ company, role }) => {
                   <th className="px-6 py-4">মাস (Month Index)</th>
                   <th className="px-6 py-4 text-center">টিপিরেট (TP)</th>
                   <th className="px-6 py-4 text-center">ম্যামো (Memo)</th>
-                  <th className="px-6 py-4 text-center">অফার (Offer)</th>
+                  <th className="px-6 py-4 text-center">কমিশন (Comm)</th>
                   <th className="px-6 py-4 text-center">রিটার্ন</th>
                   <th className="px-6 py-4 text-right">আদায়</th>
                 </tr>
