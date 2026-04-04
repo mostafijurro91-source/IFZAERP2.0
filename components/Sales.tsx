@@ -11,7 +11,7 @@ type ItemAction = 'SALE' | 'RETURN' | 'REPLACE';
 
 interface CartItem extends Product {
   qty: number;
-  editedPrice: number;
+  sellingPrice: number;
   discountPercent: number;
   action: ItemAction;
 }
@@ -50,6 +50,7 @@ const Sales: React.FC<SalesProps> = ({ company, role, user }) => {
 
   // New states for Commission & Deadline
   const [deadlineDate, setDeadlineDate] = useState<string>(""); 
+  const [giftAmount, setGiftAmount] = useState<number>(0); 
 
   const invoiceRef = useRef<HTMLDivElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -159,7 +160,7 @@ const Sales: React.FC<SalesProps> = ({ company, role, user }) => {
     if (existing) {
       setCart(cart.map(i => (i.id === p.id && i.action === 'SALE') ? { ...i, qty: i.qty + 1 } : i));
     } else {
-      setCart([...cart, { ...p, qty: 1, editedPrice: p.tp, discountPercent: defaultComm, action: 'SALE' }]);
+      setCart([...cart, { ...p, qty: 1, sellingPrice: p.tp, discountPercent: defaultComm, action: 'SALE' }]);
     }
     setProdSearch("");
   };
@@ -167,7 +168,15 @@ const Sales: React.FC<SalesProps> = ({ company, role, user }) => {
   const updateCartItem = (idx: number, updates: Partial<CartItem>) => {
     setCart(prev => {
       const next = [...prev];
-      next[idx] = { ...next[idx], ...updates };
+      const item = { ...next[idx], ...updates };
+
+      if (updates.sellingPrice !== undefined) {
+        item.discountPercent = item.tp > 0 ? ((item.tp - updates.sellingPrice) / item.tp) * 100 : 0;
+      } else if (updates.discountPercent !== undefined) {
+        item.sellingPrice = item.tp - (item.tp * updates.discountPercent / 100);
+      }
+
+      next[idx] = item;
       return next.filter(i => i.qty > 0 || (i.qty === 0 && updates.qty === undefined));
     });
   };
@@ -179,20 +188,19 @@ const Sales: React.FC<SalesProps> = ({ company, role, user }) => {
   const totals = useMemo(() => {
     const subtotalBeforeCommission = cart.reduce((sum: number, i: CartItem) => {
       if (i.action === 'REPLACE') return sum;
-      const itemPrice = Number(i.editedPrice); // This is TP in our case
+      const itemPrice = Number(i.tp); // Full TP value
       const lineTotal = itemPrice * i.qty;
       return sum + (i.action === 'RETURN' ? -lineTotal : lineTotal);
     }, 0);
 
-    // 1. Calculate Item-specific commissions
     const itemCommissionTotal = cart.reduce((sum: number, i: CartItem) => {
       if (i.action !== 'SALE') return sum;
-      const itemPrice = Number(i.editedPrice);
-      const commission = (itemPrice * Number(i.discountPercent)) / 100;
-      return sum + (commission * i.qty);
+      const tpPrice = Number(i.tp);
+      const sellPrice = Number(i.sellingPrice);
+      const commissionPerUnit = tpPrice - sellPrice;
+      return sum + (commissionPerUnit * i.qty);
     }, 0);
 
-    // 2. Calculate Global commission (on subtotal after item discounts or before? Let's do before as per user preference)
     const globalCommissionAmount = (subtotalBeforeCommission > 0) ? (subtotalBeforeCommission * globalCommission) / 100 : 0;
 
     const totalCommission = itemCommissionTotal + globalCommissionAmount;
@@ -210,13 +218,13 @@ const Sales: React.FC<SalesProps> = ({ company, role, user }) => {
     try {
       const itemsToSave = cart.map((i: CartItem) => {
         const isReplace = i.action === 'REPLACE';
-        const price = isReplace ? 0 : Number(i.editedPrice);
-        const discount = isReplace ? 0 : Number(i.discountPercent);
-        const itemTotal = isReplace ? 0 : (i.action === 'RETURN' ? -1 : 1) * (price - (price * discount / 100)) * i.qty;
+        const price = isReplace ? 0 : Number(i.sellingPrice);
+        const tpRate = isReplace ? 0 : Number(i.tp);
+        const itemTotal = isReplace ? 0 : (i.action === 'RETURN' ? -1 : 1) * price * i.qty;
 
         return {
-          id: i.id, name: i.name, qty: i.qty, price, mrp: i.mrp,
-          discount, action: i.action, total: itemTotal
+          id: i.id, name: i.name, qty: i.qty, price, mrp: i.mrp, tp: tpRate,
+          discount: i.discountPercent, action: i.action, total: itemTotal
         };
       });
 
@@ -231,6 +239,7 @@ const Sales: React.FC<SalesProps> = ({ company, role, user }) => {
         submitted_by: user.name,
         meta: {
           total_commission: totals.totalCommission,
+          total_gift: giftAmount,
           commission_percent_global: globalCommission,
           commission_percent_item: cart.map(it => it.discountPercent),
           commission_type: deadlineDate ? 'CONDITIONAL' : 'IMMEDIATE',
@@ -476,35 +485,44 @@ const Sales: React.FC<SalesProps> = ({ company, role, user }) => {
                     <button onClick={() => removeItem(idx)} className="text-slate-500 hover:text-red-500 text-xl ml-2">×</button>
                   </div>
 
-                  <div className="grid grid-cols-4 gap-2 items-center">
+                  <div className="grid grid-cols-5 gap-1.5 items-center">
                     <div className="space-y-1">
-                      <label className="text-[7px] font-black uppercase text-slate-500 block text-center italic">পরিমাণ</label>
+                      <label className="text-[6.5px] font-black uppercase text-slate-500 block text-center italic">পিস (Qty)</label>
                       <input type="number" className="w-full bg-black/40 p-2 rounded-xl text-center text-[10px] font-bold text-white outline-none" value={item.qty} onChange={e => updateCartItem(idx, { qty: Number(e.target.value) })} />
                     </div>
                     <div className="space-y-1">
-                      <label className="text-[7px] font-black uppercase text-slate-500 block text-center italic">রেট (TP)</label>
+                      <label className="text-[6.5px] font-black uppercase text-slate-500 block text-center italic">টিপি (TP)</label>
                       <input
                         type="number"
-                        disabled={item.action === 'REPLACE'}
-                        className={`w-full p-2 rounded-xl text-center text-[10px] font-bold text-white outline-none ${item.action === 'REPLACE' ? 'bg-white/5 text-slate-500' : 'bg-black/40'}`}
-                        value={item.editedPrice}
-                        onChange={e => updateCartItem(idx, { editedPrice: Number(e.target.value) })}
+                        disabled
+                        className="w-full p-2 rounded-xl text-center text-[10px] font-bold text-slate-500 outline-none bg-white/5"
+                        value={item.tp}
                       />
                     </div>
                     <div className="space-y-1">
-                      <label className="text-[7px] font-black uppercase text-slate-500 block text-center italic">ডিসকাউন্ট %</label>
+                      <label className="text-[6.5px] font-black uppercase text-blue-400 block text-center italic font-bold">বিক্রয় রেট</label>
+                      <input
+                        type="number"
+                        disabled={item.action === 'REPLACE'}
+                        className={`w-full p-2 rounded-xl text-center text-[10px] font-bold text-white outline-none ${item.action === 'REPLACE' ? 'bg-white/5 text-slate-500' : 'bg-black/40 border border-blue-500/30'}`}
+                        value={item.sellingPrice}
+                        onChange={e => updateCartItem(idx, { sellingPrice: Number(e.target.value) })}
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[6.5px] font-black uppercase text-slate-500 block text-center italic">ডিসকাউন্ট %</label>
                       <input
                         type="number"
                         disabled={item.action === 'REPLACE'}
                         className={`w-full p-2 rounded-xl text-center text-[10px] font-bold text-emerald-400 outline-none ${item.action === 'REPLACE' ? 'bg-white/5 opacity-20' : 'bg-black/40'}`}
-                        value={item.discountPercent}
+                        value={Math.round(item.discountPercent || 0)}
                         onChange={e => updateCartItem(idx, { discountPercent: Number(e.target.value) })}
                       />
                     </div>
                     <div className="flex flex-col gap-1">
-                      <button onClick={() => updateCartItem(idx, { action: 'SALE', editedPrice: item.tp })} title="Sell" className={`py-1 rounded text-[8px] font-black border transition-all ${item.action === 'SALE' ? 'bg-blue-600 border-blue-600 text-white shadow-lg' : 'bg-white/5 border-white/5 text-slate-500'}`}>S</button>
-                      <button onClick={() => updateCartItem(idx, { action: 'RETURN', editedPrice: item.tp })} title="Return" className={`py-1 rounded text-[8px] font-black border transition-all ${item.action === 'RETURN' ? 'bg-red-600 border-red-600 text-white shadow-lg' : 'bg-white/5 border-white/5 text-slate-500'}`}>R</button>
-                      <button onClick={() => updateCartItem(idx, { action: 'REPLACE', editedPrice: 0, discountPercent: 0 })} title="Replace" className={`py-1 rounded text-[8px] font-black border transition-all ${item.action === 'REPLACE' ? 'bg-cyan-600 border-cyan-600 text-white shadow-lg' : 'bg-white/5 border-white/5 text-slate-500'}`}>Rp</button>
+                      <button onClick={() => updateCartItem(idx, { action: 'SALE', sellingPrice: item.tp })} title="Sell" className={`py-1 rounded text-[8px] font-black border transition-all ${item.action === 'SALE' ? 'bg-blue-600 border-blue-600 text-white shadow-lg' : 'bg-white/5 border-white/5 text-slate-500'}`}>S</button>
+                      <button onClick={() => updateCartItem(idx, { action: 'RETURN', sellingPrice: item.tp })} title="Return" className={`py-1 rounded text-[8px] font-black border transition-all ${item.action === 'RETURN' ? 'bg-red-600 border-red-600 text-white shadow-lg' : 'bg-white/5 border-white/5 text-slate-500'}`}>R</button>
+                      <button onClick={() => updateCartItem(idx, { action: 'REPLACE', sellingPrice: 0, discountPercent: 0 })} title="Replace" className={`py-1 rounded text-[8px] font-black border transition-all ${item.action === 'REPLACE' ? 'bg-cyan-600 border-cyan-600 text-white shadow-lg' : 'bg-white/5 border-white/5 text-slate-500'}`}>Rp</button>
                     </div>
                   </div>
                 </div>
@@ -527,6 +545,11 @@ const Sales: React.FC<SalesProps> = ({ company, role, user }) => {
                   />
                   {!deadlineDate && <p className="text-[7px] text-slate-500 text-center uppercase font-bold mt-1">নগদ (Instant)</p>}
                 </div>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[8px] font-black text-rose-400 uppercase ml-2 italic">গোপন গিফট ভ্যালু (Gift)</label>
+                <input type="number" placeholder="0" className="w-full bg-white/5 p-4 rounded-2xl text-center font-black text-rose-400 text-lg shadow-inner" value={giftAmount || ""} onChange={e => setGiftAmount(Number(e.target.value))} />
               </div>
 
               <div className="space-y-1">
@@ -695,10 +718,10 @@ const Sales: React.FC<SalesProps> = ({ company, role, user }) => {
                           {it.action !== 'SALE' && <span className="text-[7px] border border-black px-1 rounded uppercase">[{it.action}]</span>}
                         </div>
                       </td>
-                      <td className="py-2 text-center">৳{it.action === 'REPLACE' ? '0' : it.editedPrice}</td>
+                      <td className="py-2 text-center">৳{it.action === 'REPLACE' ? '0' : it.sellingPrice}</td>
                       <td className="py-2 text-center">{it.qty}</td>
                       <td className="py-2 text-right">
-                        {it.action === 'REPLACE' ? '৳0' : (it.action === 'RETURN' ? '-' : '') + '৳' + Math.round((it.editedPrice * it.qty)).toLocaleString()}
+                        {it.action === 'REPLACE' ? '৳0' : (it.action === 'RETURN' ? '-' : '') + '৳' + Math.round((it.sellingPrice * it.qty)).toLocaleString()}
                       </td>
                     </tr>
                   ))}
@@ -720,6 +743,9 @@ const Sales: React.FC<SalesProps> = ({ company, role, user }) => {
                 <div className="flex justify-between border-t-2 border-black pt-2 text-[15px] text-blue-600">
                   <span className="uppercase">নিট বিল (Payable):</span>
                   <span>৳{Math.round(totals.netTotal).toLocaleString()}</span>
+                </div>
+                <div className="mt-4 pt-2 border-t border-slate-200">
+                  <p className="text-[9px] font-black text-rose-600 italic text-center">** এই পণ্যের সাথে গিফট ধার্য করা হয়েছে।</p>
                 </div>
                 {deadlineDate && (
                   <p className="text-[7px] text-rose-600 font-black mt-2 leading-tight">* শর্ত: আগামী {new Date(deadlineDate).toLocaleDateString('bn-BD')} তারিখের মধ্যে মোট বকেয়া পরিশোধ করলে উপরের কমিশন কার্যকর হবে।</p>
