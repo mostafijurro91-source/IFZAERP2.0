@@ -528,40 +528,38 @@ const Sales: React.FC<SalesProps> = ({ company, role, user }) => {
               ))}
             </div>
 
-            <div className="p-8 bg-black/40 border-t border-white/10 space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1">
-                  <label className="text-[8px] font-black text-slate-500 uppercase ml-2 italic">গ্লোবাল কমিশন %</label>
-                  <input type="number" placeholder="0" className="w-full bg-white/5 p-4 rounded-2xl text-center font-black text-white text-lg" value={globalCommission || ""} onChange={e => setGlobalCommission(Number(e.target.value))} />
+            <div className="p-4 bg-black/40 border-t border-white/10 space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-0.5">
+                  <label className="text-[7px] font-black text-slate-500 uppercase ml-2 italic">গ্লোবাল কমিশন %</label>
+                  <input type="number" placeholder="0" className="w-full bg-white/5 p-2 rounded-xl text-center font-black text-white text-base" value={globalCommission || ""} onChange={e => setGlobalCommission(Number(e.target.value))} />
                 </div>
-                <div className="space-y-1">
-                  <label className="text-[8px] font-black text-blue-500 uppercase ml-2 italic">পেমেন্ট ডেডলাইন (শর্ত)</label>
+                <div className="space-y-0.5 relative">
+                  <label className="text-[7px] font-black text-blue-500 uppercase ml-2 italic">পেমেন্ট ডেডলাইন (শর্ত)</label>
                   <input 
                     type="date"
-                    className="w-full bg-white/5 p-4 rounded-2xl text-center font-black text-white text-[11px] outline-none border border-white/5 focus:border-blue-500" 
+                    className="w-full bg-white/5 p-2 rounded-xl text-center font-black text-white text-[10px] outline-none border border-white/5 focus:border-blue-500" 
                     value={deadlineDate} 
                     onChange={e => setDeadlineDate(e.target.value)}
                   />
-                  {!deadlineDate && <p className="text-[7px] text-slate-500 text-center uppercase font-bold mt-1">নগদ (Instant)</p>}
+                  {!deadlineDate && <p className="absolute -bottom-2 right-2 text-[6px] text-slate-500 uppercase font-bold">নগদ (Instant)</p>}
+                </div>
+                <div className="space-y-0.5">
+                  <label className="text-[7px] font-black text-rose-400 uppercase ml-2 italic">গোপন গিফট ভ্যালু (Gift)</label>
+                  <input type="number" placeholder="0" className="w-full bg-white/5 p-2 rounded-xl text-center font-black text-rose-400 text-base shadow-inner" value={giftAmount || ""} onChange={e => setGiftAmount(Number(e.target.value))} />
+                </div>
+                <div className="space-y-0.5">
+                  <label className="text-[7px] font-black text-emerald-500 uppercase ml-2 italic">আজকের জমা (নগদ)</label>
+                  <input type="number" placeholder="0" className="w-full bg-white/5 p-2 rounded-xl text-center font-black text-emerald-400 text-base shadow-inner" value={cashReceived || ""} onChange={e => setCashReceived(Number(e.target.value))} />
                 </div>
               </div>
 
-              <div className="space-y-1">
-                <label className="text-[8px] font-black text-rose-400 uppercase ml-2 italic">গোপন গিফট ভ্যালু (Gift)</label>
-                <input type="number" placeholder="0" className="w-full bg-white/5 p-4 rounded-2xl text-center font-black text-rose-400 text-lg shadow-inner" value={giftAmount || ""} onChange={e => setGiftAmount(Number(e.target.value))} />
-              </div>
-
-              <div className="space-y-1">
-                <label className="text-[8px] font-black text-emerald-500 uppercase ml-2 italic">আজকের জমা (নগদ)</label>
-                <input type="number" placeholder="0" className="w-full bg-white/5 p-4 rounded-2xl text-center font-black text-emerald-400 text-lg shadow-inner" value={cashReceived || ""} onChange={e => setCashReceived(Number(e.target.value))} />
-              </div>
-
-              <div className="flex justify-between items-end pt-4">
+              <div className="flex justify-between items-center pt-2 border-t border-white/5">
                 <div>
-                  <p className="text-[9px] font-black text-slate-500 uppercase italic mb-1 tracking-widest">Grand Total (Commission subtract)</p>
-                  <p className="text-4xl font-black italic tracking-tighter text-white">{formatCurrency(totals.netTotal)}</p>
+                  <p className="text-[8px] font-black text-slate-500 uppercase italic leading-none mb-1">Grand Total</p>
+                  <p className="text-2xl font-black italic tracking-tighter text-white">{formatCurrency(totals.netTotal)}</p>
                 </div>
-                <button disabled={cart.length === 0 || !selectedCust} onClick={() => setShowInvoicePreview(true)} className="bg-blue-600 text-white px-10 py-6 rounded-3xl font-black uppercase text-xs shadow-2xl active:scale-95 transition-all">মেমো প্রিভিউ ➔</button>
+                <button disabled={cart.length === 0 || !selectedCust} onClick={() => setShowInvoicePreview(true)} className="bg-blue-600 text-white px-6 py-4 rounded-2xl font-black uppercase text-[10px] shadow-2xl active:scale-95 transition-all">মেমো প্রিভিউ ➔</button>
               </div>
             </div>
           </div>
