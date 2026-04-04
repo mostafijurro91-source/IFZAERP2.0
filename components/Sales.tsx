@@ -474,47 +474,46 @@ const Sales: React.FC<SalesProps> = ({ company, role, user }) => {
               <button onClick={() => { setCart([]); setGlobalCommission(0); setCashReceived(0); }} className="text-[9px] font-black uppercase text-rose-400">রিসেট</button>
             </div>
 
-            <div className="flex-1 overflow-y-auto p-4 space-y-3 custom-scroll">
+            <div className="flex-1 overflow-y-auto p-4 space-y-2 custom-scroll">
               {cart.map((item, idx) => (
-                <div key={`${item.id}-${idx}`} className={`p-4 rounded-2xl border transition-all ${item.action === 'SALE' ? 'bg-white/5 border-white/5' : item.action === 'RETURN' ? 'bg-red-500/10 border-red-500/20' : 'bg-cyan-500/10 border-cyan-500/20'}`}>
-                  <div className="flex justify-between items-start mb-3">
-                    <div className="min-w-0 flex-1">
-                      <p className="text-[10px] font-black uppercase italic text-slate-100 truncate">{item.name}</p>
-                      <p className="text-[8px] font-bold text-slate-500 uppercase mt-1">MRP: ৳{item.mrp}</p>
+                <div key={`${item.id}-${idx}`} className={`p-2 rounded-xl border transition-all ${item.action === 'SALE' ? 'bg-white/5 border-white/5' : item.action === 'RETURN' ? 'bg-red-500/10 border-red-500/20' : 'bg-cyan-500/10 border-cyan-500/20'}`}>
+                  <div className="flex justify-between items-center mb-1.5 px-1">
+                    <div className="min-w-0 flex-1 flex items-center gap-2">
+                      <p className="text-[9px] font-black uppercase italic text-slate-100 truncate">{item.name}</p>
+                      <span className="text-[7px] font-bold text-slate-500 uppercase whitespace-nowrap">M: ৳{item.mrp}</span>
                     </div>
-                    <button onClick={() => removeItem(idx)} className="text-slate-500 hover:text-red-500 text-xl ml-2">×</button>
+                    <button onClick={() => removeItem(idx)} className="text-slate-500 hover:text-red-500 text-lg ml-2 leading-none">×</button>
                   </div>
 
-                  <div className="grid grid-cols-5 gap-1.5 items-center">
-                    <div className="space-y-1">
-                      <label className="text-[6.5px] font-black uppercase text-slate-500 block text-center italic">পিস (Qty)</label>
-                      <input type="number" className="w-full bg-black/40 p-2 rounded-xl text-center text-[10px] font-bold text-white outline-none" value={item.qty} onChange={e => updateCartItem(idx, { qty: Number(e.target.value) })} />
+                  <div className="grid grid-cols-5 gap-1 items-center">
+                    <div>
+                      <input type="number" className="w-full bg-black/40 p-1.5 rounded-lg text-center text-[9px] font-bold text-white outline-none" title="পিস (Qty)" value={item.qty} onChange={e => updateCartItem(idx, { qty: Number(e.target.value) })} />
                     </div>
-                    <div className="space-y-1">
-                      <label className="text-[6.5px] font-black uppercase text-slate-500 block text-center italic">টিপি (TP)</label>
+                    <div>
                       <input
                         type="number"
                         disabled
-                        className="w-full p-2 rounded-xl text-center text-[10px] font-bold text-slate-500 outline-none bg-white/5"
+                        title="টিপি (TP)"
+                        className="w-full p-1.5 rounded-lg text-center text-[9px] font-bold text-slate-500 outline-none bg-white/5"
                         value={item.tp}
                       />
                     </div>
-                    <div className="space-y-1">
-                      <label className="text-[6.5px] font-black uppercase text-blue-400 block text-center italic font-bold">বিক্রয় রেট</label>
+                    <div>
                       <input
                         type="number"
                         disabled={item.action === 'REPLACE'}
-                        className={`w-full p-2 rounded-xl text-center text-[10px] font-bold text-white outline-none ${item.action === 'REPLACE' ? 'bg-white/5 text-slate-500' : 'bg-black/40 border border-blue-500/30'}`}
+                        title="বিক্রয় রেট"
+                        className={`w-full p-1.5 rounded-lg text-center text-[9px] font-bold text-white outline-none ${item.action === 'REPLACE' ? 'bg-white/5 text-slate-500' : 'bg-black/40 border border-blue-500/30'}`}
                         value={item.sellingPrice}
                         onChange={e => updateCartItem(idx, { sellingPrice: Number(e.target.value) })}
                       />
                     </div>
-                    <div className="space-y-1">
-                      <label className="text-[6.5px] font-black uppercase text-slate-500 block text-center italic">ডিসকাউন্ট %</label>
+                    <div>
                       <input
                         type="number"
                         disabled={item.action === 'REPLACE'}
-                        className={`w-full p-2 rounded-xl text-center text-[10px] font-bold text-emerald-400 outline-none ${item.action === 'REPLACE' ? 'bg-white/5 opacity-20' : 'bg-black/40'}`}
+                        title="ডিসকাউন্ট %"
+                        className={`w-full p-1.5 rounded-lg text-center text-[9px] font-bold text-emerald-400 outline-none ${item.action === 'REPLACE' ? 'bg-white/5 opacity-20' : 'bg-black/40'}`}
                         value={Math.round(item.discountPercent || 0)}
                         onChange={e => updateCartItem(idx, { discountPercent: Number(e.target.value) })}
                       />
