@@ -13,7 +13,7 @@ interface ReportsProps {
   userName?: string;
 }
 
-type ReportType = 'MAIN' | 'CUSTOMER_DUES' | 'STOCK_REPORT' | 'DELIVERY_LOG_A4' | 'PURCHASE_HISTORY' | 'BOOKING_LOG' | 'COLLECTION_REPORT';
+type ReportType = 'MAIN' | 'CUSTOMER_DUES' | 'STOCK_REPORT' | 'DELIVERY_LOG_A4' | 'PURCHASE_HISTORY' | 'BOOKING_LOG' | 'COLLECTION_REPORT' | 'CUSTOMER_LEDGER';
 
 const Reports: React.FC<ReportsProps> = ({ company, userRole, userName }) => {
   const [activeReport, setActiveReport] = useState<ReportType>('MAIN');
@@ -25,14 +25,26 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName }) => {
   const [selectedMemo, setSelectedMemo] = useState<any>(null);
   const [showMemoModal, setShowMemoModal] = useState(false);
 
+  const [selectedCustomerId, setSelectedCustomerId] = useState<string>("");
+  const [ledgerCustomers, setLedgerCustomers] = useState<any[]>([]);
+
   const reportRef = useRef<HTMLDivElement>(null);
   const memoRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (activeReport !== 'MAIN') {
-      fetchReport(activeReport);
+      if (activeReport === 'CUSTOMER_LEDGER') {
+        loadLedgerCustomers();
+      } else {
+        fetchReport(activeReport);
+      }
     }
-  }, [activeReport, company, selectedDate]);
+  }, [activeReport, company, selectedDate, selectedCustomerId]);
+
+  const loadLedgerCustomers = async () => {
+    const { data } = await supabase.from('customers').select('id, name, address').order('name');
+    setLedgerCustomers(data || []);
+  };
 
   const fetchReport = async (type: ReportType) => {
     setLoading(true);
@@ -188,6 +200,30 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName }) => {
         });
         setReportData(custs?.map((c: any) => ({ ...c, balance: dues[c.id] || 0 })).filter((c: any) => Math.abs(c.balance) > 1) || []);
       }
+      else if (type === 'CUSTOMER_LEDGER') {
+        if (!selectedCustomerId) {
+          setReportData([]);
+          return;
+        }
+        const { data } = await supabase
+          .from('transactions')
+          .select('*, customers(name, address)')
+          .eq('customer_id', selectedCustomerId)
+          .eq('company', dbCompany)
+          .order('created_at', { ascending: true });
+        
+        let balance = 0;
+        const processed = data?.map(tx => {
+          const amt = Number(tx.amount);
+          if (tx.payment_type === 'COLLECTION') {
+            balance -= amt;
+          } else {
+            balance += amt;
+          }
+          return { ...tx, runningBalance: balance };
+        });
+        setReportData(processed || []);
+      }
     } catch (err) { console.error("Report Fetch Error:", err); } finally { setLoading(false); }
   };
 
@@ -331,7 +367,8 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName }) => {
       { id: 'STOCK_REPORT', title: 'STOCK LIST', icon: '📦', desc: 'ইনভেন্টরি লেজার' },
       { id: 'DELIVERY_LOG_A4', title: 'DELIVERY SHEET', icon: '🚚', desc: 'প্রতিদিনের ডেলিভারি শিট' },
       { id: 'PURCHASE_HISTORY', title: 'PURCHASE LOG', icon: '📒', desc: 'কোম্পানি ক্রয় হিসাব' },
-      { id: 'CUSTOMER_DUES', title: 'DUE REPORT', icon: '💸', desc: 'মার্কেট বকেয়া' }
+      { id: 'CUSTOMER_DUES', title: 'DUE REPORT', icon: '💸', desc: 'মার্কেট বকেয়া' },
+      { id: 'CUSTOMER_LEDGER', title: 'SHOP LEDGER', icon: '📜', desc: 'দোকানদার লেজার রিপোর্ট' }
     ];
 
     return (
@@ -353,6 +390,20 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName }) => {
         <button onClick={() => setActiveReport('MAIN')} className="bg-slate-900 text-white px-8 py-5 rounded-[1.5rem] font-black text-[11px] uppercase">← ফিরে যান</button>
         <div className="flex gap-4 items-center bg-slate-50 p-3 rounded-[2rem] border">
           {(activeReport === 'DELIVERY_LOG_A4' || activeReport === 'COLLECTION_REPORT') && <input type="date" className="p-3 border rounded-[1.2rem] text-[10px] font-black" value={selectedDate} onChange={(e: any) => setSelectedDate(e.target.value)} />}
+          
+          {activeReport === 'CUSTOMER_LEDGER' && (
+            <select 
+              className="p-3 border rounded-[1.2rem] text-[10px] font-black outline-none bg-white min-w-[200px]"
+              value={selectedCustomerId}
+              onChange={(e) => setSelectedCustomerId(e.target.value)}
+            >
+              <option value="">দোকান সিলেক্ট করুন...</option>
+              {ledgerCustomers.map(c => (
+                <option key={c.id} value={c.id}>{c.name} - {c.address}</option>
+              ))}
+            </select>
+          )}
+
           <input className="p-3 border rounded-[1.2rem] text-[10px] font-black outline-none bg-white" placeholder="সার্চ..." value={searchQuery} onChange={(e: any) => setSearchQuery(e.target.value)} />
           <button disabled={isDownloading || loading} onClick={() => handleDownloadPDF(reportRef, `IFZA_${activeReport}`)} className="bg-emerald-600 text-white px-5 py-4 rounded-[1.2rem] font-black text-[9px] uppercase shadow-lg">PDF ডাউনলোড</button>
         </div>
@@ -422,6 +473,16 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName }) => {
                     <th className="p-3 border-r border-white/20 text-center w-16">বিক্রয় (-)</th>
                     <th className="p-3 border-r border-white/20 text-center w-20 bg-slate-800">স্টক</th>
                     <th className="p-3 text-right w-32">স্টক মূল্য (TP)</th>
+                  </>
+                ) : activeReport === 'CUSTOMER_LEDGER' ? (
+                  <>
+                    <th className="p-3 border-r border-white/20 text-center w-24">তারিখ</th>
+                    <th className="p-3 border-r border-white/20 text-left">মেমো/বিবরণ</th>
+                    <th className="p-3 border-r border-white/20 text-right w-24">বিল/পণ্য</th>
+                    <th className="p-3 border-r border-white/20 text-right w-24">জমা/নগদ</th>
+                    <th className="p-3 border-r border-white/20 text-right w-28 bg-slate-800">জের (Dues)</th>
+                    <th className="p-3 border-r border-white/20 text-center w-20">স্বাক্ষর (মাল)</th>
+                    <th className="p-3 text-center w-20">স্বাক্ষর (নগদ)</th>
                   </>
                 ) : (
                   <>
@@ -518,6 +579,24 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName }) => {
                       <td className="p-3 border-r border-black text-center text-rose-600">-{(item.sold || 0)}</td>
                       <td className="p-3 border-r border-black text-center font-black bg-slate-50 text-base italic">{(item.current_stock || 0)}</td>
                       <td className="p-3 text-right font-black italic">৳{(Number(item.current_stock || 0) * Number(item.tp || 0)).toLocaleString()}</td>
+                    </>
+                  ) : activeReport === 'CUSTOMER_LEDGER' ? (
+                    <>
+                      <td className="p-3 border-r border-black text-center text-[10px]">{new Date(item.created_at).toLocaleDateString('bn-BD')}</td>
+                      <td className="p-3 border-r border-black font-black uppercase text-[10px]">
+                        {item.payment_type === 'DUE' ? `মেমো #${String(item.id).slice(-6).toUpperCase()}` : 'টাকা জমা'}
+                      </td>
+                      <td className="p-3 border-r border-black text-right font-black text-indigo-700">
+                        {item.payment_type === 'DUE' ? `৳${Math.round(item.amount).toLocaleString()}` : '-'}
+                      </td>
+                      <td className="p-3 border-r border-black text-right font-black text-emerald-600">
+                        {item.payment_type === 'COLLECTION' ? `৳${Math.round(item.amount).toLocaleString()}` : '-'}
+                      </td>
+                      <td className="p-3 border-r border-black text-right font-black bg-slate-50 text-base italic text-rose-600">
+                        ৳{Math.round(item.runningBalance).toLocaleString()}
+                      </td>
+                      <td className="p-3 border-r border-black text-center"></td>
+                      <td className="p-3 text-center"></td>
                     </>
                   ) : (
                     <>
