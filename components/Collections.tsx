@@ -57,6 +57,26 @@ const Collections: React.FC<CollectionsProps> = ({ company, user, companies }) =
    }, [selectedCust, targetCompany]);
 
    useEffect(() => {
+      const channel = supabase
+         .channel("collection-realtime")
+         .on(
+            "postgres_changes",
+            { event: "*", schema: "public", table: "collection_requests" },
+            () => fetchData()
+         )
+         .on(
+            "postgres_changes",
+            { event: "*", schema: "public", table: "transactions" },
+            () => fetchData()
+         )
+         .subscribe();
+
+      return () => {
+         supabase.removeChannel(channel);
+      };
+   }, [user.company, company, companies]);
+
+   useEffect(() => {
       const handleClickOutside = (event: MouseEvent) => {
          if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
             setShowAreaDropdown(false);
