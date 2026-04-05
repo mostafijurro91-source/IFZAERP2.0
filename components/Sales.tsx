@@ -471,8 +471,16 @@ const Sales: React.FC<SalesProps> = ({ company, role, user }) => {
         <div className="w-full lg:w-[480px] space-y-6 no-print">
           <div className="bg-slate-900 text-white rounded-[2.5rem] shadow-xl flex flex-col h-[700px] sticky top-6 overflow-hidden">
             <div className="p-8 border-b border-white/5 flex justify-between items-center">
-              <h3 className="font-black uppercase italic text-sm">মেমো কার্ট (POS)</h3>
-              <button onClick={() => { setCart([]); setGlobalCommission(0); setCashReceived(0); }} className="text-[9px] font-black uppercase text-rose-400">রিসেট</button>
+              <div className="flex items-center gap-4">
+                <h3 className="font-black uppercase italic text-sm">মেমো কার্ট (POS)</h3>
+                <button 
+                  onClick={() => setShowGift(!showGift)} 
+                  className={`px-3 py-1.5 rounded-lg font-black text-[8px] uppercase transition-all ${showGift ? 'bg-rose-600 text-white shadow-lg' : 'bg-white/10 text-rose-400 border border-white/10'}`}
+                >
+                  {showGift ? '🎁 গিফট চালু' : '🎁 গিফট'}
+                </button>
+              </div>
+              <button onClick={() => { setCart([]); setGlobalCommission(0); setCashReceived(0); setShowGift(false); }} className="text-[9px] font-black uppercase text-rose-400">রিসেট</button>
             </div>
 
             <div className="flex-1 overflow-y-auto p-4 space-y-2 custom-scroll">
@@ -522,13 +530,8 @@ const Sales: React.FC<SalesProps> = ({ company, role, user }) => {
             <div className="p-4 bg-black/40 border-t border-white/10 space-y-3">
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-0.5">
-                  <label className="text-[7px] font-black text-rose-400 uppercase ml-2 italic">অতিরিক্ত অপশন</label>
-                  <button 
-                    onClick={() => setShowGift(!showGift)} 
-                    className={`w-full p-2 rounded-xl font-black text-[10px] uppercase transition-all ${showGift ? 'bg-rose-600 text-white shadow-lg' : 'bg-white/5 text-rose-400 border border-rose-400/20'}`}
-                  >
-                    {showGift ? '🎁 গিফট অপশন চালু' : '🎁 গিফট অপশন'}
-                  </button>
+                  <label className="text-[7px] font-black text-slate-500 uppercase ml-2 italic">গ্লোবাল কমিশন %</label>
+                  <input type="number" placeholder="0" className="w-full bg-white/5 p-2 rounded-xl text-center font-black text-white text-base" value={globalCommission || ""} onChange={e => setGlobalCommission(Number(e.target.value))} />
                 </div>
                 <div className="space-y-0.5 relative">
                   <label className="text-[7px] font-black text-blue-500 uppercase ml-2 italic">পেমেন্ট ডেডলাইন (শর্ত)</label>
