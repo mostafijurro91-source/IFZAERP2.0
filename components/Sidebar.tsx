@@ -146,13 +146,16 @@ const Sidebar: React.FC<SidebarProps> = ({
             <button onClick={onClose} className="md:hidden text-slate-400 p-2 text-xl hover:text-red-500 transition-colors">✕</button>
           </div>
 
-          <div className="flex flex-col items-center mb-2 group cursor-pointer animate-float">
-            <div className="w-12 h-12 bg-slate-900 rounded-2xl flex items-center justify-center text-white text-xl font-black italic shadow-lg transition-all duration-700 group-hover:rotate-[360deg] group-hover:bg-blue-600 active:scale-90">
+          <div className="flex flex-col items-center mb-2 group cursor-pointer animate-logo-float">
+            <div className="w-14 h-14 bg-gradient-to-br from-slate-900 to-slate-700 rounded-[1.8rem] flex items-center justify-center text-white text-2xl font-black italic shadow-2xl transition-all duration-700 group-hover:rotate-[360deg] group-hover:from-blue-600 group-hover:to-blue-400 group-hover:shadow-blue-500/50 active:scale-90 relative overflow-hidden">
+              <div className="absolute inset-0 bg-gradient-to-tr from-white/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
               ই
             </div>
-            <div className="text-center mt-3">
-              <div className="text-2xl font-black italic tracking-tighter leading-none">ইফজা<span className="text-blue-600 animate-ping inline-block ml-0.5">.</span></div>
-              <p className="text-[6px] text-slate-400 font-bold uppercase tracking-[0.4em] mt-2 italic leading-none">Global Terminal</p>
+            <div className="text-center mt-4">
+              <div className="text-3xl font-black italic tracking-tight leading-none logo-gradient-text group-hover:animate-logo-shimmer">
+                 ইফজা<span className="text-blue-600 animate-logo-glow inline-block ml-0.5">.</span>
+              </div>
+              <p className="text-[7px] text-slate-400 font-black uppercase tracking-[0.4em] mt-3 italic leading-none opacity-50 group-hover:opacity-100 transition-opacity">ERP ENTERPRISE HUB</p>
             </div>
           </div>
           
@@ -219,14 +222,11 @@ const Sidebar: React.FC<SidebarProps> = ({
           })}
         </nav>
 
-        <div className="p-6 border-t border-slate-100 bg-slate-50/50">
-           <button onClick={onLogout} className="w-full bg-white text-rose-600 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-3 hover:bg-rose-600 hover:text-white transition-all border border-rose-100 shadow-sm active:scale-95 group">
-             <span className="group-hover:translate-x-1 transition-transform">🚪</span> LOGOUT
-           </button>
-        </div>
-      </aside>
-    </>
-  );
-};
-
-export default Sidebar;
+        <div className="p-6 border-t border-slate-100 bg-slate-50/50 space-y-3">
+           <button 
+             onClick={async () => {
+               if (window.confirm("অ্যাপটি রিফ্রেশ করলে ক্যাশ ক্লিয়ার হবে এবং লেটেস্ট ভার্সন লোড হবে। আপনি কি নিশ্চিত?")) {
+                 if ('serviceWorker' in navigator) {
+                   const regs = await navigator.serviceWorker.getRegistrations();
+                   for (const reg of regs) await reg.unregister();
+                 }
