@@ -153,8 +153,10 @@ const Sidebar: React.FC<SidebarProps> = ({
             </div>
             <div className="text-center mt-6">
               <div className="text-3xl font-black italic tracking-tight leading-none logo-premium relative group-hover:scale-105 transition-transform duration-500">
-                 ইফজা
-                 <span className="logo-shimmer-layer">ইফজা</span>
+                 <span className="relative inline-block">
+                    ইফজা
+                    <span className="logo-shimmer-layer">ইফজা</span>
+                 </span>
                  <span className="text-blue-600 animate-logo-glow inline-block ml-0.5">.</span>
               </div>
               <p className="text-[7px] text-slate-400 font-black uppercase tracking-[0.4em] mt-4 italic leading-none opacity-50 group-hover:opacity-100 transition-opacity">ERP ENTERPRISE HUB</p>
