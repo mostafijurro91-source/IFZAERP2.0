@@ -170,16 +170,13 @@ const MarketingPage: React.FC<MarketingPageProps> = ({ onEnterERP }) => {
              <div className="absolute inset-0 bg-white/10 skew-x-[-15deg] animate-[logo-shimmer_3s_infinite_cubic-bezier(0.4,0,0.2,1)]"></div>
              if
           </div>
-          <div className="text-3xl font-black italic tracking-tighter uppercase leading-none text-white whitespace-nowrap">
-            <span className="logo-premium relative group-hover:scale-110 transition-transform duration-700">
-               <span className="relative">
-                  ifza
-                  <span className="logo-shimmer-layer">ifza</span>
-               </span>
-            </span>
-            <span className="text-blue-500 animate-logo-glow">.</span>
-            <span className="text-slate-400 opacity-60 text-xl font-black italic">electronics</span>
-          </div>
+           <div className="text-3xl font-black italic tracking-tighter uppercase leading-none text-white whitespace-nowrap">
+             <div className="relative group-hover:scale-110 transition-transform duration-700">
+                <span className="logo-premium">ifza</span>
+                <span className="text-blue-500 animate-logo-glow inline-block">.</span>
+             </div>
+             <span className="text-slate-400 opacity-60 text-xl font-black italic">electronics</span>
+           </div>
         </div>
         <button onClick={onEnterERP} className="bg-blue-600 text-white px-8 py-3.5 rounded-full font-black uppercase text-[10px] tracking-widest shadow-xl active:scale-95 hover:bg-blue-700">
           Staff Portal ➔
