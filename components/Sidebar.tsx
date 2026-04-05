@@ -146,16 +146,18 @@ const Sidebar: React.FC<SidebarProps> = ({
             <button onClick={onClose} className="md:hidden text-slate-400 p-2 text-xl hover:text-red-500 transition-colors">✕</button>
           </div>
 
-          <div className="flex flex-col items-center mb-2 group cursor-pointer animate-logo-float">
+          <div className="flex flex-col items-center mb-2 group cursor-pointer animate-logo-float liquid-glow mt-2">
             <div className="w-14 h-14 bg-gradient-to-br from-slate-900 to-slate-700 rounded-[1.8rem] flex items-center justify-center text-white text-2xl font-black italic shadow-2xl transition-all duration-700 group-hover:rotate-[360deg] group-hover:from-blue-600 group-hover:to-blue-400 group-hover:shadow-blue-500/50 active:scale-90 relative overflow-hidden">
-              <div className="absolute inset-0 bg-gradient-to-tr from-white/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
-              ই
+              <div className="absolute inset-0 bg-white/10 skew-x-[-15deg] animate-[logo-shimmer_3s_infinite_cubic-bezier(0.4,0,0.2,1)]"></div>
+              if
             </div>
-            <div className="text-center mt-4">
-              <div className="text-3xl font-black italic tracking-tight leading-none logo-gradient-text group-hover:animate-logo-shimmer">
-                 ইফজা<span className="text-blue-600 animate-logo-glow inline-block ml-0.5">.</span>
+            <div className="text-center mt-6">
+              <div className="text-3xl font-black italic tracking-tight leading-none logo-premium relative group-hover:scale-105 transition-transform duration-500">
+                 ইফজা
+                 <span className="logo-shimmer-layer">ইফজা</span>
+                 <span className="text-blue-600 animate-logo-glow inline-block ml-0.5">.</span>
               </div>
-              <p className="text-[7px] text-slate-400 font-black uppercase tracking-[0.4em] mt-3 italic leading-none opacity-50 group-hover:opacity-100 transition-opacity">ERP ENTERPRISE HUB</p>
+              <p className="text-[7px] text-slate-400 font-black uppercase tracking-[0.4em] mt-4 italic leading-none opacity-50 group-hover:opacity-100 transition-opacity">ERP ENTERPRISE HUB</p>
             </div>
           </div>
           
@@ -230,3 +232,24 @@ const Sidebar: React.FC<SidebarProps> = ({
                    const regs = await navigator.serviceWorker.getRegistrations();
                    for (const reg of regs) await reg.unregister();
                  }
+                 window.location.reload();
+               }
+             }}
+             className="w-full flex items-center justify-center gap-3 py-4 rounded-2xl bg-white border border-slate-200 text-slate-500 font-bold text-[10px] uppercase tracking-widest hover:bg-slate-100 transition-all active:scale-95"
+           >
+             🔄 ক্যাশ রিফ্রেশ করুন
+           </button>
+
+           <button 
+             onClick={onLogout}
+             className="w-full flex items-center justify-center gap-3 py-4 rounded-2xl bg-red-50 text-red-600 font-black text-[10px] uppercase tracking-[0.2em] shadow-sm hover:bg-red-600 hover:text-white transition-all active:scale-95"
+           >
+             🚪 লগ-আউট করুন
+           </button>
+        </div>
+      </aside>
+    </>
+  );
+};
+
+export default Sidebar;
