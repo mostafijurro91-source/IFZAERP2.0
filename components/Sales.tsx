@@ -169,13 +169,13 @@ const Sales: React.FC<SalesProps> = ({ company, role, user }) => {
     }
   };
 
-  const getMemoNo = (id: string, date?: string) => {
+  const getMemoNo = (id: string, date?: string, meta?: any) => {
     const d = date ? new Date(date) : new Date();
     const yr = String(d.getFullYear()).slice(-2);
     const mo = String(d.getMonth() + 1).padStart(2, '0');
     const day = String(d.getDate()).padStart(2, '0');
-    const shortId = String(id).slice(-4).toUpperCase();
-    return `INV-${yr}${mo}${day}-${shortId}`;
+    const serial = meta?.daily_serial ? String(meta.daily_serial).padStart(4, '0') : String(id).slice(-4).toUpperCase();
+    return `INV-${yr}${mo}${day}-${serial}`;
   };
 
   const addToCart = (p: Product) => {
@@ -241,6 +241,22 @@ const Sales: React.FC<SalesProps> = ({ company, role, user }) => {
 
     setIsSaving(true);
     try {
+      // 📊 Calculate Daily Serial Number
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const tomorrow = new Date(today);
+      tomorrow.setDate(tomorrow.getDate() + 1);
+
+      const { count } = await supabase
+        .from('transactions')
+        .select('*', { count: 'exact', head: true })
+        .eq('company', dbCo)
+        .eq('payment_type', 'DUE')
+        .gte('created_at', today.toISOString())
+        .lt('created_at', tomorrow.toISOString());
+
+      const nextSerial = (count || 0) + 1;
+
       const itemsToSave = cart.map((i: CartItem) => {
         const isReplace = i.action === 'REPLACE';
         const price = isReplace ? 0 : Number(i.sellingPrice);
@@ -271,13 +287,14 @@ const Sales: React.FC<SalesProps> = ({ company, role, user }) => {
           expiry_date: expiryDate,
           commission_status: deadlineDate ? 'PENDING' : 'COMPLETED',
           previous_due: prevDue,
-          final_balance: totals.finalTotalBalance
+          final_balance: totals.finalTotalBalance,
+          daily_serial: nextSerial
         }
       }]).select().single();
 
       if (txError) throw txError;
 
-      const memoNo = getMemoNo(txData.id);
+      const memoNo = getMemoNo(txData.id, txData.created_at, txData.meta);
 
       // 🔔 Trigger Notification to Customer
       await supabase.from('notifications').insert([{
@@ -653,7 +670,7 @@ const Sales: React.FC<SalesProps> = ({ company, role, user }) => {
                   </td>
                   <td className="px-8 py-6">
                     <span className="px-2 py-1 bg-blue-50 text-blue-600 rounded-lg text-[9px] font-black uppercase border border-blue-100 italic">
-                      {getMemoNo(memo.id, memo.created_at)}
+                      {getMemoNo(memo.id, memo.created_at, memo.meta)}
                     </span>
                   </td>
                   <td className="px-8 py-6">
@@ -761,7 +778,7 @@ const Sales: React.FC<SalesProps> = ({ company, role, user }) => {
                   <div className="text-right space-y-1 w-44">
                     <p className="text-[9px] font-black uppercase text-black mb-2">তারিখ: {isArchive ? new Date(viewingArchiveMemo.created_at).toLocaleDateString('bn-BD') : new Date().toLocaleDateString('bn-BD')}</p>
                     <p className="text-[11px] font-black text-blue-600 uppercase italic mb-2 leading-none">
-                      মেমো নাম্বার: {isArchive ? getMemoNo(viewingArchiveMemo.id, viewingArchiveMemo.created_at) : `INV-${new Date().getFullYear().toString().slice(-2)}${(new Date().getMonth()+1).toString().padStart(2,'0')}${new Date().getDate().toString().padStart(2,'0')}-XXXX`}
+                      মেমো নাম্বার: {isArchive ? getMemoNo(viewingArchiveMemo.id, viewingArchiveMemo.created_at, viewingArchiveMemo.meta) : `INV-${new Date().getFullYear().toString().slice(-2)}${(new Date().getMonth()+1).toString().padStart(2,'0')}${new Date().getDate().toString().padStart(2,'0')}-...`}
                     </p>
                     <p className="flex justify-between font-bold text-[11px] text-black"><span>পূর্বের বাকি:</span> <span className="text-red-700">{archivePrevDue !== null ? `৳${Math.round(archivePrevDue).toLocaleString()}` : 'N/A'}</span></p>
                     <p className="flex justify-between font-black text-[13px] border-t border-black pt-1 text-black"><span>আজকের বিল:</span> <span className="text-blue-700">৳{Math.round(archiveNetTotal).toLocaleString()}</span></p>
