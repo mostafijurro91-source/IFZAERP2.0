@@ -172,8 +172,10 @@ const MarketingPage: React.FC<MarketingPageProps> = ({ onEnterERP }) => {
           </div>
           <div className="text-3xl font-black italic tracking-tighter uppercase leading-none text-white whitespace-nowrap">
             <span className="logo-premium relative group-hover:scale-110 transition-transform duration-700">
-               ifza
-               <span className="logo-shimmer-layer">ifza</span>
+               <span className="relative">
+                  ifza
+                  <span className="logo-shimmer-layer">ifza</span>
+               </span>
             </span>
             <span className="text-blue-500 animate-logo-glow">.</span>
             <span className="text-slate-400 opacity-60 text-xl font-black italic">electronics</span>
