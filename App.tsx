@@ -180,12 +180,19 @@ const App: React.FC = () => {
 
   if (!initialized) {
     return (
-      <div className="h-screen flex flex-col items-center justify-center bg-[#05070a] text-white">
-        <div className="relative mb-8">
-            <div className="w-24 h-24 border-[6px] border-blue-500/10 border-t-blue-600 rounded-full animate-spin"></div>
-            <div className="absolute inset-0 flex items-center justify-center font-black text-2xl italic text-blue-500">if</div>
+      <div className="h-screen flex flex-col items-center justify-center bg-[#05070a] text-white overflow-hidden relative">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(37,99,235,0.1),transparent_70%)] animate-pulse"></div>
+        <div className="relative mb-12 animate-logo-float">
+            <div className="w-32 h-32 bg-gradient-to-br from-blue-600 to-blue-900 rounded-[2.5rem] flex items-center justify-center shadow-[0_0_50px_rgba(37,99,235,0.3)] border border-white/10 relative overflow-hidden group">
+               <div className="absolute inset-0 bg-white/20 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000"></div>
+               <span className="text-5xl font-black italic tracking-tighter animate-logo-glow">if</span>
+            </div>
+            <div className="absolute -bottom-2 -right-2 w-10 h-10 bg-emerald-500 rounded-full border-4 border-[#05070a] animate-pulse"></div>
         </div>
-        <p className="font-black uppercase text-[12px] tracking-[0.8em] text-blue-500 animate-pulse">IFZA ELECTRONICS</p>
+        <div className="text-center relative z-10">
+           <h2 className="text-2xl font-black italic tracking-tighter uppercase mb-3 bg-clip-text text-transparent bg-gradient-to-r from-blue-400 via-white to-blue-400 bg-[length:200%_auto] animate-logo-shimmer">IFZA ENTERPRISE</h2>
+           <p className="font-bold uppercase text-[8px] tracking-[0.8em] text-blue-500/50">Secure Node Syncing...</p>
+        </div>
       </div>
     );
   }
@@ -280,10 +287,3 @@ const App: React.FC = () => {
             {activeTab === 'github_sync' && <Tracking />}
             {activeTab === 'company_settings' && <CompanySettings onUpdate={() => db.getCompanies().then(setCompanies)} />}
           </div>
-        </div>
-      </main>
-    </div>
-  );
-};
-
-export default App;
