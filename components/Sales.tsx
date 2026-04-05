@@ -169,6 +169,15 @@ const Sales: React.FC<SalesProps> = ({ company, role, user }) => {
     }
   };
 
+  const getMemoNo = (id: string, date?: string) => {
+    const d = date ? new Date(date) : new Date();
+    const yr = String(d.getFullYear()).slice(-2);
+    const mo = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    const shortId = String(id).slice(-4).toUpperCase();
+    return `INV-${yr}${mo}${day}-${shortId}`;
+  };
+
   const addToCart = (p: Product) => {
     const existing = cart.find(i => i.id === p.id && i.action === 'SALE');
     const defaultComm = p.commission_percent || 0;
@@ -266,27 +275,27 @@ const Sales: React.FC<SalesProps> = ({ company, role, user }) => {
 
       if (txError) throw txError;
 
-      const memoIdShort = String(txData.id).slice(-6).toUpperCase();
+      const memoNo = getMemoNo(txData.id);
 
       // 🔔 Trigger Notification to Customer
       await supabase.from('notifications').insert([{
         customer_id: selectedCust.id,
-        title: `নতুন সেলস মেমো #${memoIdShort}`,
-        message: `${company} থেকে আপনার নামে ৳${Math.round(totals.netTotal).toLocaleString()} টাকার একটি মেমো তৈরি করা হয়েছে। (#${memoIdShort})`,
+        title: `নতুন সেলস মেমো ${memoNo}`,
+        message: `${company} থেকে আপনার নামে ৳${Math.round(totals.netTotal).toLocaleString()} টাকার একটি মেমো তৈরি করা হয়েছে। (${memoNo})`,
         type: 'MEMO'
       }]);
 
       if (cashReceived > 0) {
         await supabase.from('transactions').insert([{
           customer_id: selectedCust.id, company: dbCo, amount: cashReceived, payment_type: 'COLLECTION',
-          items: [{ note: `নগদ গ্রহণ (মেমো #${memoIdShort})` }],
+          items: [{ note: `নগদ গ্রহণ (মেমো ${memoNo})` }],
           submitted_by: user.name
         }]);
 
         await supabase.from('notifications').insert([{
           customer_id: selectedCust.id,
-          title: `টাকা জমা রশিদ (মেমো #${memoIdShort})`,
-          message: `আপনার মেমো #${memoIdShort} পরিশোধ বাবদ ৳${Math.round(cashReceived).toLocaleString()} জমা করা হয়েছে।`,
+          title: `টাকা জমা রশিদ (${memoNo})`,
+          message: `আপনার মেমো ${memoNo} পরিশোধ বাবদ ৳${Math.round(cashReceived).toLocaleString()} জমা করা হয়েছে।`,
           type: 'PAYMENT'
         }]);
       }
@@ -322,8 +331,8 @@ const Sales: React.FC<SalesProps> = ({ company, role, user }) => {
 
   const handleDeleteMemo = async (memo: any) => {
     if (!user.role.includes('ADMIN') && !user.role.includes('STAFF')) return;
-    const memoIdShort = String(memo.id).slice(-6).toUpperCase();
-    const confirmMsg = `আপনি কি নিশ্চিত এই মেমোটি (#${memoIdShort}) ডিলিট করতে চান? এটি ডিলিট করলে মাল স্টকে ফেরত যাবে এবং নোটিফিকেশন মুছে যাবে।`;
+    const memoNo = getMemoNo(memo.id, memo.created_at);
+    const confirmMsg = `আপনি কি নিশ্চিত এই মেমোটি (${memoNo}) ডিলিট করতে চান? এটি ডিলিট করলে মাল স্টকে ফেরত যাবে এবং নোটিফিকেশন মুছে যাবে।`;
     if (!confirm(confirmMsg)) return;
 
     setLoading(true);
@@ -619,6 +628,7 @@ const Sales: React.FC<SalesProps> = ({ company, role, user }) => {
             <thead>
               <tr className="bg-slate-50 text-[9px] font-black text-slate-400 uppercase tracking-[0.2em] border-b">
                 <th className="px-8 py-6">সময়</th>
+                <th className="px-8 py-6">মেমো নাম্বার</th>
                 <th className="px-8 py-6">দোকানের নাম ও ঠিকানা</th>
                 <th className="px-8 py-6 text-center">আইটেম</th>
                 <th className="px-8 py-6 text-right">মেমো বিল</th>
@@ -632,6 +642,11 @@ const Sales: React.FC<SalesProps> = ({ company, role, user }) => {
                 <tr key={memo.id} className="hover:bg-blue-50/50 transition-colors animate-reveal" style={{ animationDelay: `${idx * 0.05}s` }}>
                   <td className="px-8 py-6 text-slate-400 font-black italic">
                     {new Date(memo.created_at).toLocaleTimeString('bn-BD', { hour: '2-digit', minute: '2-digit' })}
+                  </td>
+                  <td className="px-8 py-6">
+                    <span className="px-2 py-1 bg-blue-50 text-blue-600 rounded-lg text-[9px] font-black uppercase border border-blue-100 italic">
+                      {getMemoNo(memo.id, memo.created_at)}
+                    </span>
                   </td>
                   <td className="px-8 py-6">
                     <p className="uppercase font-black text-slate-900 leading-none mb-1">{memo.customers?.name}</p>
@@ -733,6 +748,11 @@ const Sales: React.FC<SalesProps> = ({ company, role, user }) => {
 
                   <div className="text-right space-y-1 w-44">
                     <p className="text-[9px] font-black uppercase text-black mb-2">তারিখ: {isArchive ? new Date(viewingArchiveMemo.created_at).toLocaleDateString('bn-BD') : new Date().toLocaleDateString('bn-BD')}</p>
+                    {isArchive && (
+                      <p className="text-[11px] font-black text-blue-600 uppercase italic mb-2 leading-none">
+                        মেমো নাম্বার: {getMemoNo(viewingArchiveMemo.id, viewingArchiveMemo.created_at)}
+                      </p>
+                    )}
                     {!isArchive && <p className="flex justify-between font-bold text-[11px] text-black"><span>পূর্বের বাকি:</span> <span className="text-red-600">৳{Math.round(prevDue).toLocaleString()}</span></p>}
                     <p className="flex justify-between font-black text-[14px] border-t border-black pt-1 text-black"><span>মোট বিল:</span> <span className="text-red-600">৳{Math.round(archiveNetTotal).toLocaleString()}</span></p>
                     {archiveDeadline && (
