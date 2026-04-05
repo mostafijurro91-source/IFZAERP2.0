@@ -165,10 +165,12 @@ const MarketingPage: React.FC<MarketingPageProps> = ({ onEnterERP }) => {
       )}
 
       <nav className={`fixed ${canInstall ? 'top-[72px]' : 'top-0'} inset-x-0 h-24 bg-black/40 backdrop-blur-2xl z-[1000] border-b border-white/5 flex justify-between items-center px-6 md:px-20 transition-all duration-500`}>
-        <div className="flex items-center gap-4 cursor-pointer" onClick={() => setViewAllBrand(null)}>
-          <div className="w-12 h-12 bg-blue-600 rounded-2xl flex items-center justify-center font-black italic shadow-lg text-white">if</div>
-          <div className="text-2xl font-black italic tracking-tighter uppercase leading-none text-white">
-            ifza<span className="text-blue-500">.</span>electronics
+        <div className="flex items-center gap-5 cursor-pointer group animate-logo-float" onClick={() => setViewAllBrand(null)}>
+          <div className="w-14 h-14 bg-gradient-to-br from-blue-600 to-blue-400 rounded-2xl flex items-center justify-center font-black italic shadow-2xl text-white group-hover:rotate-[360deg] transition-transform duration-700">if</div>
+          <div className="text-3xl font-black italic tracking-tighter uppercase leading-none text-white whitespace-nowrap">
+            <span className="logo-gradient-text group-hover:animate-logo-shimmer">ifza</span>
+            <span className="text-blue-500 animate-logo-glow">.</span>
+            <span className="text-slate-400 opacity-60 text-xl font-black italic">electronics</span>
           </div>
         </div>
         <button onClick={onEnterERP} className="bg-blue-600 text-white px-8 py-3.5 rounded-full font-black uppercase text-[10px] tracking-widest shadow-xl active:scale-95 hover:bg-blue-700">
