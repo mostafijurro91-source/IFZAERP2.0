@@ -517,6 +517,17 @@ const Sales: React.FC<SalesProps> = ({ company, role, user }) => {
                         onChange={e => updateCartItem(idx, { sellingPrice: Number(e.target.value) })}
                       />
                     </div>
+                    <div>
+                      <input
+                        type="number"
+                        disabled={item.action === 'REPLACE'}
+                        title="কমিশন %"
+                        className={`w-full p-1.5 rounded-lg text-center text-[9px] font-black text-emerald-500 outline-none ${item.action === 'REPLACE' ? 'bg-white/5 opacity-20' : 'bg-black/40 border border-emerald-500/20'}`}
+                        placeholder="0%"
+                        value={Math.round(item.discountPercent || 0)}
+                        onChange={e => updateCartItem(idx, { discountPercent: Number(e.target.value) })}
+                      />
+                    </div>
                     <div className="flex flex-col gap-1">
                       <button onClick={() => updateCartItem(idx, { action: 'SALE', sellingPrice: item.tp })} title="Sell" className={`py-1 rounded text-[8px] font-black border transition-all ${item.action === 'SALE' ? 'bg-blue-600 border-blue-600 text-white shadow-lg' : 'bg-white/5 border-white/5 text-slate-500'}`}>S</button>
                       <button onClick={() => updateCartItem(idx, { action: 'RETURN', sellingPrice: item.tp })} title="Return" className={`py-1 rounded text-[8px] font-black border transition-all ${item.action === 'RETURN' ? 'bg-red-600 border-red-600 text-white shadow-lg' : 'bg-white/5 border-white/5 text-slate-500'}`}>R</button>
