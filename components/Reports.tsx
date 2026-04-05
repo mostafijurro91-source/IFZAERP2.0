@@ -682,7 +682,9 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName }) => {
 
               <div className="text-right space-y-0.5 w-44">
                 <p className="text-[9px] font-black uppercase text-black mb-1">তারিখ: {new Date(selectedMemo.created_at).toLocaleDateString('bn-BD')}</p>
-                <p className="flex justify-between font-black text-[13px] border-t border-black pt-0.5 text-black"><span>মেমো বিল:</span> <span className="text-red-600">৳{(Number(selectedMemo.amount) || 0).toLocaleString()}</span></p>
+                <p className="flex justify-between font-black text-[11px] text-slate-500"><span>পূর্বের বাকি:</span> <span>৳{(Number(selectedMemo.meta?.previous_due) || 0).toLocaleString()}</span></p>
+                <p className="flex justify-between font-black text-[13px] border-t border-black pt-0.5 text-black"><span>মেমো বিল:</span> <span className="text-blue-700">৳{(Number(selectedMemo.amount) || 0).toLocaleString()}</span></p>
+                <p className="flex justify-between font-black text-[15px] border-t-2 border-black pt-1 text-black bg-slate-50 px-1 mt-1"><span>মোট বাকি:</span> <span className="text-red-600">৳{(Number(selectedMemo.meta?.final_balance) || (Number(selectedMemo.amount) + (Number(selectedMemo.meta?.previous_due) || 0))).toLocaleString()}</span></p>
               </div>
             </div>
 
