@@ -147,16 +147,13 @@ const Sidebar: React.FC<SidebarProps> = ({
           </div>
 
           <div className="flex flex-col items-center mb-2 group cursor-pointer animate-logo-float liquid-glow mt-2">
-            <div className="w-14 h-14 bg-gradient-to-br from-slate-900 to-slate-700 rounded-[1.8rem] flex items-center justify-center text-white text-2xl font-black italic shadow-2xl transition-all duration-700 group-hover:rotate-[360deg] group-hover:from-blue-600 group-hover:to-blue-400 group-hover:shadow-blue-500/50 active:scale-90 relative overflow-hidden">
+            <div className="w-14 h-14 bg-gradient-to-br from-slate-900 to-slate-700 rounded-[1.8rem] flex items-center justify-center text-white text-2xl font-black italic shadow-2xl transition-all duration-700 group-hover:rotate-[360deg] group-hover:from-blue-600 group-hover:to-blue-400 logo-box-glow active:scale-90 relative overflow-hidden">
               <div className="absolute inset-0 bg-white/10 skew-x-[-15deg] animate-[logo-shimmer_3s_infinite_cubic-bezier(0.4,0,0.2,1)]"></div>
               if
             </div>
             <div className="text-center mt-6">
-              <div className="text-3xl font-black italic tracking-tight leading-none logo-premium relative group-hover:scale-105 transition-transform duration-500">
-                 <span className="relative inline-block">
-                    ইফজা
-                    <span className="logo-shimmer-layer">ইফজা</span>
-                 </span>
+              <div className="text-4xl font-black italic tracking-tight leading-none relative group-hover:scale-110 transition-transform duration-700">
+                 <span className="logo-premium">ইফজা</span>
                  <span className="text-blue-600 animate-logo-glow inline-block ml-0.5">.</span>
               </div>
               <p className="text-[7px] text-slate-400 font-black uppercase tracking-[0.4em] mt-4 italic leading-none opacity-50 group-hover:opacity-100 transition-opacity">ERP ENTERPRISE HUB</p>
