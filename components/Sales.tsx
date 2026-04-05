@@ -269,7 +269,9 @@ const Sales: React.FC<SalesProps> = ({ company, role, user }) => {
           commission_percent_item: cart.map(it => it.discountPercent),
           commission_type: deadlineDate ? 'CONDITIONAL' : 'IMMEDIATE',
           expiry_date: expiryDate,
-          commission_status: deadlineDate ? 'PENDING' : 'COMPLETED'
+          commission_status: deadlineDate ? 'PENDING' : 'COMPLETED',
+          previous_due: prevDue,
+          final_balance: totals.finalTotalBalance
         }
       }]).select().single();
 
@@ -632,12 +634,13 @@ const Sales: React.FC<SalesProps> = ({ company, role, user }) => {
                 <th className="px-8 py-6">দোকানের নাম ও ঠিকানা</th>
                 <th className="px-8 py-6 text-center">আইটেম</th>
                 <th className="px-8 py-6 text-right">মেমো বিল</th>
+                <th className="px-8 py-6 text-right">মোট বাকি</th>
                 <th className="px-8 py-6 text-center">অ্যাকশন</th>
               </tr>
             </thead>
             <tbody className="divide-y text-[12px] font-bold">
               {recentMemos.length === 0 ? (
-                <tr><td colSpan={5} className="p-20 text-center opacity-20 font-black uppercase italic italic text-sm">এই তারিখে কোনো মেমো পাওয়া যায়নি</td></tr>
+                <tr><td colSpan={6} className="p-20 text-center opacity-20 font-black uppercase italic italic text-sm">এই তারিখে কোনো মেমো পাওয়া যায়নি</td></tr>
               ) : recentMemos.map((memo, idx) => (
                 <tr key={memo.id} className="hover:bg-blue-50/50 transition-colors animate-reveal" style={{ animationDelay: `${idx * 0.05}s` }}>
                   <td className="px-8 py-6 text-slate-400 font-black italic">
@@ -659,6 +662,9 @@ const Sales: React.FC<SalesProps> = ({ company, role, user }) => {
                   </td>
                   <td className="px-8 py-6 text-right font-black italic text-base text-slate-900 tracking-tighter">
                     {formatCurrency(memo.amount)}
+                  </td>
+                  <td className="px-8 py-6 text-right font-black italic text-base text-red-600 bg-slate-50 shadow-inner">
+                    {memo.meta?.final_balance ? formatCurrency(memo.meta.final_balance) : '--'}
                   </td>
                   <td className="px-8 py-6 text-center">
                     <div className="flex justify-center items-center gap-2">
@@ -710,10 +716,11 @@ const Sales: React.FC<SalesProps> = ({ company, role, user }) => {
             const archiveNetTotal = isArchive ? (archiveSubtotal - archiveCommission) : totals.netTotal;
             const archiveGift = isArchive ? viewingArchiveMemo.meta?.total_gift : giftAmount;
             const archiveDeadline = isArchive ? viewingArchiveMemo.meta?.expiry_date : deadlineDate;
+            const archivePrevDue = isArchive ? (viewingArchiveMemo.meta?.previous_due ?? null) : prevDue;
             
             // For archive, we might not have prevDue/finalTotal stored in meta? 
             // Let's check if they are there. If not, we use current or 0.
-            const archiveFinalTotal = isArchive ? (Number(archiveNetTotal)) : totals.finalTotalBalance;
+            const archiveFinalTotal = isArchive ? (viewingArchiveMemo.meta?.final_balance ?? null) : totals.finalTotalBalance;
 
             return (
               <div ref={invoiceRef} className="bg-white w-[148mm] min-h-fit p-10 flex flex-col font-sans text-black relative overflow-hidden">
@@ -753,8 +760,9 @@ const Sales: React.FC<SalesProps> = ({ company, role, user }) => {
                         মেমো নাম্বার: {getMemoNo(viewingArchiveMemo.id, viewingArchiveMemo.created_at)}
                       </p>
                     )}
-                    {!isArchive && <p className="flex justify-between font-bold text-[11px] text-black"><span>পূর্বের বাকি:</span> <span className="text-red-600">৳{Math.round(prevDue).toLocaleString()}</span></p>}
-                    <p className="flex justify-between font-black text-[14px] border-t border-black pt-1 text-black"><span>মোট বিল:</span> <span className="text-red-600">৳{Math.round(archiveNetTotal).toLocaleString()}</span></p>
+                    <p className="flex justify-between font-bold text-[11px] text-black"><span>পূর্বের বাকি:</span> <span className="text-red-700">{archivePrevDue !== null ? `৳${Math.round(archivePrevDue).toLocaleString()}` : 'N/A'}</span></p>
+                    <p className="flex justify-between font-black text-[13px] border-t border-black pt-1 text-black"><span>আজকের বিল:</span> <span className="text-blue-700">৳{Math.round(archiveNetTotal).toLocaleString()}</span></p>
+                    <p className="flex justify-between font-black text-[15px] border-t-2 border-black pt-1 text-black bg-slate-50 px-1"><span>মোট বাকি:</span> <span className="text-red-600">{archiveFinalTotal !== null ? `৳${Math.round(archiveFinalTotal).toLocaleString()}` : 'N/A'}</span></p>
                     {archiveDeadline && (
                       <div className="mt-2 p-2 bg-rose-50 border border-rose-100 rounded-lg">
                         <p className="text-[7px] font-black text-rose-600 uppercase leading-tight">পেমেন্ট ডেডলাইন (কমিশন শর্ত):</p>
