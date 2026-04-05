@@ -191,7 +191,7 @@ const App: React.FC = () => {
         </div>
         <div className="text-center relative z-10">
            <h2 className="text-2xl font-black italic tracking-tighter uppercase mb-3 bg-clip-text text-transparent bg-gradient-to-r from-blue-400 via-white to-blue-400 bg-[length:200%_auto] animate-logo-shimmer">IFZA ENTERPRISE</h2>
-           <p className="font-bold uppercase text-[8px] tracking-[0.8em] text-blue-500/50">Secure Node Syncing...</p>
+           <p className="font-bold uppercase text-[8px] tracking-[0.8em] text-blue-500/50 italic">Secure Node Syncing...</p>
         </div>
       </div>
     );
@@ -287,3 +287,10 @@ const App: React.FC = () => {
             {activeTab === 'github_sync' && <Tracking />}
             {activeTab === 'company_settings' && <CompanySettings onUpdate={() => db.getCompanies().then(setCompanies)} />}
           </div>
+        </div>
+      </main>
+    </div>
+  );
+};
+
+export default App;
