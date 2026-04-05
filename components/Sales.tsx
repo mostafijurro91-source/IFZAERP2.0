@@ -51,6 +51,7 @@ const Sales: React.FC<SalesProps> = ({ company, role, user }) => {
   // New states for Commission & Deadline
   const [deadlineDate, setDeadlineDate] = useState<string>(""); 
   const [giftAmount, setGiftAmount] = useState<number>(0); 
+  const [showGift, setShowGift] = useState(false); 
 
   const invoiceRef = useRef<HTMLDivElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -508,16 +509,6 @@ const Sales: React.FC<SalesProps> = ({ company, role, user }) => {
                         onChange={e => updateCartItem(idx, { sellingPrice: Number(e.target.value) })}
                       />
                     </div>
-                    <div>
-                      <input
-                        type="number"
-                        disabled={item.action === 'REPLACE'}
-                        title="ডিসকাউন্ট %"
-                        className={`w-full p-1.5 rounded-lg text-center text-[9px] font-bold text-emerald-400 outline-none ${item.action === 'REPLACE' ? 'bg-white/5 opacity-20' : 'bg-black/40'}`}
-                        value={Math.round(item.discountPercent || 0)}
-                        onChange={e => updateCartItem(idx, { discountPercent: Number(e.target.value) })}
-                      />
-                    </div>
                     <div className="flex flex-col gap-1">
                       <button onClick={() => updateCartItem(idx, { action: 'SALE', sellingPrice: item.tp })} title="Sell" className={`py-1 rounded text-[8px] font-black border transition-all ${item.action === 'SALE' ? 'bg-blue-600 border-blue-600 text-white shadow-lg' : 'bg-white/5 border-white/5 text-slate-500'}`}>S</button>
                       <button onClick={() => updateCartItem(idx, { action: 'RETURN', sellingPrice: item.tp })} title="Return" className={`py-1 rounded text-[8px] font-black border transition-all ${item.action === 'RETURN' ? 'bg-red-600 border-red-600 text-white shadow-lg' : 'bg-white/5 border-white/5 text-slate-500'}`}>R</button>
@@ -531,8 +522,13 @@ const Sales: React.FC<SalesProps> = ({ company, role, user }) => {
             <div className="p-4 bg-black/40 border-t border-white/10 space-y-3">
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-0.5">
-                  <label className="text-[7px] font-black text-slate-500 uppercase ml-2 italic">গ্লোবাল কমিশন %</label>
-                  <input type="number" placeholder="0" className="w-full bg-white/5 p-2 rounded-xl text-center font-black text-white text-base" value={globalCommission || ""} onChange={e => setGlobalCommission(Number(e.target.value))} />
+                  <label className="text-[7px] font-black text-rose-400 uppercase ml-2 italic">অতিরিক্ত অপশন</label>
+                  <button 
+                    onClick={() => setShowGift(!showGift)} 
+                    className={`w-full p-2 rounded-xl font-black text-[10px] uppercase transition-all ${showGift ? 'bg-rose-600 text-white shadow-lg' : 'bg-white/5 text-rose-400 border border-rose-400/20'}`}
+                  >
+                    {showGift ? '🎁 গিফট অপশন চালু' : '🎁 গিফট অপশন'}
+                  </button>
                 </div>
                 <div className="space-y-0.5 relative">
                   <label className="text-[7px] font-black text-blue-500 uppercase ml-2 italic">পেমেন্ট ডেডলাইন (শর্ত)</label>
@@ -544,10 +540,12 @@ const Sales: React.FC<SalesProps> = ({ company, role, user }) => {
                   />
                   {!deadlineDate && <p className="absolute -bottom-2 right-2 text-[6px] text-slate-500 uppercase font-bold">নগদ (Instant)</p>}
                 </div>
-                <div className="space-y-0.5">
-                  <label className="text-[7px] font-black text-rose-400 uppercase ml-2 italic">গোপন গিফট ভ্যালু (Gift)</label>
-                  <input type="number" placeholder="0" className="w-full bg-white/5 p-2 rounded-xl text-center font-black text-rose-400 text-base shadow-inner" value={giftAmount || ""} onChange={e => setGiftAmount(Number(e.target.value))} />
-                </div>
+                {showGift && (
+                  <div className="space-y-0.5">
+                    <label className="text-[7px] font-black text-rose-400 uppercase ml-2 italic">গোপন গিফট ভ্যালু (Gift)</label>
+                    <input type="number" placeholder="0" className="w-full bg-white/5 p-2 rounded-xl text-center font-black text-rose-400 text-base shadow-inner" value={giftAmount || ""} onChange={e => setGiftAmount(Number(e.target.value))} />
+                  </div>
+                )}
                 <div className="space-y-0.5">
                   <label className="text-[7px] font-black text-emerald-500 uppercase ml-2 italic">আজকের জমা (নগদ)</label>
                   <input type="number" placeholder="0" className="w-full bg-white/5 p-2 rounded-xl text-center font-black text-emerald-400 text-base shadow-inner" value={cashReceived || ""} onChange={e => setCashReceived(Number(e.target.value))} />
@@ -709,9 +707,6 @@ const Sales: React.FC<SalesProps> = ({ company, role, user }) => {
                         <span>{it.name}</span>
                         <div className="flex gap-2 items-center mt-0.5 opacity-60">
                           <span className="text-[7px] font-black">MRP: ৳{it.mrp}</span>
-                          {it.discountPercent > 0 && it.action === 'SALE' && (
-                            <span className="text-[7px] font-black text-blue-600">COMM: {it.discountPercent}%</span>
-                          )}
                           {it.action !== 'SALE' && <span className="text-[7px] border border-black px-1 rounded uppercase">[{it.action}]</span>}
                         </div>
                       </td>
@@ -731,9 +726,7 @@ const Sales: React.FC<SalesProps> = ({ company, role, user }) => {
                 <div className="flex justify-between"><span>SUB-TOTAL (TP):</span><span>৳{Math.round(totals.subtotal).toLocaleString()}</span></div>
                 {totals.totalCommission > 0 && (
                   <div className="flex justify-between text-blue-600">
-                    <span>TOTAL COMMISSION 
-                      {globalCommission > 0 ? ` (${globalCommission}% Global)` : ''}:
-                    </span>
+                    <span>TOTAL COMMISSION:</span>
                     <span>-৳{Math.round(totals.totalCommission).toLocaleString()}</span>
                   </div>
                 )}
@@ -741,9 +734,11 @@ const Sales: React.FC<SalesProps> = ({ company, role, user }) => {
                   <span className="uppercase">নিট বিল (Payable):</span>
                   <span>৳{Math.round(totals.netTotal).toLocaleString()}</span>
                 </div>
-                <div className="mt-4 pt-2 border-t border-slate-200">
-                  <p className="text-[9px] font-black text-rose-600 italic text-center">** এই পণ্যের সাথে গিফট ধার্য করা হয়েছে।</p>
-                </div>
+                {showGift && (
+                  <div className="mt-4 pt-2 border-t border-slate-200">
+                    <p className="text-[9px] font-black text-rose-600 italic text-center">** এই পণ্যের সাথে গিফট ধার্য করা হয়েছে।</p>
+                  </div>
+                )}
                 {deadlineDate && (
                   <p className="text-[7px] text-rose-600 font-black mt-2 leading-tight">* শর্ত: আগামী {new Date(deadlineDate).toLocaleDateString('bn-BD')} তারিখের মধ্যে মোট বকেয়া পরিশোধ করলে উপরের কমিশন কার্যকর হবে।</p>
                 )}
