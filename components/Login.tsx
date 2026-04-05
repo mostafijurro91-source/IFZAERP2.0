@@ -86,8 +86,10 @@ const Login: React.FC<LoginProps> = ({ onLogin, onBack }) => {
           <div className="text-center mb-10 overflow-hidden">
              <div className="text-6xl font-black italic tracking-tighter text-white lowercase leading-none flex justify-center items-baseline group animate-logo-float liquid-glow mt-8">
                 <span className="logo-premium relative group-hover:scale-110 transition-transform duration-700">
-                   ifza
-                   <span className="logo-shimmer-layer">ifza</span>
+                   <span className="relative">
+                      ifza
+                      <span className="logo-shimmer-layer">ifza</span>
+                   </span>
                 </span>
                 <span className="text-blue-500 mx-0.5 animate-logo-glow">.</span>
                 <span className="text-slate-400 text-4xl">erp</span>
