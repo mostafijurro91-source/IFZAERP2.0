@@ -1,6 +1,21 @@
 
-/* index.css is now minimal as premium animations are moved to index.html for CDN compatibility */
+:root {
+  --sat: env(safe-area-inset-top);
+  --sab: env(safe-area-inset-bottom);
+}
 
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Custom Scrollbar Styles */
 .custom-scroll::-webkit-scrollbar {
   width: 6px;
 }
