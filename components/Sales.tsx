@@ -321,7 +321,12 @@ const Sales: React.FC<SalesProps> = ({ company, role, user }) => {
       }
 
       alert("মেমো সফলভাবে সেভ হয়েছে!");
-      setShowInvoicePreview(false);
+      
+      // 📝 Automatically switch to Archive view so user can see real Memo No and Print
+      const finalMemo = { ...txData, customers: selectedCust };
+      setViewingArchiveMemo(finalMemo);
+      
+      // Clear secondary states but keep the preview open
       setCart([]);
       setSelectedCust(null);
       setGlobalCommission(0);
@@ -755,11 +760,9 @@ const Sales: React.FC<SalesProps> = ({ company, role, user }) => {
 
                   <div className="text-right space-y-1 w-44">
                     <p className="text-[9px] font-black uppercase text-black mb-2">তারিখ: {isArchive ? new Date(viewingArchiveMemo.created_at).toLocaleDateString('bn-BD') : new Date().toLocaleDateString('bn-BD')}</p>
-                    {isArchive && (
-                      <p className="text-[11px] font-black text-blue-600 uppercase italic mb-2 leading-none">
-                        মেমো নাম্বার: {getMemoNo(viewingArchiveMemo.id, viewingArchiveMemo.created_at)}
-                      </p>
-                    )}
+                    <p className="text-[11px] font-black text-blue-600 uppercase italic mb-2 leading-none">
+                      মেমো নাম্বার: {isArchive ? getMemoNo(viewingArchiveMemo.id, viewingArchiveMemo.created_at) : `INV-${new Date().getFullYear().toString().slice(-2)}${(new Date().getMonth()+1).toString().padStart(2,'0')}${new Date().getDate().toString().padStart(2,'0')}-XXXX`}
+                    </p>
                     <p className="flex justify-between font-bold text-[11px] text-black"><span>পূর্বের বাকি:</span> <span className="text-red-700">{archivePrevDue !== null ? `৳${Math.round(archivePrevDue).toLocaleString()}` : 'N/A'}</span></p>
                     <p className="flex justify-between font-black text-[13px] border-t border-black pt-1 text-black"><span>আজকের বিল:</span> <span className="text-blue-700">৳{Math.round(archiveNetTotal).toLocaleString()}</span></p>
                     <p className="flex justify-between font-black text-[15px] border-t-2 border-black pt-1 text-black bg-slate-50 px-1"><span>মোট বাকি:</span> <span className="text-red-600">{archiveFinalTotal !== null ? `৳${Math.round(archiveFinalTotal).toLocaleString()}` : 'N/A'}</span></p>
