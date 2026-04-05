@@ -190,13 +190,15 @@ const App: React.FC = () => {
             <div className="absolute -bottom-2 -right-2 w-10 h-10 bg-emerald-500 rounded-full border-4 border-[#05070a] active-pulse shadow-[0_0_20px_rgba(16,185,129,0.4)]"></div>
         </div>
         <div className="text-center relative z-10">
-           <h2 className="text-2xl font-black italic tracking-tighter uppercase mb-3 logo-premium relative">
-              <span className="relative">
-                IFZA ENTERPRISE
-                <span className="logo-shimmer-layer">IFZA ENTERPRISE</span>
-              </span>
+           <h2 className="text-4xl font-black italic tracking-tighter uppercase mb-6 relative animate-logo-float">
+              <span className="logo-premium">IFZA ENTERPRISE</span>
            </h2>
-           <p className="font-bold uppercase text-[8px] tracking-[0.8em] text-blue-500/50 italic animate-pulse">Secure Node Syncing...</p>
+           <div className="flex justify-center items-center space-x-2">
+              <span className="w-2 h-2 bg-blue-500 rounded-full animate-bounce [animation-delay:-0.3s]"></span>
+              <span className="w-2 h-2 bg-blue-500 rounded-full animate-bounce [animation-delay:-0.15s]"></span>
+              <span className="w-2 h-2 bg-blue-500 rounded-full animate-bounce"></span>
+           </div>
+           <p className="font-bold uppercase text-[10px] tracking-[0.8em] text-blue-400/50 italic mt-6 animate-pulse">Secure Node Syncing...</p>
         </div>
       </div>
     );
