@@ -165,10 +165,16 @@ const MarketingPage: React.FC<MarketingPageProps> = ({ onEnterERP }) => {
       )}
 
       <nav className={`fixed ${canInstall ? 'top-[72px]' : 'top-0'} inset-x-0 h-24 bg-black/40 backdrop-blur-2xl z-[1000] border-b border-white/5 flex justify-between items-center px-6 md:px-20 transition-all duration-500`}>
-        <div className="flex items-center gap-5 cursor-pointer group animate-logo-float" onClick={() => setViewAllBrand(null)}>
-          <div className="w-14 h-14 bg-gradient-to-br from-blue-600 to-blue-400 rounded-2xl flex items-center justify-center font-black italic shadow-2xl text-white group-hover:rotate-[360deg] transition-transform duration-700">if</div>
+        <div className="flex items-center gap-5 cursor-pointer group animate-logo-float liquid-glow" onClick={() => setViewAllBrand(null)}>
+          <div className="w-14 h-14 bg-gradient-to-br from-blue-600 to-blue-400 rounded-2xl flex items-center justify-center font-black italic shadow-2xl text-white group-hover:rotate-[360deg] transition-transform duration-700 relative overflow-hidden">
+             <div className="absolute inset-0 bg-white/10 skew-x-[-15deg] animate-[logo-shimmer_3s_infinite_cubic-bezier(0.4,0,0.2,1)]"></div>
+             if
+          </div>
           <div className="text-3xl font-black italic tracking-tighter uppercase leading-none text-white whitespace-nowrap">
-            <span className="logo-gradient-text group-hover:animate-logo-shimmer">ifza</span>
+            <span className="logo-premium relative group-hover:scale-110 transition-transform duration-700">
+               ifza
+               <span className="logo-shimmer-layer">ifza</span>
+            </span>
             <span className="text-blue-500 animate-logo-glow">.</span>
             <span className="text-slate-400 opacity-60 text-xl font-black italic">electronics</span>
           </div>
