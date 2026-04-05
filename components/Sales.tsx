@@ -52,6 +52,7 @@ const Sales: React.FC<SalesProps> = ({ company, role, user }) => {
   const [deadlineDate, setDeadlineDate] = useState<string>(""); 
   const [giftAmount, setGiftAmount] = useState<number>(0); 
   const [showGift, setShowGift] = useState(false); 
+  const [viewingArchiveMemo, setViewingArchiveMemo] = useState<any>(null);
 
   const invoiceRef = useRef<HTMLDivElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -97,18 +98,32 @@ const Sales: React.FC<SalesProps> = ({ company, role, user }) => {
 
   const fetchRecentMemos = async () => {
     try {
+      // Fetch full day range inclusive of local timezone
       const start = `${historyDate}T00:00:00.000Z`;
       const end = `${historyDate}T23:59:59.999Z`;
-      const { data } = await supabase
+      
+      const { data, error } = await supabase
         .from('transactions')
-        .select('*, customers(name, address)')
+        .select('*, customers(name, address, phone)')
         .eq('company', dbCo)
         .eq('payment_type', 'DUE')
         .gte('created_at', start)
         .lte('created_at', end)
         .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error("Fetch Error:", error);
+      }
       setRecentMemos(data || []);
-    } catch (err) { }
+    } catch (err) { 
+      console.error("Catch Error:", err);
+    }
+  };
+
+  const handleViewArchiveMemo = (memo: any) => {
+    // We recreate the state for the preview modal but marked as archive
+    setViewingArchiveMemo(memo);
+    setShowInvoicePreview(true);
   };
 
   const fetchCustomerStats = async (customerId: string) => {
@@ -631,13 +646,22 @@ const Sales: React.FC<SalesProps> = ({ company, role, user }) => {
                     {formatCurrency(memo.amount)}
                   </td>
                   <td className="px-8 py-6 text-center">
-                    <button
-                      onClick={() => handleDeleteMemo(memo)}
-                      className="w-10 h-10 bg-red-50 text-red-600 rounded-xl hover:bg-red-600 hover:text-white transition-all shadow-sm flex items-center justify-center text-sm active:scale-90"
-                      title="Delete Memo & Revert Stock"
-                    >
-                      🗑️
-                    </button>
+                    <div className="flex justify-center items-center gap-2">
+                      <button
+                        onClick={() => handleViewArchiveMemo(memo)}
+                        className="w-10 h-10 bg-blue-50 text-blue-600 rounded-xl hover:bg-blue-600 hover:text-white transition-all shadow-sm flex items-center justify-center text-sm active:scale-90"
+                        title="View & Re-print Memo"
+                      >
+                        👁️
+                      </button>
+                      <button
+                        onClick={() => handleDeleteMemo(memo)}
+                        className="w-10 h-10 bg-red-50 text-red-600 rounded-xl hover:bg-red-600 hover:text-white transition-all shadow-sm flex items-center justify-center text-sm active:scale-90"
+                        title="Delete Memo & Revert Stock"
+                      >
+                        🗑️
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -647,135 +671,154 @@ const Sales: React.FC<SalesProps> = ({ company, role, user }) => {
       </div>
 
       {/* 🧾 MINIMALIST INVOICE PREVIEW MODAL */}
-      {showInvoicePreview && selectedCust && (
+      {showInvoicePreview && (viewingArchiveMemo || (selectedCust && cart.length > 0)) && (
         <div className="fixed inset-0 bg-black/98 backdrop-blur-3xl z-[5000] flex flex-col items-center p-4 overflow-y-auto no-print">
           <div className="w-full max-w-[148mm] flex justify-between items-center mb-8 sticky top-0 z-[5001] bg-slate-900/90 p-6 rounded-[2.5rem] border border-white/10">
-            <button onClick={() => setShowInvoicePreview(false)} className="text-white font-black uppercase text-[10px] px-6 transition-colors hover:text-blue-400">← ফিরে যান</button>
+            <button onClick={() => { setShowInvoicePreview(false); setViewingArchiveMemo(null); }} className="text-white font-black uppercase text-[10px] px-6 transition-colors hover:text-blue-400">← ফিরে যান</button>
             <div className="flex gap-3">
               <button disabled={isDownloading} onClick={downloadPDF} className="bg-white text-slate-900 px-8 py-4 rounded-xl font-black text-[10px] uppercase shadow-xl active:scale-95">PDF ডাউনলোড ⎙</button>
-              <button disabled={isSaving} onClick={handleFinalSave} className="bg-emerald-600 text-white px-10 py-4 rounded-xl font-black text-[10px] uppercase shadow-xl transition-all hover:bg-emerald-700">কনফার্ম সেভ ✓</button>
+              {!viewingArchiveMemo && (
+                <button disabled={isSaving} onClick={handleFinalSave} className="bg-emerald-600 text-white px-10 py-4 rounded-xl font-black text-[10px] uppercase shadow-xl transition-all hover:bg-emerald-700">কনফার্ম সেভ ✓</button>
+              )}
             </div>
           </div>
 
-          <div ref={invoiceRef} className="bg-white w-[148mm] min-h-fit p-10 flex flex-col font-sans text-black relative overflow-hidden">
-            <p className="text-center font-bold text-[11px] mb-2 italic leading-tight text-black">
-              বিসমিল্লাহির রাহমানির রাহিম
-            </p>
+          {(() => {
+            const isArchive = !!viewingArchiveMemo;
+            const targetCust = isArchive ? viewingArchiveMemo.customers : selectedCust;
+            const targetItems = isArchive ? viewingArchiveMemo.items : cart;
+            const targetMeta = isArchive ? viewingArchiveMemo.meta : {};
+            
+            // Reconstruct totals for archive if needed, or use stored totals
+            const archiveSubtotal = isArchive ? (targetItems.reduce((s: any, i: any) => s + (Number(i.tp || 0) * i.qty * (i.action === 'RETURN' ? -1 : 1)), 0)) : totals.subtotal;
+            const archiveCommission = isArchive ? viewingArchiveMemo.meta?.total_commission : totals.totalCommission;
+            const archiveNetTotal = isArchive ? (archiveSubtotal - archiveCommission) : totals.netTotal;
+            const archiveGift = isArchive ? viewingArchiveMemo.meta?.total_gift : giftAmount;
+            const archiveDeadline = isArchive ? viewingArchiveMemo.meta?.expiry_date : deadlineDate;
+            
+            // For archive, we might not have prevDue/finalTotal stored in meta? 
+            // Let's check if they are there. If not, we use current or 0.
+            const archiveFinalTotal = isArchive ? (Number(archiveNetTotal)) : totals.finalTotalBalance;
 
-            <div className="text-center border-b border-black pb-4 mb-4">
-              <h1 className="text-[26px] font-black uppercase italic tracking-tighter leading-none mb-1 text-blue-600">IFZA ELECTRONICS</h1>
-              <p className="text-[10px] font-black uppercase tracking-[0.2em] mb-1 text-black">{company} DIVISION</p>
-              <p className="text-[8px] font-bold text-black italic">যোগাযোগ: {getStaffContacts(company)}</p>
-            </div>
+            return (
+              <div ref={invoiceRef} className="bg-white w-[148mm] min-h-fit p-10 flex flex-col font-sans text-black relative overflow-hidden">
+                <p className="text-center font-bold text-[11px] mb-2 italic leading-tight text-black">
+                  বিসমিল্লাহির রাহমানির রাহিম
+                </p>
 
-            <div className="flex justify-between items-start mb-6">
-              <div className="space-y-1 flex-1">
-                <p className="text-[18px] font-black uppercase italic leading-tight text-blue-600">{selectedCust.name}</p>
-                <p className="text-[10px] font-bold text-black">📍 ঠিকানা: {selectedCust.address} | 📱 {selectedCust.phone}</p>
-
-                <div className="mt-4 flex gap-4">
-                  <div className="border-l-4 border-black pl-3">
-                    <p className="text-[8px] font-black uppercase text-black">সর্বশেষ জমা:</p>
-                    <p className="text-[13px] font-black text-black">৳{lastPaymentFromDb.toLocaleString()}</p>
-                  </div>
-                  {cashReceived > 0 && (
-                    <div className="border-l-4 border-green-600 pl-3">
-                      <p className="text-[8px] font-black uppercase text-green-600">আজকের জমা:</p>
-                      <p className="text-[13px] font-black text-green-600">৳{cashReceived.toLocaleString()}</p>
-                    </div>
-                  )}
+                <div className="text-center border-b border-black pb-4 mb-4">
+                  <h1 className="text-[26px] font-black uppercase italic tracking-tighter leading-none mb-1 text-blue-600">IFZA ELECTRONICS</h1>
+                  <p className="text-[10px] font-black uppercase tracking-[0.2em] mb-1 text-black">{company} DIVISION</p>
+                  <p className="text-[8px] font-bold text-black italic">যোগাযোগ: {getStaffContacts(company)}</p>
                 </div>
-              </div>
 
-              <div className="text-right space-y-1 w-44">
-                <p className="text-[9px] font-black uppercase text-black mb-2">তারিখ: {new Date().toLocaleDateString('bn-BD')}</p>
-                <p className="flex justify-between font-bold text-[11px] text-black"><span>পূর্বের বাকি:</span> <span className="text-red-600">৳{Math.round(prevDue).toLocaleString()}</span></p>
-                <p className="flex justify-between font-black text-[14px] border-t border-black pt-1 text-black"><span>মোট বাকি:</span> <span className="text-red-600">৳{Math.round(totals.finalTotalBalance).toLocaleString()}</span></p>
-                {deadlineDate && (
-                  <div className="mt-2 p-2 bg-rose-50 border border-rose-100 rounded-lg">
-                    <p className="text-[7px] font-black text-rose-600 uppercase leading-tight">পেমেন্ট ডেডলাইন (কমিশন শর্ত):</p>
-                    <p className="text-[10px] font-black text-rose-700 italic">
-                      {new Date(deadlineDate).toLocaleDateString('bn-BD')}
-                    </p>
-                  </div>
-                )}
-              </div>
-            </div>
+                <div className="flex justify-between items-start mb-6">
+                  <div className="space-y-1 flex-1">
+                    <p className="text-[18px] font-black uppercase italic leading-tight text-blue-600">{targetCust?.name}</p>
+                    <p className="text-[10px] font-bold text-black">📍 ঠিকানা: {targetCust?.address} | 📱 {targetCust?.phone}</p>
 
-            <div className="flex-1 mt-4">
-              <table className="w-full border-collapse">
-                <thead>
-                  <tr className="text-[10px] font-black uppercase italic border-b-2 border-black text-left text-black">
-                    <th className="py-2 w-8">Sl</th>
-                    <th className="py-2">বিবরণ (Description)</th>
-                    <th className="py-2 text-center w-16">দর</th>
-                    <th className="py-2 text-center w-12">Qty</th>
-                    <th className="py-2 text-right w-20">মোট</th>
-                  </tr>
-                </thead>
-                <tbody className={`${cart.length > 35 ? "text-[8px]" : "text-[10px]"} text-black`}>
-                  {cart.map((it, idx) => (
-                    <tr key={idx} className={`font-bold italic border-b border-black ${it.action === 'RETURN' ? 'text-red-600' : it.action === 'REPLACE' ? 'text-blue-600' : 'text-black'}`}>
-                      <td className="py-2">{idx + 1}</td>
-                      <td className="py-2 uppercase">
-                        <span>{it.name}</span>
-                        <div className="flex gap-2 items-center mt-0.5 opacity-60">
-                          <span className="text-[7px] font-black">MRP: ৳{it.mrp}</span>
-                          {it.action !== 'SALE' && <span className="text-[7px] border border-black px-1 rounded uppercase">[{it.action}]</span>}
+                    <div className="mt-4 flex gap-4">
+                      <div className="border-l-4 border-black pl-3">
+                        <p className="text-[8px] font-black uppercase text-black">সর্বশেষ জমা:</p>
+                        <p className="text-[13px] font-black text-black">৳{isArchive ? "N/A" : lastPaymentFromDb.toLocaleString()}</p>
+                      </div>
+                      {!isArchive && cashReceived > 0 && (
+                        <div className="border-l-4 border-green-600 pl-3">
+                          <p className="text-[8px] font-black uppercase text-green-600">আজকের জমা:</p>
+                          <p className="text-[13px] font-black text-green-600">৳{cashReceived.toLocaleString()}</p>
                         </div>
-                      </td>
-                      <td className="py-2 text-center">৳{it.action === 'REPLACE' ? '0' : it.sellingPrice}</td>
-                      <td className="py-2 text-center">{it.qty}</td>
-                      <td className="py-2 text-right">
-                        {it.action === 'REPLACE' ? '৳0' : (it.action === 'RETURN' ? '-' : '') + '৳' + Math.round((it.sellingPrice * it.qty)).toLocaleString()}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-
-            <div className="mt-8 flex justify-end">
-              <div className="w-56 space-y-1 font-black italic text-[10px] text-black">
-                <div className="flex justify-between"><span>SUB-TOTAL (TP):</span><span>৳{Math.round(totals.subtotal).toLocaleString()}</span></div>
-                {totals.totalCommission > 0 && (
-                  <div className="flex justify-between text-blue-600">
-                    <span>TOTAL COMMISSION:</span>
-                    <span>-৳{Math.round(totals.totalCommission).toLocaleString()}</span>
+                      )}
+                    </div>
                   </div>
-                )}
-                <div className="flex justify-between border-t-2 border-black pt-2 text-[15px] text-blue-600">
-                  <span className="uppercase">নিট বিল (Payable):</span>
-                  <span>৳{Math.round(totals.netTotal).toLocaleString()}</span>
-                </div>
-                {showGift && (
-                  <div className="mt-4 pt-2 border-t border-slate-200">
-                    <p className="text-[9px] font-black text-rose-600 italic text-center">** এই পণ্যের সাথে গিফট ধার্য করা হয়েছে।</p>
+
+                  <div className="text-right space-y-1 w-44">
+                    <p className="text-[9px] font-black uppercase text-black mb-2">তারিখ: {isArchive ? new Date(viewingArchiveMemo.created_at).toLocaleDateString('bn-BD') : new Date().toLocaleDateString('bn-BD')}</p>
+                    {!isArchive && <p className="flex justify-between font-bold text-[11px] text-black"><span>পূর্বের বাকি:</span> <span className="text-red-600">৳{Math.round(prevDue).toLocaleString()}</span></p>}
+                    <p className="flex justify-between font-black text-[14px] border-t border-black pt-1 text-black"><span>মোট বিল:</span> <span className="text-red-600">৳{Math.round(archiveNetTotal).toLocaleString()}</span></p>
+                    {archiveDeadline && (
+                      <div className="mt-2 p-2 bg-rose-50 border border-rose-100 rounded-lg">
+                        <p className="text-[7px] font-black text-rose-600 uppercase leading-tight">পেমেন্ট ডেডলাইন (কমিশন শর্ত):</p>
+                        <p className="text-[10px] font-black text-rose-700 italic">
+                          {new Date(archiveDeadline).toLocaleDateString('bn-BD')}
+                        </p>
+                      </div>
+                    )}
                   </div>
-                )}
-                {deadlineDate && (
-                  <p className="text-[7px] text-rose-600 font-black mt-2 leading-tight">* শর্ত: আগামী {new Date(deadlineDate).toLocaleDateString('bn-BD')} তারিখের মধ্যে মোট বকেয়া পরিশোধ করলে উপরের কমিশন কার্যকর হবে।</p>
-                )}
-              </div>
-            </div>
-
-            <div className="mt-20 flex justify-between items-end px-4 mb-4 text-black">
-              <div className="text-center w-40 border-t border-black pt-2 font-black uppercase italic text-[9px]">ক্রেতার স্বাক্ষর</div>
-              <div className="text-center">
-                <div className="mb-1">
-                  <p className="text-[12px] font-black text-red-600 uppercase italic leading-none">এস এম মোস্তাফিজুর রহমান</p>
-                  <p className="text-[9px] font-bold text-red-600 uppercase mt-1">ইফজা ইলেকট্রনিক্স</p>
                 </div>
-                <div className="w-48 border-t border-black pt-2">
-                  <p className="text-[9px] font-black uppercase italic">কর্তৃপক্ষের স্বাক্ষর</p>
+
+                <div className="flex-1 mt-4">
+                  <table className="w-full border-collapse">
+                    <thead>
+                      <tr className="text-[10px] font-black uppercase italic border-b-2 border-black text-left text-black">
+                        <th className="py-2 w-8">Sl</th>
+                        <th className="py-2">বিবরণ (Description)</th>
+                        <th className="py-2 text-center w-16">দর</th>
+                        <th className="py-2 text-center w-12">Qty</th>
+                        <th className="py-2 text-right w-20">মোট</th>
+                      </tr>
+                    </thead>
+                    <tbody className={`${targetItems.length > 35 ? "text-[8px]" : "text-[10px]"} text-black`}>
+                      {targetItems.map((it: any, idx: number) => (
+                        <tr key={idx} className={`font-bold italic border-b border-black ${it.action === 'RETURN' ? 'text-red-600' : it.action === 'REPLACE' ? 'text-blue-600' : 'text-black'}`}>
+                          <td className="py-2">{idx + 1}</td>
+                          <td className="py-2 uppercase">
+                            <span>{it.name}</span>
+                            <div className="flex gap-2 items-center mt-0.5 opacity-60">
+                              <span className="text-[7px] font-black">MRP: ৳{it.mrp}</span>
+                              {it.action !== 'SALE' && <span className="text-[7px] border border-black px-1 rounded uppercase">[{it.action}]</span>}
+                            </div>
+                          </td>
+                          <td className="py-2 text-center">৳{it.action === 'REPLACE' ? '0' : it.price || it.sellingPrice}</td>
+                          <td className="py-2 text-center">{it.qty}</td>
+                          <td className="py-2 text-right">
+                            ৳{Math.abs(Math.round((it.price || it.sellingPrice) * it.qty)).toLocaleString()}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                <div className="mt-8 flex justify-end">
+                  <div className="w-56 space-y-1 font-black italic text-[10px] text-black">
+                    <div className="flex justify-between"><span>SUB-TOTAL (TP):</span><span>৳{Math.round(archiveSubtotal).toLocaleString()}</span></div>
+                    {archiveCommission > 0 && (
+                      <div className="flex justify-between text-blue-600">
+                        <span>TOTAL COMMISSION:</span>
+                        <span>-৳{Math.round(archiveCommission).toLocaleString()}</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between border-t-2 border-black pt-2 text-[15px] text-blue-600">
+                      <span className="uppercase">নিট বিল (Payable):</span>
+                      <span>৳{Math.round(archiveNetTotal).toLocaleString()}</span>
+                    </div>
+                    {archiveGift > 0 && (
+                      <div className="mt-4 pt-2 border-t border-slate-200">
+                        <p className="text-[9px] font-black text-rose-600 italic text-center">** এই পণ্যের সাথে গিফট ধার্য করা হয়েছে।</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="mt-20 flex justify-between items-end px-4 mb-4 text-black">
+                  <div className="text-center w-40 border-t border-black pt-2 font-black uppercase italic text-[9px]">ক্রেতার স্বাক্ষর</div>
+                  <div className="text-center">
+                    <div className="mb-1">
+                      <p className="text-[12px] font-black text-red-600 uppercase italic leading-none">এস এম মোস্তাফিজুর রহমান</p>
+                      <p className="text-[9px] font-bold text-red-600 uppercase mt-1">ইফজা ইলেকট্রনিক্স</p>
+                    </div>
+                    <div className="w-48 border-t border-black pt-2">
+                      <p className="text-[9px] font-black uppercase italic">কর্তৃপক্ষের স্বাক্ষর</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="text-center mt-auto pt-10">
+                  <p className="text-[7px] font-bold uppercase italic tracking-[0.2em] text-black">POWERED BY IFZAERP.COM</p>
                 </div>
               </div>
-            </div>
-
-            <div className="text-center mt-auto pt-10">
-              <p className="text-[7px] font-bold uppercase italic tracking-[0.2em] text-black">POWERED BY IFZAERP.COM</p>
-            </div>
-          </div>
+            );
+          })()}
         </div>
       )}
 
