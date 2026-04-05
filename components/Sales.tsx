@@ -355,7 +355,7 @@ const Sales: React.FC<SalesProps> = ({ company, role, user }) => {
 
   const handleDeleteMemo = async (memo: any) => {
     if (!user.role.includes('ADMIN') && !user.role.includes('STAFF')) return;
-    const memoNo = getMemoNo(memo.id, memo.created_at);
+    const memoNo = getMemoNo(memo.id, memo.created_at, memo.meta);
     const confirmMsg = `আপনি কি নিশ্চিত এই মেমোটি (${memoNo}) ডিলিট করতে চান? এটি ডিলিট করলে মাল স্টকে ফেরত যাবে এবং নোটিফিকেশন মুছে যাবে।`;
     if (!confirm(confirmMsg)) return;
 
@@ -376,7 +376,7 @@ const Sales: React.FC<SalesProps> = ({ company, role, user }) => {
         .from('notifications')
         .delete()
         .eq('customer_id', memo.customer_id)
-        .ilike('message', `%#${memoIdShort}%`);
+        .ilike('message', `%${memoNo}%`);
 
       // 3. Delete the transaction
       const { error } = await supabase.from('transactions').delete().eq('id', memo.id);
