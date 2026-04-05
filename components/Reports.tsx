@@ -31,13 +31,13 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName }) => {
   const reportRef = useRef<HTMLDivElement>(null);
   const memoRef = useRef<HTMLDivElement>(null);
 
-  const getMemoNo = (id: string, date?: string) => {
+  const getMemoNo = (id: string, date?: string, meta?: any) => {
     const d = date ? new Date(date) : new Date();
     const yr = String(d.getFullYear()).slice(-2);
     const mo = String(d.getMonth() + 1).padStart(2, '0');
     const day = String(d.getDate()).padStart(2, '0');
-    const shortId = String(id).slice(-4).toUpperCase();
-    return `INV-${yr}${mo}${day}-${shortId}`;
+    const serial = meta?.daily_serial ? String(meta.daily_serial).padStart(4, '0') : String(id).slice(-4).toUpperCase();
+    return `INV-${yr}${mo}${day}-${serial}`;
   };
 
   useEffect(() => {
@@ -516,7 +516,7 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName }) => {
                           <div>
                             <p className="font-black uppercase">{item.customers?.name}</p>
                             <p className="text-[9px] italic opacity-60">📍 {item.customers?.address}</p>
-                            <p className="text-[8px] font-black text-blue-600 mt-1 uppercase italic bg-blue-50 px-1 inline-block rounded">{getMemoNo(item.id, item.created_at)}</p>
+                            <p className="text-[8px] font-black text-blue-600 mt-1 uppercase italic bg-blue-50 px-1 inline-block rounded">{getMemoNo(item.id, item.created_at, item.meta)}</p>
                           </div>
                           <button onClick={() => { setSelectedMemo(item); setShowMemoModal(true); }} className="no-print opacity-30 hover:opacity-100 transition-opacity" title="মেমো প্রিন্ট">⎙</button>
                         </div>
@@ -594,7 +594,7 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName }) => {
                     <>
                       <td className="p-3 border-r border-black text-center text-[10px]">{new Date(item.created_at).toLocaleDateString('bn-BD')}</td>
                       <td className="p-3 border-r border-black font-black uppercase text-[10px]">
-                        {item.payment_type === 'DUE' ? getMemoNo(item.id, item.created_at) : 'টাকা জমা'}
+                        {item.payment_type === 'DUE' ? getMemoNo(item.id, item.created_at, item.meta) : 'টাকা জমা'}
                       </td>
                       <td className="p-3 border-r border-black text-right font-black text-indigo-700">
                         {item.payment_type === 'DUE' ? `৳${Math.round(item.amount).toLocaleString()}` : '-'}
@@ -676,7 +676,7 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName }) => {
                 <p className={`${(selectedMemo.items?.length || 0) > 30 ? 'text-[15px]' : 'text-[18px]'} font-black uppercase italic leading-tight text-blue-600`}>{selectedMemo.customers?.name}</p>
                 <p className="text-[10px] font-bold text-black">📍 ঠিকানা: {selectedMemo.customers?.address}</p>
                 <p className="text-[11px] text-blue-600 font-black mt-2 uppercase italic leading-none">
-                  মেমো নাম্বার: {getMemoNo(selectedMemo.id, selectedMemo.created_at)}
+                  মেমো নাম্বার: {getMemoNo(selectedMemo.id, selectedMemo.created_at, selectedMemo.meta)}
                 </p>
               </div>
 
