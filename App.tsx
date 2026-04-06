@@ -183,22 +183,26 @@ const App: React.FC = () => {
       <div className="h-screen flex flex-col items-center justify-center bg-[#05070a] text-white overflow-hidden relative">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(37,99,235,0.1),transparent_70%)] animate-pulse"></div>
         <div className="relative mb-12 animate-logo-float">
-            <div className="w-32 h-32 bg-gradient-to-br from-blue-600 to-blue-900 rounded-[2.5rem] flex items-center justify-center shadow-[0_0_50px_rgba(37,99,235,0.3)] border border-white/10 relative overflow-hidden liquid-glow">
-               <div className="absolute inset-0 bg-white/10 skew-x-[-15deg] animate-[logo-shimmer_3s_infinite_cubic-bezier(0.4,0,0.2,1)]"></div>
-               <span className="text-5xl font-black italic tracking-tighter animate-logo-glow relative z-10">if</span>
+            <div className="w-32 h-32 bg-gradient-to-br from-blue-600 via-blue-700 to-indigo-900 rounded-[3rem] flex items-center justify-center shadow-[0_40px_80px_rgba(37,99,235,0.4)] border border-white/20 relative overflow-hidden liquid-glow">
+               <div className="absolute inset-0 bg-white/10 skew-x-[-20deg] animate-[premium-shimmer_3s_infinite_cubic-bezier(0.4,0,0.2,1)]"></div>
+               <span className="text-6xl font-black italic tracking-tighter relative z-10 drop-shadow-2xl">if</span>
             </div>
-            <div className="absolute -bottom-2 -right-2 w-10 h-10 bg-emerald-500 rounded-full border-4 border-[#05070a] active-pulse shadow-[0_0_20px_rgba(16,185,129,0.4)]"></div>
+            <div className="absolute -bottom-2 -right-2 w-10 h-10 bg-emerald-500 rounded-full border-4 border-[#05070a] active-pulse shadow-[0_0_30px_rgba(16,185,129,0.5)]"></div>
         </div>
         <div className="text-center relative z-10">
-           <h2 className="text-4xl font-black italic tracking-tighter uppercase mb-6 relative animate-logo-float">
-              <span className="logo-premium">IFZA ENTERPRISE</span>
-           </h2>
-           <div className="flex justify-center items-center space-x-2">
+           <div className="flex flex-col items-center">
+              <h2 className="text-5xl font-black italic tracking-tighter uppercase mb-2 relative animate-logo-float">
+                 <span className="logo-premium drop-shadow-sm">ইফজা</span>
+                 <span className="text-blue-500 animate-logo-glow inline-block ml-1">.</span>
+              </h2>
+              <div className="h-[1px] w-24 bg-gradient-to-r from-transparent via-blue-400/30 to-transparent mb-6"></div>
+           </div>
+           <div className="flex justify-center items-center space-x-3 mb-8">
               <span className="w-2 h-2 bg-blue-500 rounded-full animate-bounce [animation-delay:-0.3s]"></span>
               <span className="w-2 h-2 bg-blue-500 rounded-full animate-bounce [animation-delay:-0.15s]"></span>
               <span className="w-2 h-2 bg-blue-500 rounded-full animate-bounce"></span>
            </div>
-           <p className="font-bold uppercase text-[10px] tracking-[0.8em] text-blue-400/50 italic mt-6 animate-pulse">Secure Node Syncing...</p>
+           <p className="font-extrabold uppercase text-[9px] tracking-[1em] text-blue-400/40 italic animate-pulse">Syncing Enterprise v4</p>
         </div>
       </div>
     );
@@ -247,7 +251,7 @@ const App: React.FC = () => {
         onClose={() => setIsSidebarOpen(false)} 
       />
       
-      <main className="flex-1 flex flex-col md:ml-[300px] overflow-hidden relative">
+      <main className="flex-1 flex flex-col md:ml-[320px] overflow-hidden relative">
         <header className="h-20 bg-white border-b border-slate-200 flex justify-between items-center px-6 md:px-10 shrink-0 z-40 shadow-sm">
           <div className="flex items-center gap-4">
             <button onClick={() => setIsSidebarOpen(true)} className="md:hidden p-2.5 bg-slate-900 text-white rounded-xl shadow-lg">☰</button>
