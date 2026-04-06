@@ -166,19 +166,24 @@ const MarketingPage: React.FC<MarketingPageProps> = ({ onEnterERP }) => {
 
       <nav className={`fixed ${canInstall ? 'top-[72px]' : 'top-0'} inset-x-0 h-24 bg-black/40 backdrop-blur-2xl z-[1000] border-b border-white/5 flex justify-between items-center px-6 md:px-20 transition-all duration-500`}>
         <div className="flex items-center gap-5 cursor-pointer group animate-logo-float liquid-glow" onClick={() => setViewAllBrand(null)}>
-          <div className="w-14 h-14 bg-gradient-to-br from-blue-600 to-blue-400 rounded-2xl flex items-center justify-center font-black italic shadow-2xl text-white group-hover:rotate-[360deg] transition-transform duration-700 relative overflow-hidden">
-             <div className="absolute inset-0 bg-white/10 skew-x-[-15deg] animate-[logo-shimmer_3s_infinite_cubic-bezier(0.4,0,0.2,1)]"></div>
-             if
+          <div className="relative">
+            <div className="w-14 h-14 bg-gradient-to-br from-blue-600 via-blue-700 to-indigo-900 rounded-2xl flex items-center justify-center text-white text-2xl font-black italic shadow-[0_20px_40px_rgba(37,99,235,0.3)] border border-white/20 transition-all duration-700 group-hover:rotate-[360deg] active:scale-95 overflow-hidden">
+              <div className="absolute inset-0 bg-gradient-to-tr from-white/20 to-transparent opacity-50"></div>
+              <div className="absolute inset-0 bg-white/10 skew-x-[-20deg] animate-[premium-shimmer_3s_infinite_cubic-bezier(0.4,0,0.2,1)]"></div>
+              <span className="relative z-10 drop-shadow-2xl">if</span>
+            </div>
+            <div className="absolute -bottom-0.5 -right-0.5 w-4 h-4 bg-emerald-500 rounded-full border-2 border-[#020408] shadow-lg active-pulse"></div>
           </div>
-           <div className="text-3xl font-black italic tracking-tighter uppercase leading-none text-white whitespace-nowrap">
+          
+          <div className="text-2xl font-black italic tracking-tighter uppercase leading-none text-white whitespace-nowrap">
              <div className="relative group-hover:scale-110 transition-transform duration-700">
-                <span className="logo-premium">ifza</span>
+                <span className="logo-premium drop-shadow-sm">ইফজা</span>
                 <span className="text-blue-500 animate-logo-glow inline-block">.</span>
              </div>
-             <span className="text-slate-400 opacity-60 text-xl font-black italic">electronics</span>
-           </div>
+             <span className="text-slate-400 opacity-40 text-[10px] font-extrabold uppercase tracking-[0.4em] block mt-1">Electronics v4</span>
+          </div>
         </div>
-        <button onClick={onEnterERP} className="bg-blue-600 text-white px-8 py-3.5 rounded-full font-black uppercase text-[10px] tracking-widest shadow-xl active:scale-95 hover:bg-blue-700">
+        <button onClick={onEnterERP} className="bg-blue-600 text-white px-8 py-3.5 rounded-full font-black uppercase text-[10px] tracking-widest shadow-xl active:scale-95 hover:bg-blue-700 transition-all">
           Staff Portal ➔
         </button>
       </nav>
