@@ -8,7 +8,7 @@ interface LedgerProps {
   role: UserRole;
 }
 
-const CompanyLedger: React.FC<LedgerProps> = ({ company, role }) => {
+const CompanyLedger: React.FC<LedgerProps> = ({ company, role }: LedgerProps) => {
   const [ledgerData, setLedgerData] = useState<any[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
@@ -21,6 +21,7 @@ const CompanyLedger: React.FC<LedgerProps> = ({ company, role }) => {
   const [showBankModal, setShowBankModal] = useState(false);
   
   const [bulkCart, setBulkCart] = useState<any[]>([]);
+  const [unmatchedItems, setUnmatchedItems] = useState<any[]>([]);
   const [searchProd, setSearchProd] = useState("");
   const [purchaseDate, setPurchaseDate] = useState(new Date().toISOString().split('T')[0]);
 
@@ -56,19 +57,26 @@ const CompanyLedger: React.FC<LedgerProps> = ({ company, role }) => {
 
   const stats = useMemo(() => {
     let pur = 0, pay = 0, exp = 0, bank = 0;
-    ledgerData.forEach(d => {
+    ledgerData.forEach((d: any) => {
       const amt = Number(d.amount) || 0;
       if (d.type === 'PURCHASE') pur += amt;
       else if (d.type === 'PAYMENT') pay += amt;
       else if (d.type === 'EXPENSE') exp += amt;
       else if (d.type === 'BANK_TRANSFER') bank += amt;
     });
-    return { purchase: pur, paid: pay, expense: exp, bank_sent: bank, balance: pur - (pay + bank) };
+    return { 
+      purchase: pur, 
+      paid: pay, 
+      expense: exp, 
+      bank_sent: bank, 
+      factory_pending: pur - bank,
+      balance: pur - (pay + bank) 
+    };
   }, [ledgerData]);
 
   const filteredHistory = useMemo(() => {
-    if (activeTab === 'BANK') return ledgerData.filter(d => d.type === 'BANK_TRANSFER');
-    return ledgerData.filter(d => d.type !== 'BANK_TRANSFER');
+    if (activeTab === 'BANK') return ledgerData.filter((d: any) => d.type === 'BANK_TRANSFER');
+    return ledgerData.filter((d: any) => d.type !== 'BANK_TRANSFER');
   }, [ledgerData, activeTab]);
 
   const handleSaveBankDeposit = async () => {
@@ -98,7 +106,7 @@ const CompanyLedger: React.FC<LedgerProps> = ({ company, role }) => {
     try {
       const dbCo = mapToDbCompany(company);
       const total = bulkCart.reduce((sum, i) => sum + (i.qty * i.tp), 0);
-      const note = "পারচেজ: " + bulkCart.map(i => `${i.qty}X ${i.name}`).join(", ");
+      const note = "পারচেজ: " + bulkCart.map((i: any) => `${i.qty}X ${i.name}`).join(", ");
       const { error: ledgerErr } = await supabase.from('company_ledger').insert([{
         company: dbCo, type: 'PURCHASE', amount: total, note: note, date: purchaseDate, items_json: bulkCart
       }]);
@@ -128,7 +136,8 @@ const CompanyLedger: React.FC<LedgerProps> = ({ company, role }) => {
       
       {/* 💳 TOP STATS PANEL */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-        <div className="bg-white p-6 rounded-[2.5rem] border border-slate-100 shadow-sm">
+        <div className="bg-white p-6 rounded-[2.5rem] border border-slate-100 shadow-sm relative overflow-hidden group">
+           <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:scale-110 transition-transform">📊</div>
            <p className="text-[10px] font-black uppercase text-slate-400 mb-2 italic">মোট পারচেজ</p>
            <p className="text-xl font-black italic text-slate-900">{formatCurrency(stats.purchase)}</p>
         </div>
@@ -141,12 +150,14 @@ const CompanyLedger: React.FC<LedgerProps> = ({ company, role }) => {
            <p className="text-[10px] font-black uppercase text-indigo-100 mb-2 italic relative z-10">কোম্পানি ব্যাংক জমা</p>
            <p className="text-xl font-black italic tracking-tighter relative z-10">{formatCurrency(stats.bank_sent)}</p>
         </div>
-        <div className="bg-orange-50 p-6 rounded-[2.5rem] border border-orange-100">
-           <p className="text-[10px] font-black uppercase text-orange-600 mb-2 italic">অফিস খরচ</p>
-           <p className="text-xl font-black italic text-orange-700">{formatCurrency(stats.expense)}</p>
+        <div className="bg-blue-900 p-6 rounded-[2.5rem] text-white shadow-xl relative overflow-hidden group border-4 border-blue-400/30">
+           <div className="absolute top-0 right-0 p-3 text-4xl opacity-10">🏭</div>
+           <p className="text-[10px] font-black uppercase text-blue-200 mb-2 italic">ফ্যাক্টরি সেটেলমেন্ট (পেন্ডিং)</p>
+           <p className="text-xl font-black italic tracking-tighter text-blue-100">{formatCurrency(stats.factory_pending)}</p>
+           <p className="text-[8px] font-bold opacity-50 mt-1">*পারচেজ - ব্যাংক জমা</p>
         </div>
         <div className="bg-rose-50 p-6 rounded-[2.5rem] border border-rose-100">
-           <p className="text-[10px] font-black uppercase text-rose-600 mb-2 italic">নিট বকেয়া</p>
+           <p className="text-[10px] font-black uppercase text-rose-600 mb-2 italic">মোট নিট বকেয়া</p>
            <p className="text-xl font-black italic text-rose-700">{formatCurrency(stats.balance)}</p>
         </div>
       </div>
@@ -254,8 +265,109 @@ const CompanyLedger: React.FC<LedgerProps> = ({ company, role }) => {
         <div className="fixed inset-0 bg-slate-950/95 backdrop-blur-xl z-[3000] flex items-center justify-center p-4">
            <div className="bg-white rounded-[4rem] w-full max-w-6xl h-[90vh] flex flex-col shadow-2xl overflow-hidden animate-reveal text-slate-900">
               <div className="p-8 bg-slate-900 text-white flex justify-between items-center shrink-0">
-                 <h3 className="text-2xl font-black uppercase italic tracking-tighter">বাল্ক মাল পারচেজ (Stock In)</h3>
-                 <div className="flex gap-4">
+                 <div className="flex flex-col">
+                    <h3 className="text-2xl font-black uppercase italic tracking-tighter">বাল্ক মাল পারচেজ (Stock In)</h3>
+                    <p className="text-[9px] text-blue-400 font-bold uppercase mt-1">Automatic PDF Parsing Enabled for SQ</p>
+                 </div>
+                 <div className="flex gap-3">
+                    <input 
+                       id="pdf-upload" 
+                       type="file" 
+                       accept=".pdf" 
+                       className="hidden" 
+                       onChange={async (e) => {
+                          const file = e.target.files?.[0];
+                          if (!file) return;
+                          
+                          setLoading(true);
+                          try {
+                             // Load pdfjs from window (added in index.html)
+                             const pdfjsLib = (window as any)['pdfjs-dist/build/pdf'];
+                             pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.worker.min.mjs';
+                             
+                             const arrayBuffer = await file.arrayBuffer();
+                             const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+                             let fullText = "";
+                             
+                             for (let i = 1; i <= pdf.numPages; i++) {
+                                const page = await pdf.getPage(i);
+                                const textContent = await page.getTextContent();
+                                fullText += textContent.items.map((item: any) => item.str).join(' ') + "\n";
+                             }
+
+                             // Regex values for parsing
+                             const dateMatch = fullText.match(/Date:\s*([\d-]+)/);
+                             if (dateMatch) setPurchaseDate(dateMatch[1]);
+
+                             // Find items table
+                             // Format: SL. Item Name Qty Pieces UnitPrice GrossPrice ...
+                             const lines = fullText.split('\n').join(' ').split(/\d+\.\s+/);
+                             const extractedItems: any[] = [];
+                             const failedItems: any[] = [];
+                             
+                             lines.forEach((line, idx) => {
+                                if (idx === 0) return;
+                                const parts = line.trim().split(/\s+/);
+                                if (parts.length < 5) return;
+                                
+                                const piecesIdx = parts.findIndex(p => p.toLowerCase() === 'pieces');
+                                if (piecesIdx === -1) return;
+
+                                const qty = parseFloat(parts[piecesIdx - 1].replace(/,/g, '')) || 0;
+                                const unitPrice = parseFloat(parts[piecesIdx + 1].replace(/,/g, '')) || 0;
+                                const rawName = parts.slice(0, piecesIdx - 1).join(' ');
+
+                                // Cleaning name for better match (remove SQP-, SQ-, extra dashes)
+                                const cleanName = rawName.toLowerCase().replace(/^(sqp|sq)-/i, '').replace(/[^a-z0-9]/g, '');
+
+                                let matchedProd = products.find(p => {
+                                   const pClean = p.name.toLowerCase().replace(/^(sqp|sq)-/i, '').replace(/[^a-z0-9]/g, '');
+                                   return pClean === cleanName;
+                                });
+                                
+                                if (!matchedProd) {
+                                   matchedProd = products.find(p => p.name.toLowerCase().includes(cleanName) || cleanName.includes(p.name.toLowerCase()));
+                                }
+
+                                if (matchedProd) {
+                                   extractedItems.push({ ...matchedProd, qty, tp: unitPrice });
+                                } else {
+                                   failedItems.push({ name: rawName, qty, tp: unitPrice });
+                                }
+                             });
+
+                             if (extractedItems.length > 0) {
+                                setBulkCart(prev => {
+                                   const newCart = [...prev];
+                                   extractedItems.forEach(et => {
+                                      if (!newCart.find(c => c.id === et.id)) newCart.push(et);
+                                   });
+                                   return newCart;
+                                });
+                             }
+                             
+                             if (failedItems.length > 0) {
+                                setUnmatchedItems(failedItems);
+                                alert(`${extractedItems.length} টি আইটেম মিলেছে, কিন্তু ${failedItems.length} টি আইটেম খুঁজে পাওয়া যায়নি। দয়া করে ম্যানুয়ালি সিলেক্ট করুন।`);
+                             } else if (extractedItems.length > 0) {
+                                alert(`${extractedItems.length} টি আইটেম সম্পূর্ণভাবে ইম্পোর্ট হয়েছে!`);
+                             } else {
+                                alert("পিডিএফ থেকে কোনো প্রোডাক্ট ডাটাবেজের সাথে মিলানো যায়নি।");
+                             }
+
+                          } catch (err: any) {
+                             alert("পিডিএফ পার্সিং করতে সমস্যা হয়েছে: " + err.message);
+                          } finally {
+                             setLoading(false);
+                          }
+                       }} 
+                    />
+                    <button 
+                       onClick={() => document.getElementById('pdf-upload')?.click()}
+                       className="flex items-center gap-2 bg-emerald-600 text-white px-6 py-4 rounded-2xl text-[10px] font-black hover:bg-emerald-700 transition-all border border-emerald-400/30"
+                    >
+                       📄 PDF ইম্পোর্ট
+                    </button>
                     <input type="date" className="p-4 bg-white/10 border border-white/20 rounded-2xl text-[10px] font-black" value={purchaseDate} onChange={e => setPurchaseDate(e.target.value)} />
                     <button onClick={() => setShowBulkModal(false)} className="w-12 h-12 bg-white/10 rounded-2xl flex items-center justify-center text-xl">✕</button>
                  </div>
@@ -272,9 +384,42 @@ const CompanyLedger: React.FC<LedgerProps> = ({ company, role }) => {
                        ))}
                     </div>
                  </div>
-                 <div className="w-full lg:w-1/2 p-10 bg-white flex flex-col">
-                    <div className="flex-1 overflow-y-auto custom-scroll space-y-3 mb-8">
-                       {bulkCart.map(item => (
+                  <div className="w-full lg:w-1/2 p-10 bg-white flex flex-col">
+                     <div className="flex-1 overflow-y-auto custom-scroll space-y-3 mb-8">
+                        {unmatchedItems.length > 0 && (
+                           <div className="mb-6 p-6 bg-rose-50 border-2 border-rose-100 rounded-[2.5rem]">
+                              <p className="text-[10px] font-black text-rose-600 uppercase mb-4 text-center">⚠️ নিচের আইটেমগুলো ডাটাবেজে পাওয়া যায়নি</p>
+                              <div className="space-y-3">
+                                 {unmatchedItems.map((item, idx) => (
+                                    <div key={idx} className="flex flex-col gap-2 p-4 bg-white rounded-2xl border border-rose-200">
+                                       <p className="text-[10px] font-black italic text-slate-800 truncate">{item.name}</p>
+                                       <select 
+                                          className="w-full p-2 bg-slate-50 border rounded-xl text-[10px] font-bold outline-none"
+                                          onChange={(e) => {
+                                             const prod = products.find(p => p.id === e.target.value);
+                                             if (prod) {
+                                                setBulkCart([...bulkCart, { ...prod, qty: item.qty, tp: item.tp }]);
+                                                setUnmatchedItems(unmatchedItems.filter((_, i) => i !== idx));
+                                             }
+                                          }}
+                                       >
+                                          <option value="">প্রোডাক্ট সিলেক্ট করুন...</option>
+                                          {products.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                                       </select>
+                                    </div>
+                                 ))}
+                              </div>
+                           </div>
+                        )}
+                        
+                        <p className="text-[10px] font-black text-slate-400 uppercase mb-4 italic">ইম্পোর্ট হতে যাওয়া আইটেম ({bulkCart.length})</p>
+                        {bulkCart.length === 0 && !unmatchedItems.length && (
+                           <div className="h-64 flex flex-col items-center justify-center opacity-20 border-2 border-dashed rounded-[3rem]">
+                              <p className="text-4xl mb-4">📦</p>
+                              <p className="text-[10px] font-black uppercase">কার্ট খালি</p>
+                           </div>
+                        )}
+                        {bulkCart.map(item => (
                          <div key={item.id} className="bg-slate-50 p-6 rounded-[2.5rem] border flex items-center justify-between">
                             <p className="text-[11px] font-black uppercase italic flex-1 truncate pr-4">{item.name}</p>
                             <div className="flex items-center gap-4">
