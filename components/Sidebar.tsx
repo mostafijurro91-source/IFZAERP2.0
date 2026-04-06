@@ -146,15 +146,17 @@ const Sidebar: React.FC<SidebarProps> = ({
             <button onClick={onClose} className="md:hidden text-slate-400 p-2 text-xl hover:text-red-500 transition-colors">✕</button>
           </div>
  
-          <div className="flex flex-col items-center mb-6 mt-6 group cursor-pointer">
-            <div className="text-center">
-              <h1 className="text-5xl font-black italic tracking-tighter text-slate-900 drop-shadow-2xl flex items-center justify-center gap-1">
-                <span className="logo-premium">ইফজা</span>
-                <span className="text-blue-500 animate-dot-bounce inline-block">.</span>
+          <div className="flex flex-col items-center mb-8 mt-4 group cursor-pointer h-24">
+            <div className="text-center relative">
+              <h1 className="text-3xl font-black italic tracking-tighter text-slate-800 flex items-end justify-center gap-2">
+                <span className="logo-premium pb-0.5">ইফজা</span>
+                <div className="pb-1.5">
+                  <span className="w-2.5 h-2.5 bg-blue-500 rounded-full animate-dot-bounce block shadow-[0_4px_10px_rgba(37,99,235,0.3)]"></span>
+                </div>
               </h1>
-              <div className="flex flex-col items-center mt-6">
-                <div className="h-[1px] w-20 bg-gradient-to-r from-transparent via-blue-400/30 to-transparent mb-4"></div>
-                <p className="text-[8px] text-slate-500 font-black uppercase tracking-[0.8em] leading-none opacity-40 group-hover:opacity-100 transition-opacity">Enterprise V4</p>
+              <div className="flex flex-col items-center mt-3">
+                <div className="h-[1px] w-16 bg-gradient-to-r from-transparent via-blue-400/20 to-transparent mb-2"></div>
+                <p className="text-[7px] text-slate-400 font-extrabold uppercase tracking-[0.6em] leading-none opacity-40">Enterprise V4</p>
               </div>
             </div>
           </div>
