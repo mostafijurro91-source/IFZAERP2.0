@@ -20,7 +20,7 @@ const Sidebar: React.FC<SidebarProps> = ({
   setActiveTab, 
   onLogout, 
   user, 
-  companies,
+  companies = [],
   selectedCompany, 
   onCompanyChange,
   isOpen,
@@ -135,7 +135,7 @@ const Sidebar: React.FC<SidebarProps> = ({
         <div className="fixed inset-0 bg-slate-950/20 backdrop-blur-sm z-[240] md:hidden transition-opacity duration-500" onClick={onClose} />
       )}
 
-      <aside className={`fixed inset-y-0 left-0 w-[280px] md:w-[320px] bg-white flex flex-col no-print z-[250] border-r border-slate-200 shadow-xl transition-transform duration-700 cubic-bezier(0.16, 1, 0.3, 1) ${
+      <aside className={`fixed inset-y-0 left-0 w-[280px] md:w-[320px] bg-white/95 backdrop-blur-xl flex flex-col no-print z-[250] border-r border-slate-200/50 shadow-2xl transition-transform duration-700 ease-[cubic-bezier(0.16,1,0.3,1)] ${
         isOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'
       }`}>
         <div className="p-4 md:p-6 space-y-4">
@@ -147,16 +147,24 @@ const Sidebar: React.FC<SidebarProps> = ({
           </div>
 
           <div className="flex flex-col items-center mb-2 group cursor-pointer animate-logo-float liquid-glow mt-2">
-            <div className="w-14 h-14 bg-gradient-to-br from-slate-900 to-slate-700 rounded-[1.8rem] flex items-center justify-center text-white text-2xl font-black italic shadow-2xl transition-all duration-700 group-hover:rotate-[360deg] group-hover:from-blue-600 group-hover:to-blue-400 logo-box-glow active:scale-90 relative overflow-hidden">
-              <div className="absolute inset-0 bg-white/10 skew-x-[-15deg] animate-[logo-shimmer_3s_infinite_cubic-bezier(0.4,0,0.2,1)]"></div>
-              if
+            <div className="relative">
+              <div className="w-12 h-12 bg-gradient-to-br from-blue-600 via-blue-700 to-indigo-900 rounded-[1.5rem] flex items-center justify-center text-white text-2xl font-black italic shadow-[0_15px_40px_rgba(37,99,235,0.3)] border border-white/20 transition-all duration-700 group-hover:rotate-[360deg] active:scale-95 overflow-hidden">
+                <div className="absolute inset-0 bg-gradient-to-tr from-white/20 to-transparent opacity-50"></div>
+                <div className="absolute inset-0 bg-white/10 skew-x-[-20deg] animate-[premium-shimmer_3s_infinite_cubic-bezier(0.4,0,0.2,1)]"></div>
+                <span className="relative z-10 drop-shadow-2xl">if</span>
+              </div>
+              <div className="absolute -bottom-0.5 -right-0.5 w-4 h-4 bg-emerald-500 rounded-full border-[3px] border-white shadow-lg active-pulse"></div>
             </div>
-            <div className="text-center mt-6">
-              <div className="text-4xl font-black italic tracking-tight leading-none relative group-hover:scale-110 transition-transform duration-700">
-                 <span className="logo-premium">ইফজা</span>
+            
+            <div className="text-center mt-4">
+              <div className="text-3xl font-black italic tracking-tighter leading-none relative group-hover:scale-110 transition-transform duration-700">
+                 <span className="logo-premium drop-shadow-sm">ইফজা</span>
                  <span className="text-blue-600 animate-logo-glow inline-block ml-0.5">.</span>
               </div>
-              <p className="text-[7px] text-slate-400 font-black uppercase tracking-[0.4em] mt-4 italic leading-none opacity-50 group-hover:opacity-100 transition-opacity">ERP ENTERPRISE HUB</p>
+              <div className="flex flex-col items-center mt-3">
+                <div className="h-[1px] w-10 bg-gradient-to-r from-transparent via-blue-400/30 to-transparent mb-2"></div>
+                <p className="text-[6px] text-slate-400 font-extrabold uppercase tracking-[0.6em] leading-none opacity-40 group-hover:opacity-100 transition-opacity">ERP ENTERPRISE V4</p>
+              </div>
             </div>
           </div>
           
