@@ -182,27 +182,22 @@ const App: React.FC = () => {
     return (
       <div className="h-screen flex flex-col items-center justify-center bg-[#05070a] text-white overflow-hidden relative">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(37,99,235,0.1),transparent_70%)] animate-pulse"></div>
-        <div className="relative mb-12 animate-logo-float">
-            <div className="w-32 h-32 bg-gradient-to-br from-blue-600 via-blue-700 to-indigo-900 rounded-[3rem] flex items-center justify-center shadow-[0_40px_80px_rgba(37,99,235,0.4)] border border-white/20 relative overflow-hidden liquid-glow">
-               <div className="absolute inset-0 bg-white/10 skew-x-[-20deg] animate-[premium-shimmer_3s_infinite_cubic-bezier(0.4,0,0.2,1)]"></div>
-               <span className="text-6xl font-black italic tracking-tighter relative z-10 drop-shadow-2xl">if</span>
-            </div>
-            <div className="absolute -bottom-2 -right-2 w-10 h-10 bg-emerald-500 rounded-full border-4 border-[#05070a] active-pulse shadow-[0_0_30px_rgba(16,185,129,0.5)]"></div>
-        </div>
         <div className="text-center relative z-10">
            <div className="flex flex-col items-center">
-              <h2 className="text-5xl font-black italic tracking-tighter uppercase mb-2 relative animate-logo-float">
-                 <span className="logo-premium drop-shadow-sm">ইফজা</span>
-                 <span className="text-blue-500 animate-logo-glow inline-block ml-1">.</span>
+              <h2 className="text-7xl font-black italic tracking-tighter text-white drop-shadow-2xl flex items-end justify-center gap-3 mb-4 animate-logo-float">
+                 <span className="logo-premium pb-1">ইফজা</span>
+                 <div className="pb-3">
+                    <span className="w-5 h-5 bg-blue-500 rounded-full animate-dot-bounce block shadow-[0_8px_20px_rgba(37,99,235,0.5)]"></span>
+                 </div>
               </h2>
-              <div className="h-[1px] w-24 bg-gradient-to-r from-transparent via-blue-400/30 to-transparent mb-6"></div>
+              <div className="h-[1px] w-40 bg-gradient-to-r from-transparent via-blue-400/20 to-transparent mb-12 mt-4"></div>
            </div>
-           <div className="flex justify-center items-center space-x-3 mb-8">
-              <span className="w-2 h-2 bg-blue-500 rounded-full animate-bounce [animation-delay:-0.3s]"></span>
-              <span className="w-2 h-2 bg-blue-500 rounded-full animate-bounce [animation-delay:-0.15s]"></span>
-              <span className="w-2 h-2 bg-blue-500 rounded-full animate-bounce"></span>
+           <div className="flex justify-center items-center space-x-4 mb-10">
+              <span className="w-3 h-3 bg-blue-600 rounded-full animate-bounce [animation-delay:-0.3s] shadow-[0_0_15px_rgba(37,99,235,0.3)]"></span>
+              <span className="w-3 h-3 bg-blue-500 rounded-full animate-bounce [animation-delay:-0.15s] shadow-[0_0_15px_rgba(37,99,235,0.3)]"></span>
+              <span className="w-3 h-3 bg-blue-400 rounded-full animate-bounce shadow-[0_0_15px_rgba(37,99,235,0.3)]"></span>
            </div>
-           <p className="font-extrabold uppercase text-[9px] tracking-[1em] text-blue-400/40 italic animate-pulse">Syncing Enterprise v4</p>
+           <p className="font-black uppercase text-[10px] tracking-[1.2em] text-blue-400/30 italic animate-pulse">Syncing Enterprise v4</p>
         </div>
       </div>
     );
