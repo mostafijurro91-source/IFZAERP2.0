@@ -281,9 +281,12 @@ const CompanyLedger: React.FC<LedgerProps> = ({ company, role }: LedgerProps) =>
                           
                           setLoading(true);
                           try {
-                             // Load pdfjs from window (added in index.html)
-                             const pdfjsLib = (window as any)['pdfjs-dist/build/pdf'];
-                             pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.worker.min.mjs';
+                             // Access pdfjsLib from window (v3.11.174)
+                             const pdfjsLib = (window as any).pdfjsLib;
+                             if (!pdfjsLib) throw new Error("pdf.js library not loaded yet. Please refresh and wait a moment.");
+                             
+                             // v3 worker URL
+                             pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
                              
                              const arrayBuffer = await file.arrayBuffer();
                              const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
