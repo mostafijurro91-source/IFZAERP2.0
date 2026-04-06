@@ -145,25 +145,16 @@ const Sidebar: React.FC<SidebarProps> = ({
             </p>
             <button onClick={onClose} className="md:hidden text-slate-400 p-2 text-xl hover:text-red-500 transition-colors">✕</button>
           </div>
-
-          <div className="flex flex-col items-center mb-2 group cursor-pointer animate-logo-float liquid-glow mt-2">
-            <div className="relative">
-              <div className="w-12 h-12 bg-gradient-to-br from-blue-600 via-blue-700 to-indigo-900 rounded-[1.5rem] flex items-center justify-center text-white text-2xl font-black italic shadow-[0_15px_40px_rgba(37,99,235,0.3)] border border-white/20 transition-all duration-700 group-hover:rotate-[360deg] active:scale-95 overflow-hidden">
-                <div className="absolute inset-0 bg-gradient-to-tr from-white/20 to-transparent opacity-50"></div>
-                <div className="absolute inset-0 bg-white/10 skew-x-[-20deg] animate-[premium-shimmer_3s_infinite_cubic-bezier(0.4,0,0.2,1)]"></div>
-                <span className="relative z-10 drop-shadow-2xl">if</span>
-              </div>
-              <div className="absolute -bottom-0.5 -right-0.5 w-4 h-4 bg-emerald-500 rounded-full border-[3px] border-white shadow-lg active-pulse"></div>
-            </div>
-            
-            <div className="text-center mt-4">
-              <div className="text-3xl font-black italic tracking-tighter leading-none relative group-hover:scale-110 transition-transform duration-700">
-                 <span className="logo-premium drop-shadow-sm">ইফজা</span>
-                 <span className="text-blue-600 animate-logo-glow inline-block ml-0.5">.</span>
-              </div>
-              <div className="flex flex-col items-center mt-3">
-                <div className="h-[1px] w-10 bg-gradient-to-r from-transparent via-blue-400/30 to-transparent mb-2"></div>
-                <p className="text-[6px] text-slate-400 font-extrabold uppercase tracking-[0.6em] leading-none opacity-40 group-hover:opacity-100 transition-opacity">ERP ENTERPRISE V4</p>
+ 
+          <div className="flex flex-col items-center mb-6 mt-6 group cursor-pointer">
+            <div className="text-center">
+              <h1 className="text-5xl font-black italic tracking-tighter text-slate-900 drop-shadow-2xl flex items-center justify-center gap-1">
+                <span className="logo-premium">ইফজা</span>
+                <span className="text-blue-500 animate-dot-bounce inline-block">.</span>
+              </h1>
+              <div className="flex flex-col items-center mt-6">
+                <div className="h-[1px] w-20 bg-gradient-to-r from-transparent via-blue-400/30 to-transparent mb-4"></div>
+                <p className="text-[8px] text-slate-500 font-black uppercase tracking-[0.8em] leading-none opacity-40 group-hover:opacity-100 transition-opacity">Enterprise V4</p>
               </div>
             </div>
           </div>
