@@ -84,14 +84,27 @@ const Login: React.FC<LoginProps> = ({ onLogin, onBack }) => {
       <div className="relative w-full max-w-[460px] animate-reveal">
         <div className="bg-[#0d121f]/80 backdrop-blur-3xl border border-white/5 p-10 md:p-14 rounded-[3.5rem] shadow-2xl">
           <div className="text-center mb-10 overflow-hidden">
-             <div className="text-7xl font-black italic tracking-tighter text-white lowercase leading-none flex justify-center items-baseline group animate-logo-float liquid-glow mt-8">
-                <div className="relative group-hover:scale-110 transition-transform duration-700">
-                   <span className="logo-premium">ifza</span>
-                   <span className="text-blue-500 mx-0.5 animate-logo-glow inline-block">.</span>
+             <div className="flex flex-col items-center mb-8 group cursor-pointer animate-logo-float liquid-glow mt-8">
+                <div className="relative">
+                  <div className="w-20 h-20 bg-gradient-to-br from-blue-600 via-blue-700 to-indigo-900 rounded-[2.5rem] flex items-center justify-center text-white text-4xl font-black italic shadow-[0_30px_60px_rgba(37,99,235,0.4)] border border-white/20 transition-all duration-700 group-hover:rotate-[360deg] active:scale-95 overflow-hidden">
+                    <div className="absolute inset-0 bg-gradient-to-tr from-white/20 to-transparent opacity-50"></div>
+                    <div className="absolute inset-0 bg-white/10 skew-x-[-20deg] animate-[premium-shimmer_3s_infinite_cubic-bezier(0.4,0,0.2,1)]"></div>
+                    <span className="relative z-10 drop-shadow-2xl">if</span>
+                  </div>
+                  <div className="absolute -bottom-1 -right-1 w-7 h-7 bg-emerald-500 rounded-full border-4 border-[#0d121f] shadow-lg active-pulse"></div>
                 </div>
-                <span className="text-slate-400 text-4xl">erp</span>
+                
+                <div className="text-center mt-8">
+                  <div className="text-5xl font-black italic tracking-tighter leading-none relative group-hover:scale-110 transition-transform duration-700">
+                     <span className="logo-premium drop-shadow-sm">ইফজা</span>
+                     <span className="text-blue-500 animate-logo-glow inline-block ml-0.5">.</span>
+                  </div>
+                  <div className="flex flex-col items-center mt-6">
+                    <div className="h-[1px] w-16 bg-gradient-to-r from-transparent via-blue-400/30 to-transparent mb-4"></div>
+                    <p className="text-[8px] text-slate-500 font-extrabold uppercase tracking-[0.8em] leading-none opacity-40 group-hover:opacity-100 transition-opacity">ERP ENTERPRISE V4</p>
+                  </div>
+                </div>
              </div>
-             <p className="text-[8px] font-black uppercase tracking-[0.6em] text-slate-500 mt-8 italic scale-90">Secure Enterprise Access Node</p>
           </div>
 
           <div className="bg-white/5 p-1.5 rounded-2xl flex gap-1.5 mb-10 border border-white/5">
