@@ -219,11 +219,12 @@ const Sales: React.FC<SalesProps> = ({ company, role, user }) => {
     }, 0);
 
     const itemCommissionTotal = cart.reduce((sum: number, i: CartItem) => {
-      if (i.action !== 'SALE') return sum;
+      if (i.action === 'REPLACE') return sum;
       const tpPrice = Number(i.tp);
       const sellPrice = Number(i.sellingPrice);
       const commissionPerUnit = tpPrice - sellPrice;
-      return sum + (commissionPerUnit * i.qty);
+      const lineCommission = commissionPerUnit * i.qty;
+      return sum + (i.action === 'RETURN' ? -lineCommission : lineCommission);
     }, 0);
 
     const globalCommissionAmount = (subtotalBeforeCommission > 0) ? (subtotalBeforeCommission * globalCommission) / 100 : 0;
@@ -733,7 +734,7 @@ const Sales: React.FC<SalesProps> = ({ company, role, user }) => {
             const targetMeta = isArchive ? viewingArchiveMemo.meta : {};
             
             // Reconstruct totals for archive if needed, or use stored totals
-            const archiveSubtotal = isArchive ? (targetItems.reduce((s: any, i: any) => s + (Number(i.tp || 0) * i.qty * (i.action === 'RETURN' ? -1 : 1)), 0)) : totals.subtotal;
+            const archiveSubtotal = isArchive ? (targetItems.reduce((s: any, i: any) => s + (Number(i.tp || 0) * i.qty * (i.action === 'REPLACE' ? 0 : (i.action === 'RETURN' ? -1 : 1))), 0)) : totals.subtotal;
             const archiveCommission = isArchive ? viewingArchiveMemo.meta?.total_commission : totals.totalCommission;
             const archiveNetTotal = isArchive ? (archiveSubtotal - archiveCommission) : totals.netTotal;
             const archiveGift = isArchive ? viewingArchiveMemo.meta?.total_gift : giftAmount;
