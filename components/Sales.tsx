@@ -353,11 +353,8 @@ const Sales: React.FC<SalesProps> = ({ company, role, user }) => {
 
       alert("মেমো সফলভাবে সেভ হয়েছে!");
       
-      // 📝 Automatically switch to Archive view so user can see real Memo No and Print
-      const finalMemo = { ...txData, customers: selectedCust };
-      setViewingArchiveMemo(finalMemo);
-      
-      // Clear secondary states but keep the preview open
+      // Clear secondary states and close preview
+      setShowInvoicePreview(false);
       setCart([]);
       setSelectedCust(null);
       setGlobalCommission(0);
