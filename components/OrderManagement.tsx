@@ -28,16 +28,28 @@ const OrderManagement: React.FC<OrderManagementProps> = ({ company, user, setAct
       const startOfDay = `${selectedDate}T00:00:00.000Z`;
       const endOfDay = `${selectedDate}T23:59:59.999Z`;
       
+      // Fetch all for the company and filter in JS for maximum reliability
       const { data, error } = await supabase
         .from('market_orders')
         .select('*, customers(name, address, phone)')
         .eq('company', dbCo)
-        .or(`status.eq.PENDING,and(created_at.gte.${startOfDay},created_at.lte.${endOfDay})`)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      setOrders(data || []);
-    } catch (err) { console.error(err); } finally { setLoading(false); }
+      
+      const filtered = data?.filter(o => {
+        const isPending = o.status === 'PENDING';
+        const isToday = o.created_at >= startOfDay && o.created_at <= endOfDay;
+        return isPending || isToday;
+      }) || [];
+      
+      setOrders(filtered);
+    } catch (err: any) { 
+      console.error(err); 
+      alert("ডেটা লোড করতে সমস্যা হয়েছে: " + err.message);
+    } finally { 
+      setLoading(false); 
+    }
   };
 
   const handleProcessMemo = () => {
