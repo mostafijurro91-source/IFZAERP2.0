@@ -242,19 +242,12 @@ const Sales: React.FC<SalesProps> = ({ company, role, user }) => {
 
     setIsSaving(true);
     try {
-      // 📊 Calculate Daily Serial Number
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      const tomorrow = new Date(today);
-      tomorrow.setDate(tomorrow.getDate() + 1);
-
+      // 📊 Calculate Global Continuous Serial Number (No more daily reset)
       const { count } = await supabase
         .from('transactions')
         .select('*', { count: 'exact', head: true })
         .eq('company', dbCo)
-        .eq('payment_type', 'DUE')
-        .gte('created_at', today.toISOString())
-        .lt('created_at', tomorrow.toISOString());
+        .eq('payment_type', 'DUE');
 
       const nextSerial = (count || 0) + 1;
 
