@@ -216,7 +216,7 @@ const App: React.FC = () => {
             {activeTab === 'ad_manager' && <AdManager />}
             {activeTab === 'sales' && <Sales company={selectedCompany} role={user.role} user={user} />}
             {activeTab === 'collections' && <Collections company={selectedCompany} user={user} />}
-            {activeTab === 'order_management' && <OrderManagement company={selectedCompany} user={user} />}
+            {activeTab === 'order_management' && <OrderManagement company={selectedCompany} user={user} setActiveTab={setActiveTab} />}
             {activeTab === 'bookings' && <Bookings company={selectedCompany} role={user.role} user={user} />}
             {activeTab === 'replacements' && <Replacements company={selectedCompany} role={user.role} />}
             {activeTab === 'delivery_hub' && <DeliveryHub company={selectedCompany} user={user} />}
