@@ -6,9 +6,10 @@ import { supabase, db, mapToDbCompany } from '../lib/supabase';
 interface OrderManagementProps {
   company: Company;
   user: User;
+  setActiveTab: (tab: string) => void;
 }
 
-const OrderManagement: React.FC<OrderManagementProps> = ({ company, user }) => {
+const OrderManagement: React.FC<OrderManagementProps> = ({ company, user, setActiveTab }) => {
   const [orders, setOrders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [showDetailModal, setShowDetailModal] = useState(false);
@@ -26,15 +27,39 @@ const OrderManagement: React.FC<OrderManagementProps> = ({ company, user }) => {
       const dbCo = mapToDbCompany(company);
       const startOfDay = `${selectedDate}T00:00:00.000Z`;
       const endOfDay = `${selectedDate}T23:59:59.999Z`;
-      const { data, error } = await supabase.from('market_orders').select('*, customers(name, address, phone)').eq('company', dbCo).gte('created_at', startOfDay).lte('created_at', endOfDay).order('created_at', { ascending: false });
+      
+      const { data, error } = await supabase
+        .from('market_orders')
+        .select('*, customers(name, address, phone)')
+        .eq('company', dbCo)
+        .or(`status.eq.PENDING,and(created_at.gte.${startOfDay},created_at.lte.${endOfDay})`)
+        .order('created_at', { ascending: false });
+
       if (error) throw error;
       setOrders(data || []);
     } catch (err) { console.error(err); } finally { setLoading(false); }
   };
 
+  const handleProcessMemo = () => {
+    if (!selectedOrder) return;
+    
+    // 🚚 Handoff data to Sales component via LocalStorage
+    const pendingOrder = {
+      orderId: selectedOrder.id,
+      customerId: selectedOrder.customer_id,
+      items: selectedOrder.items
+    };
+    
+    localStorage.setItem('ifza_pending_market_order', JSON.stringify(pendingOrder));
+    
+    // Switch to Sales Tab
+    setActiveTab('sales');
+    setShowDetailModal(false);
+  };
+
   const handleApproveOrder = async () => {
     if (!selectedOrder || isSaving) return;
-    if (!confirm("অর্ডারটি কি সম্পন্ন হয়েছে? এটি করলে শুধুমাত্র স্ট্যাটাস পরিবর্তন হবে। স্টক অ্যাডজাস্ট করতে সেলস মেমো তৈরি করুন।")) return;
+    if (!confirm("অর্ডারটি কি সরাসরি সম্পন্ন (COMPLETED) করতে চান? এটি করলে স্টক বা লেজারে কোনো পরিবর্তন হবে না। স্টক ঠিক করতে 'মেমো তৈরি করুন' বাটন ব্যবহার করুন।")) return;
     setIsSaving(true);
     try {
       const { error } = await supabase.from('market_orders').update({ status: 'COMPLETED' }).eq('id', selectedOrder.id);
@@ -109,9 +134,14 @@ const OrderManagement: React.FC<OrderManagementProps> = ({ company, user }) => {
                     <p className="text-xl font-black italic text-slate-900 tracking-tighter">৳{Math.round(selectedOrder.total_amount).toLocaleString()}</p>
                  </div>
               </div>
-              <div className="p-4 bg-slate-50 border-t flex flex-col gap-2">
-                 {selectedOrder.status === 'PENDING' && <button disabled={isSaving} onClick={handleApproveOrder} className="w-full bg-emerald-600 text-white py-3.5 rounded-xl font-black uppercase text-[10px] shadow-lg">অ্যাপ্রুভ করুন ✓</button>}
-                 <button onClick={() => setShowDetailModal(false)} className="w-full py-3 bg-white border text-slate-400 rounded-xl font-black uppercase text-[10px]">বন্ধ করুন</button>
+              <div className="p-4 bg-slate-100 border-t flex flex-col gap-2">
+                 {selectedOrder.status === 'PENDING' && (
+                   <>
+                     <button onClick={handleProcessMemo} className="w-full bg-blue-600 text-white py-4 rounded-xl font-black uppercase text-[11px] shadow-xl active:scale-95 transition-all">মেমো তৈরি করুন & প্রসেস ➔</button>
+                     <button disabled={isSaving} onClick={handleApproveOrder} className="w-full bg-white border border-slate-200 text-slate-400 py-3 rounded-xl font-black uppercase text-[9px]">সরাসরি সম্পন্ন (Approve Only)</button>
+                   </>
+                 )}
+                 <button onClick={() => setShowDetailModal(false)} className="w-full py-3 text-slate-400 font-black uppercase text-[9px]">বন্ধ করুন</button>
               </div>
            </div>
         </div>
