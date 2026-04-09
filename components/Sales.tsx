@@ -53,6 +53,7 @@ const Sales: React.FC<SalesProps> = ({ company, role, user }) => {
   const [giftAmount, setGiftAmount] = useState<number>(0); 
   const [showGift, setShowGift] = useState(false); 
   const [viewingArchiveMemo, setViewingArchiveMemo] = useState<any>(null);
+  const [activeProcessingOrderId, setActiveProcessingOrderId] = useState<string | null>(null);
 
   const [nextMemoSerial, setNextMemoSerial] = useState<number | null>(null);
   const invoiceRef = useRef<HTMLDivElement>(null);
@@ -96,6 +97,45 @@ const Sales: React.FC<SalesProps> = ({ company, role, user }) => {
       setCustomers(cRes.data || []);
     } finally { setLoading(false); }
   };
+
+  useEffect(() => {
+    if (!loading && products.length > 0 && customers.length > 0) {
+      const pendingData = localStorage.getItem('ifza_pending_market_order');
+      if (pendingData) {
+        try {
+          const order = JSON.parse(pendingData);
+          const cust = customers.find(c => c.id === order.customerId);
+          if (cust) {
+            setSelectedCust(cust);
+            
+            const newCart: CartItem[] = [];
+            order.items.forEach((it: any) => {
+              const p = products.find(prod => prod.id === it.id);
+              if (p) {
+                newCart.push({
+                  ...p,
+                  qty: it.qty,
+                  sellingPrice: p.tp,
+                  discountPercent: (p as any).commission_percent || 0,
+                  action: it.action || 'SALE'
+                });
+              }
+            });
+            
+            if (newCart.length > 0) {
+              setCart(newCart);
+              setActiveProcessingOrderId(order.orderId);
+              // Clean up to prevent re-processing on refresh
+              localStorage.removeItem('ifza_pending_market_order');
+              alert("মার্কেট অর্ডার থেকে ডেটা লোড করা হয়েছে! ✅");
+            }
+          }
+        } catch (e) {
+          console.error("Order Ingestion Error:", e);
+        }
+      }
+    }
+  }, [loading, products, customers]);
 
   const fetchRecentMemos = async () => {
     try {
@@ -307,6 +347,15 @@ const Sales: React.FC<SalesProps> = ({ company, role, user }) => {
       }]).select().single();
 
       if (txError) throw txError;
+
+      // 🔄 If this was a Market Order, mark it as COMPLETED
+      if (activeProcessingOrderId) {
+        await supabase
+          .from('market_orders')
+          .update({ status: 'COMPLETED' })
+          .eq('id', activeProcessingOrderId);
+        setActiveProcessingOrderId(null);
+      }
 
       const memoNo = getMemoNo(txData.id, txData.created_at, txData.meta);
 
