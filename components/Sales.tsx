@@ -54,6 +54,7 @@ const Sales: React.FC<SalesProps> = ({ company, role, user }) => {
   const [showGift, setShowGift] = useState(false); 
   const [viewingArchiveMemo, setViewingArchiveMemo] = useState<any>(null);
 
+  const [nextMemoSerial, setNextMemoSerial] = useState<number | null>(null);
   const invoiceRef = useRef<HTMLDivElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const areaRef = useRef<HTMLDivElement>(null);
@@ -210,6 +211,23 @@ const Sales: React.FC<SalesProps> = ({ company, role, user }) => {
     setCart((prev: CartItem[]) => prev.filter((_, i) => i !== idx));
   };
 
+  const openPreview = async () => {
+    if (!selectedCust || cart.length === 0) return alert("দোকান এবং পণ্য নির্বাচন করুন!");
+    
+    try {
+      const { count } = await supabase
+        .from('transactions')
+        .select('*', { count: 'exact', head: true })
+        .eq('company', dbCo)
+        .eq('payment_type', 'DUE');
+      setNextMemoSerial((count || 0) + 1);
+      setShowInvoicePreview(true);
+    } catch (err) {
+      setNextMemoSerial(null);
+      setShowInvoicePreview(true);
+    }
+  };
+
   const totals = useMemo(() => {
     const subtotalBeforeCommission = cart.reduce((sum: number, i: CartItem) => {
       if (i.action === 'REPLACE') return sum;
@@ -281,6 +299,8 @@ const Sales: React.FC<SalesProps> = ({ company, role, user }) => {
           expiry_date: expiryDate,
           commission_status: deadlineDate ? 'PENDING' : 'COMPLETED',
           previous_due: prevDue,
+          last_collection: lastPaymentFromDb,
+          cash_received: cashReceived,
           final_balance: totals.finalTotalBalance,
           daily_serial: nextSerial
         }
@@ -613,7 +633,7 @@ const Sales: React.FC<SalesProps> = ({ company, role, user }) => {
                   <p className="text-[8px] font-black text-slate-500 uppercase italic leading-none mb-1">Grand Total</p>
                   <p className="text-2xl font-black italic tracking-tighter text-white">{formatCurrency(totals.netTotal)}</p>
                 </div>
-                <button disabled={cart.length === 0 || !selectedCust} onClick={() => setShowInvoicePreview(true)} className="bg-blue-600 text-white px-6 py-4 rounded-2xl font-black uppercase text-[10px] shadow-2xl active:scale-95 transition-all">মেমো প্রিভিউ ➔</button>
+                <button disabled={cart.length === 0 || !selectedCust} onClick={openPreview} className="bg-blue-600 text-white px-6 py-4 rounded-2xl font-black uppercase text-[10px] shadow-2xl active:scale-95 transition-all">মেমো প্রিভিউ ➔</button>
               </div>
             </div>
           </div>
@@ -737,6 +757,14 @@ const Sales: React.FC<SalesProps> = ({ company, role, user }) => {
             // For archive, we might not have prevDue/finalTotal stored in meta? 
             // Let's check if they are there. If not, we use current or 0.
             const archiveFinalTotal = isArchive ? (viewingArchiveMemo.meta?.final_balance ?? null) : totals.finalTotalBalance;
+            const archiveLastColl = isArchive ? (viewingArchiveMemo.meta?.last_collection ?? 0) : lastPaymentFromDb;
+            const archiveCashReceived = isArchive ? (viewingArchiveMemo.meta?.cash_received ?? 0) : cashReceived;
+
+            const previewMemoNo = () => {
+              if (isArchive) return getMemoNo(viewingArchiveMemo.id, viewingArchiveMemo.created_at, viewingArchiveMemo.meta);
+              if (nextMemoSerial) return getMemoNo("", new Date().toISOString(), { daily_serial: nextMemoSerial });
+              return `INV-${new Date().getFullYear().toString().slice(-2)}${(new Date().getMonth()+1).toString().padStart(2,'0')}${new Date().getDate().toString().padStart(2,'0')}-...`;
+            };
 
             return (
               <div ref={invoiceRef} className="bg-white w-[148mm] min-h-fit p-10 flex flex-col font-sans text-black relative overflow-hidden">
@@ -758,12 +786,12 @@ const Sales: React.FC<SalesProps> = ({ company, role, user }) => {
                     <div className="mt-4 flex gap-4">
                       <div className="border-l-4 border-black pl-3">
                         <p className="text-[8px] font-black uppercase text-black">সর্বশেষ জমা:</p>
-                        <p className="text-[13px] font-black text-black">৳{isArchive ? "N/A" : lastPaymentFromDb.toLocaleString()}</p>
+                        <p className="text-[13px] font-black text-black">৳{Math.round(archiveLastColl).toLocaleString()}</p>
                       </div>
-                      {!isArchive && cashReceived > 0 && (
+                      {archiveCashReceived > 0 && (
                         <div className="border-l-4 border-green-600 pl-3">
                           <p className="text-[8px] font-black uppercase text-green-600">আজকের জমা:</p>
-                          <p className="text-[13px] font-black text-green-600">৳{cashReceived.toLocaleString()}</p>
+                          <p className="text-[13px] font-black text-green-600">৳{Math.round(archiveCashReceived).toLocaleString()}</p>
                         </div>
                       )}
                     </div>
@@ -772,7 +800,7 @@ const Sales: React.FC<SalesProps> = ({ company, role, user }) => {
                   <div className="text-right space-y-1 w-44">
                     <p className="text-[9px] font-black uppercase text-black mb-2">তারিখ: {isArchive ? new Date(viewingArchiveMemo.created_at).toLocaleDateString('bn-BD') : new Date().toLocaleDateString('bn-BD')}</p>
                     <p className="text-[11px] font-black text-blue-600 uppercase italic mb-2 leading-none">
-                      মেমো নাম্বার: {isArchive ? getMemoNo(viewingArchiveMemo.id, viewingArchiveMemo.created_at, viewingArchiveMemo.meta) : `INV-${new Date().getFullYear().toString().slice(-2)}${(new Date().getMonth()+1).toString().padStart(2,'0')}${new Date().getDate().toString().padStart(2,'0')}-...`}
+                      মেমো নাম্বার: {previewMemoNo()}
                     </p>
                     <p className="flex justify-between font-bold text-[11px] text-black"><span>পূর্বের বাকি:</span> <span className="text-red-700">{archivePrevDue !== null ? `৳${Math.round(archivePrevDue).toLocaleString()}` : 'N/A'}</span></p>
                     <p className="flex justify-between font-black text-[13px] border-t border-black pt-1 text-black"><span>আজকের বিল:</span> <span className="text-blue-700">৳{Math.round(archiveNetTotal).toLocaleString()}</span></p>
@@ -826,7 +854,7 @@ const Sales: React.FC<SalesProps> = ({ company, role, user }) => {
                     <div className="flex justify-between"><span>SUB-TOTAL (TP):</span><span>৳{Math.round(archiveSubtotal).toLocaleString()}</span></div>
                     {archiveCommission > 0 && (
                       <div className="flex justify-between text-blue-600">
-                        <span>TOTAL COMMISSION:</span>
+                        <span>TOTAL COMMISSION {targetMeta?.commission_percent_global ? `(${targetMeta.commission_percent_global}%)` : (globalCommission > 0 && !isArchive ? `(${globalCommission}%)` : '')}:</span>
                         <span>-৳{Math.round(archiveCommission).toLocaleString()}</span>
                       </div>
                     )}
