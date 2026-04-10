@@ -80,9 +80,9 @@ const Customers: React.FC<CustomerProps> = ({ company, role, userName }) => {
       setLoading(true);
       const dbCompany = mapToDbCompany(company);
       const { data: custData, error: ce } = await supabase.from('customers').select('*').order('name');
-      if (ce) throw ce;
+      if (ce) console.error("Customer fetch error:", ce);
       const { data: txData, error: te } = await supabase.from('transactions').select('customer_id, amount, payment_type, meta, items').eq('company', dbCompany);
-      if (te) throw te;
+      if (te) console.error("Transaction fetch error:", te);
 
       const regMap: Record<string, number> = {};
       const bookMap: Record<string, number> = {};
@@ -431,14 +431,17 @@ const Customers: React.FC<CustomerProps> = ({ company, role, userName }) => {
     }
   };
 
-  const filtered = customers.filter((c: Customer) => 
-    (!search || 
-      c.name.toLowerCase().includes(search.toLowerCase()) || 
-      (c.phone && c.phone.includes(search)) || 
-      (c.portal_username && c.portal_username.toLowerCase().includes(search.toLowerCase()))
-    ) && 
-    (!selectedArea || c.address === selectedArea)
-  );
+  const filtered = customers.filter((c: Customer) => {
+    const q = (search || "").toLowerCase().trim();
+    const name = (c.name || "").toLowerCase();
+    const phone = (c.phone || "");
+    const portalId = (c.portal_username || "").toLowerCase();
+
+    const matchesSearch = !q || name.includes(q) || phone.includes(q) || portalId.includes(q);
+    const matchesArea = !selectedArea || c.address === selectedArea;
+
+    return matchesSearch && matchesArea;
+  });
 
   return (
     <div className="space-y-6 pb-40 relative text-slate-900">
