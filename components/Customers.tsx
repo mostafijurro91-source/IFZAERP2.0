@@ -79,8 +79,10 @@ const Customers: React.FC<CustomerProps> = ({ company, role, userName }) => {
     try {
       setLoading(true);
       const dbCompany = mapToDbCompany(company);
-      const { data: custData } = await supabase.from('customers').select('*').order('name');
-      const { data: txData } = await supabase.from('transactions').select('customer_id, amount, payment_type, meta, items').eq('company', dbCompany);
+      const { data: custData, error: ce } = await supabase.from('customers').select('*').order('name');
+      if (ce) throw ce;
+      const { data: txData, error: te } = await supabase.from('transactions').select('customer_id, amount, payment_type, meta, items').eq('company', dbCompany);
+      if (te) throw te;
 
       const regMap: Record<string, number> = {};
       const bookMap: Record<string, number> = {};
@@ -124,9 +126,14 @@ const Customers: React.FC<CustomerProps> = ({ company, role, userName }) => {
 
       let customerId = editingCustomer?.id;
       if (editingCustomer) {
-        await supabase.from('customers').update(payload).eq('id', editingCustomer.id);
+        const { error: upError } = await supabase.from('customers').update(payload).eq('id', editingCustomer.id);
+        if (upError) throw upError;
       } else {
-        const { data } = await supabase.from('customers').insert([payload]).select();
+        const { data, error: inError } = await supabase.from('customers').insert([payload]).select();
+        if (inError) throw inError;
+        if (!data || data.length === 0) {
+          throw new Error("সার্ভার থেকে কোনো ডাটা ফেরত আসেনি। অনুগ্রহ করে চেক করুন আপনার ইনসার্ট পারমিশন আছে কিনা।");
+        }
         customerId = data?.[0].id;
       }
 
@@ -142,9 +149,10 @@ const Customers: React.FC<CustomerProps> = ({ company, role, userName }) => {
           .maybeSingle();
 
         if (existingTx) {
-          await supabase.from('transactions').update({ amount: newAmt }).eq('id', existingTx.id);
+          const { error: upErr } = await supabase.from('transactions').update({ amount: newAmt }).eq('id', existingTx.id);
+          if (upErr) throw upErr;
         } else if (newAmt !== 0) {
-          await supabase.from('transactions').insert([{
+          const { error: inErr } = await supabase.from('transactions').insert([{
             customer_id: customerId,
             company: dbCompany,
             amount: newAmt,
@@ -152,15 +160,17 @@ const Customers: React.FC<CustomerProps> = ({ company, role, userName }) => {
             items: [{ note: 'পূর্বের বকেয়া (Opening Balance)' }],
             submitted_by: userName
           }]);
+          if (inErr) throw inErr;
         }
       }
       setShowModal(false);
       setEditingCustomer(null);
       setFormData({ name: '', phone: '', address: '', money_amount: '', portal_username: '', portal_password: '' });
       await fetchCustomers();
-      alert("তথ্য সফলভাবে সংরক্ষিত হয়েছে! ✅");
+      alert(`তথ্য সফলভাবে সংরক্ষিত হয়েছে! ✅\nID: ${customerId}`);
     } catch (err: any) {
-      alert("ত্রুটি: " + err.message);
+      console.error("Save Error:", err);
+      alert("ত্রুটি (Save Error): " + (err.message || "Unknown error occurred"));
     } finally { setIsSaving(false); }
   };
 
@@ -421,7 +431,14 @@ const Customers: React.FC<CustomerProps> = ({ company, role, userName }) => {
     }
   };
 
-  const filtered = customers.filter((c: Customer) => (!search || c.name.toLowerCase().includes(search.toLowerCase()) || (c.phone && c.phone.includes(search))) && (!selectedArea || c.address === selectedArea));
+  const filtered = customers.filter((c: Customer) => 
+    (!search || 
+      c.name.toLowerCase().includes(search.toLowerCase()) || 
+      (c.phone && c.phone.includes(search)) || 
+      (c.portal_username && c.portal_username.toLowerCase().includes(search.toLowerCase()))
+    ) && 
+    (!selectedArea || c.address === selectedArea)
+  );
 
   return (
     <div className="space-y-6 pb-40 relative text-slate-900">
