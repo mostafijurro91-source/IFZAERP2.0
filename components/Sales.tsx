@@ -228,7 +228,6 @@ const Sales: React.FC<SalesProps> = ({ company, role, user }) => {
     } else {
       setCart([...cart, { ...p, qty: 1, sellingPrice: p.tp, discountPercent: defaultComm, action: 'SALE' }]);
     }
-    setProdSearch("");
   };
 
   const updateCartItem = (idx: number, updates: Partial<CartItem>) => {
@@ -491,7 +490,8 @@ const Sales: React.FC<SalesProps> = ({ company, role, user }) => {
       const q = (custSearch || "").toLowerCase().trim();
       const name = (c.name || "").toLowerCase();
       const phone = (c.phone || "");
-      return (name.includes(q) || phone.includes(q)) && (!areaFilter || c.address === areaFilter);
+      const portalId = (c.portal_username || "").toLowerCase();
+      return (name.includes(q) || phone.includes(q) || portalId.includes(q)) && (!areaFilter || c.address === areaFilter);
     });
   }, [customers, custSearch, areaFilter]);
 
@@ -560,7 +560,23 @@ const Sales: React.FC<SalesProps> = ({ company, role, user }) => {
           </div>
 
           <div className="bg-white p-6 rounded-[2rem] border shadow-sm">
-            <input className="w-full p-4 bg-slate-50 border rounded-2xl font-bold text-xs uppercase mb-4" placeholder="মডেল সার্চ করুন..." value={prodSearch} onChange={e => setProdSearch(e.target.value)} />
+            <div className="relative mb-4">
+              <input 
+                className="w-full p-4 bg-slate-50 border rounded-2xl font-bold text-xs uppercase" 
+                placeholder="মডেল সার্চ করুন..." 
+                value={prodSearch} 
+                onChange={e => setProdSearch(e.target.value)} 
+              />
+              {prodSearch && (
+                <button 
+                  onClick={() => setProdSearch("")}
+                  className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-red-500 font-bold text-lg"
+                  title="Clear Search"
+                >
+                  ×
+                </button>
+              )}
+            </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-2 max-h-[500px] overflow-y-auto custom-scroll pr-2">
               {filteredProducts.map(p => (
                 <div key={p.id} onClick={() => addToCart(p)} className="p-4 border rounded-2xl flex justify-between items-center hover:bg-blue-50 cursor-pointer active:scale-95 transition-all">
