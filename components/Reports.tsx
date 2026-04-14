@@ -13,7 +13,7 @@ interface ReportsProps {
   userName?: string;
 }
 
-type ReportType = 'MAIN' | 'CUSTOMER_DUES' | 'STOCK_REPORT' | 'DELIVERY_LOG_A4' | 'PURCHASE_HISTORY' | 'BOOKING_LOG' | 'COLLECTION_REPORT' | 'CUSTOMER_LEDGER';
+type ReportType = 'MAIN' | 'CUSTOMER_DUES' | 'STOCK_REPORT' | 'DELIVERY_LOG_A4' | 'PURCHASE_HISTORY' | 'BOOKING_LOG' | 'COLLECTION_REPORT' | 'CUSTOMER_LEDGER' | 'COMPANY_SALES';
 
 const Reports: React.FC<ReportsProps> = ({ company, userRole, userName }) => {
   const [activeReport, setActiveReport] = useState<ReportType>('MAIN');
@@ -233,6 +233,36 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName }) => {
         });
         setReportData(processed || []);
       }
+      else if (type === 'COMPANY_SALES') {
+        const [{ data: cos }, { data: txs }] = await Promise.all([
+          supabase.from('companies').select('*').order('name'),
+          supabase.from('transactions').select('company, amount, payment_type')
+        ]);
+
+        const salesMap: Record<string, number> = {};
+        let totalAll = 0;
+
+        txs?.forEach((tx: any) => {
+          if (tx.payment_type !== 'COLLECTION') {
+            const amt = Number(tx.amount || 0);
+            const co = tx.company || 'Unknown';
+            salesMap[co] = (salesMap[co] || 0) + amt;
+            totalAll += amt;
+          }
+        });
+
+        const rows = cos?.map((c: any) => {
+          const sales = salesMap[c.name] || 0;
+          return {
+            name: c.name,
+            sales: sales,
+            percentage: totalAll > 0 ? (sales / totalAll) * 100 : 0,
+            grandTotal: totalAll
+          };
+        }) || [];
+
+        setReportData(rows);
+      }
     } catch (err) { console.error("Report Fetch Error:", err); } finally { setLoading(false); }
   };
 
@@ -363,6 +393,12 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName }) => {
     if (activeReport === 'CUSTOMER_DUES') {
       return { totalRemQty: 0, totalRemVal: filteredData.reduce((s: number, i: any) => s + Number(i.balance || 0), 0) };
     }
+    if (activeReport === 'COMPANY_SALES') {
+      return {
+        totalRemQty: 0,
+        totalRemVal: filteredData.length > 0 ? filteredData[0].grandTotal : 0
+      };
+    }
     return {
       totalRemQty: 0,
       totalRemVal: filteredData.reduce((s: number, i: any) => s + Number(i.amount || 0), 0)
@@ -377,7 +413,8 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName }) => {
       { id: 'DELIVERY_LOG_A4', title: 'DELIVERY SHEET', icon: '🚚', desc: 'প্রতিদিনের ডেলিভারি শিট' },
       { id: 'PURCHASE_HISTORY', title: 'PURCHASE LOG', icon: '📒', desc: 'কোম্পানি ক্রয় হিসাব' },
       { id: 'CUSTOMER_DUES', title: 'DUE REPORT', icon: '💸', desc: 'মার্কেট বকেয়া' },
-      { id: 'CUSTOMER_LEDGER', title: 'SHOP LEDGER', icon: '📜', desc: 'দোকানদার লেজার রিপোর্ট' }
+      { id: 'CUSTOMER_LEDGER', title: 'SHOP LEDGER', icon: '📜', desc: 'দোকানদার লেজার রিপোর্ট' },
+      { id: 'COMPANY_SALES', title: 'COMPANY SALES', icon: '📊', desc: 'সব কোম্পানির সেলস রিপোর্ট' }
     ];
 
     return (
@@ -493,6 +530,12 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName }) => {
                     <th className="p-3 border-r border-white/20 text-center w-20">স্বাক্ষর (মাল)</th>
                     <th className="p-3 text-center w-20">স্বাক্ষর (নগদ)</th>
                   </>
+                ) : activeReport === 'COMPANY_SALES' ? (
+                  <>
+                    <th className="p-3 border-r border-white/20 text-left">কোম্পানির নাম</th>
+                    <th className="p-3 border-r border-white/20 text-right w-48">মোট সেল (Amount)</th>
+                    <th className="p-3 text-center w-32">পার্সেন্টেজ (%)</th>
+                  </>
                 ) : (
                   <>
                     <th className="p-3 border-r border-white/20 text-left">দোকানের বিবরণ</th>
@@ -607,6 +650,23 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName }) => {
                       </td>
                       <td className="p-3 border-r border-black text-center"></td>
                       <td className="p-3 text-center"></td>
+                    </>
+                  ) : activeReport === 'COMPANY_SALES' ? (
+                    <>
+                      <td className="p-3 border-r border-black uppercase">
+                        <p className="font-black text-lg">{item.name}</p>
+                      </td>
+                      <td className="p-3 border-r border-black text-right font-black italic text-xl text-indigo-700">
+                        ৳{Math.round(item.sales).toLocaleString()}
+                      </td>
+                      <td className="p-3 text-center">
+                        <div className="flex flex-col items-center">
+                          <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden mb-1 border border-slate-200">
+                            <div className="bg-indigo-600 h-full" style={{ width: `${item.percentage}%` }}></div>
+                          </div>
+                          <span className="font-black text-indigo-600">{item.percentage.toFixed(2)}%</span>
+                        </div>
+                      </td>
                     </>
                   ) : (
                     <>
