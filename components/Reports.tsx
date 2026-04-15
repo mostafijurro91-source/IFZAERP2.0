@@ -242,9 +242,18 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName }) => {
         const salesMap: Record<string, number> = {};
         const commissionMap: Record<string, number> = {};
         const collectionMap: Record<string, number> = {};
+        const myEarningsMap: Record<string, number> = {};
+        
         let totalSalesAll = 0;
         let totalCommAll = 0;
         let totalCollAll = 0;
+        let totalMyEarnAll = 0;
+
+        const myCommRates: Record<string, number> = {
+          'SQ Light': 0.08,
+          'Transtec': 0.07,
+          'SQ Cables': 0.02
+        };
 
         txs?.forEach((tx: any) => {
           const co = tx.company || 'Unknown';
@@ -260,6 +269,11 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName }) => {
             const comm = Number(tx.meta?.total_commission || 0);
             commissionMap[co] = (commissionMap[co] || 0) + comm;
             totalCommAll += comm;
+
+            const rate = myCommRates[co] || 0;
+            const earn = amt * rate;
+            myEarningsMap[co] = (myEarningsMap[co] || 0) + earn;
+            totalMyEarnAll += earn;
           }
         });
 
@@ -270,10 +284,12 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName }) => {
             sales: sales,
             commission: commissionMap[c.name] || 0,
             collection: collectionMap[c.name] || 0,
+            myEarnings: myEarningsMap[c.name] || 0,
             percentage: totalSalesAll > 0 ? (sales / totalSalesAll) * 100 : 0,
             grandTotalSales: totalSalesAll,
             grandTotalComm: totalCommAll,
-            grandTotalColl: totalCollAll
+            grandTotalColl: totalCollAll,
+            grandTotalMyEarn: totalMyEarnAll
           };
         }) || [];
 
@@ -414,7 +430,8 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName }) => {
         totalRemQty: 0,
         totalRemVal: filteredData.length > 0 ? filteredData[0].grandTotalSales : 0,
         totalComm: filteredData.length > 0 ? filteredData[0].grandTotalComm : 0,
-        totalColl: filteredData.length > 0 ? filteredData[0].grandTotalColl : 0
+        totalColl: filteredData.length > 0 ? filteredData[0].grandTotalColl : 0,
+        totalMyEarn: filteredData.length > 0 ? filteredData[0].grandTotalMyEarn : 0
       };
     }
     return {
@@ -551,10 +568,11 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName }) => {
                 ) : activeReport === 'COMPANY_SALES' ? (
                   <>
                     <th className="p-3 border-r border-white/20 text-left">কোম্পানির নাম</th>
-                    <th className="p-3 border-r border-white/20 text-right w-36">মোট সেল</th>
-                    <th className="p-3 border-r border-white/20 text-right w-36">কমিশন</th>
-                    <th className="p-3 border-r border-white/20 text-right w-36">সংগ্রহ (Cash)</th>
-                    <th className="p-3 text-center w-28">পার্সেন্টেজ (%)</th>
+                    <th className="p-3 border-r border-white/20 text-right w-32">মোট সেল</th>
+                    <th className="p-3 border-r border-white/20 text-right w-32">দোকানি কমিশন</th>
+                    <th className="p-3 border-r border-white/20 text-right w-32 bg-indigo-900">আমার কমিশন</th>
+                    <th className="p-3 border-r border-white/20 text-right w-32">সংগ্রহ (Cash)</th>
+                    <th className="p-3 text-center w-24">পার্সেন্টেজ (%)</th>
                   </>
                 ) : (
                   <>
@@ -674,15 +692,18 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName }) => {
                   ) : activeReport === 'COMPANY_SALES' ? (
                     <>
                       <td className="p-3 border-r border-black uppercase">
-                        <p className="font-black text-sm">{item.name}</p>
+                        <p className="font-black text-[11px]">{item.name}</p>
                       </td>
-                      <td className="p-3 border-r border-black text-right font-black italic text-base text-indigo-700">
+                      <td className="p-3 border-r border-black text-right font-black italic text-[13px] text-slate-700">
                         ৳{Math.round(item.sales).toLocaleString()}
                       </td>
-                      <td className="p-3 border-r border-black text-right font-black italic text-base text-rose-600">
+                      <td className="p-3 border-r border-black text-right font-black italic text-[13px] text-rose-600">
                         ৳{Math.round(item.commission).toLocaleString()}
                       </td>
-                      <td className="p-3 border-r border-black text-right font-black italic text-base text-emerald-600">
+                      <td className="p-3 border-r border-black text-right font-black italic text-sm text-indigo-700 bg-indigo-50">
+                        ৳{Math.round(item.myEarnings).toLocaleString()}
+                      </td>
+                      <td className="p-3 border-r border-black text-right font-black italic text-[13px] text-emerald-600">
                         ৳{Math.round(item.collection).toLocaleString()}
                       </td>
                       <td className="p-3 text-center">
@@ -690,7 +711,7 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName }) => {
                           <div className="w-full bg-slate-100 h-1 rounded-full overflow-hidden mb-1 border border-slate-200">
                             <div className="bg-indigo-600 h-full" style={{ width: `${item.percentage}%` }}></div>
                           </div>
-                          <span className="font-black text-indigo-600 text-[9px]">{item.percentage.toFixed(1)}%</span>
+                          <span className="font-black text-indigo-600 text-[8px]">{item.percentage.toFixed(1)}%</span>
                         </div>
                       </td>
                     </>
@@ -729,21 +750,25 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName }) => {
                 </div>
               )}
               {activeReport === 'COMPANY_SALES' ? (
-                <div className="space-y-2">
-                  <div className="flex justify-between text-sm font-black text-indigo-700 italic border-b border-indigo-100 pb-1">
+                <div className="space-y-1.5">
+                  <div className="flex justify-between text-[11px] font-black text-slate-500 italic border-b border-black/5 pb-1">
                     <span>সার্বিক সেল (Across All):</span>
                     <span>৳{(summary.totalRemVal || 0).toLocaleString()}</span>
                   </div>
-                  <div className="flex justify-between text-sm font-black text-rose-600 italic border-b border-rose-100 pb-1">
-                    <span>মোট কমিশন (Expense):</span>
+                  <div className="flex justify-between text-[11px] font-black text-rose-600 italic border-b border-rose-50 pb-1">
+                    <span>মোট দোকানি কমিশন (Expense):</span>
                     <span>৳{(summary.totalComm || 0).toLocaleString()}</span>
                   </div>
-                  <div className="flex justify-between text-sm font-black text-emerald-600 italic border-b border-emerald-100 pb-1">
+                  <div className="flex justify-between text-[11px] font-black text-indigo-600 italic border-b border-indigo-50 pb-1">
+                    <span>মোট আপনার কমিশন (My Earnings):</span>
+                    <span>৳{(summary.totalMyEarn || 0).toLocaleString()}</span>
+                  </div>
+                  <div className="flex justify-between text-[11px] font-black text-emerald-600 italic border-b border-emerald-50 pb-1">
                     <span>মোট কালেকশন (Received):</span>
                     <span>৳{(summary.totalColl || 0).toLocaleString()}</span>
                   </div>
-                  <div className="flex justify-between text-2xl font-black text-black tracking-tighter leading-none pt-2">
-                    <span className="uppercase">NET OUTSTANDING (বাকি):</span>
+                  <div className="flex justify-between text-[18px] font-black text-black tracking-tighter leading-none pt-2 mt-2 border-t-2 border-black">
+                    <span className="uppercase italic">NET OUTSTANDING (মার্কেট বকেয়া):</span>
                     <span>৳{((summary.totalRemVal || 0) - (summary.totalColl || 0)).toLocaleString()}</span>
                   </div>
                 </div>
