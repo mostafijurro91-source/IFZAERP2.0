@@ -236,18 +236,30 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName }) => {
       else if (type === 'COMPANY_SALES') {
         const [{ data: cos }, { data: txs }] = await Promise.all([
           supabase.from('companies').select('*').order('name'),
-          supabase.from('transactions').select('company, amount, payment_type')
+          supabase.from('transactions').select('company, amount, payment_type, meta')
         ]);
 
         const salesMap: Record<string, number> = {};
-        let totalAll = 0;
+        const commissionMap: Record<string, number> = {};
+        const collectionMap: Record<string, number> = {};
+        let totalSalesAll = 0;
+        let totalCommAll = 0;
+        let totalCollAll = 0;
 
         txs?.forEach((tx: any) => {
-          if (tx.payment_type !== 'COLLECTION') {
-            const amt = Number(tx.amount || 0);
-            const co = tx.company || 'Unknown';
+          const co = tx.company || 'Unknown';
+          const amt = Number(tx.amount || 0);
+          
+          if (tx.payment_type === 'COLLECTION') {
+            collectionMap[co] = (collectionMap[co] || 0) + amt;
+            totalCollAll += amt;
+          } else {
             salesMap[co] = (salesMap[co] || 0) + amt;
-            totalAll += amt;
+            totalSalesAll += amt;
+            
+            const comm = Number(tx.meta?.total_commission || 0);
+            commissionMap[co] = (commissionMap[co] || 0) + comm;
+            totalCommAll += comm;
           }
         });
 
@@ -256,8 +268,12 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName }) => {
           return {
             name: c.name,
             sales: sales,
-            percentage: totalAll > 0 ? (sales / totalAll) * 100 : 0,
-            grandTotal: totalAll
+            commission: commissionMap[c.name] || 0,
+            collection: collectionMap[c.name] || 0,
+            percentage: totalSalesAll > 0 ? (sales / totalSalesAll) * 100 : 0,
+            grandTotalSales: totalSalesAll,
+            grandTotalComm: totalCommAll,
+            grandTotalColl: totalCollAll
           };
         }) || [];
 
@@ -396,7 +412,9 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName }) => {
     if (activeReport === 'COMPANY_SALES') {
       return {
         totalRemQty: 0,
-        totalRemVal: filteredData.length > 0 ? filteredData[0].grandTotal : 0
+        totalRemVal: filteredData.length > 0 ? filteredData[0].grandTotalSales : 0,
+        totalComm: filteredData.length > 0 ? filteredData[0].grandTotalComm : 0,
+        totalColl: filteredData.length > 0 ? filteredData[0].grandTotalColl : 0
       };
     }
     return {
@@ -533,8 +551,10 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName }) => {
                 ) : activeReport === 'COMPANY_SALES' ? (
                   <>
                     <th className="p-3 border-r border-white/20 text-left">কোম্পানির নাম</th>
-                    <th className="p-3 border-r border-white/20 text-right w-48">মোট সেল (Amount)</th>
-                    <th className="p-3 text-center w-32">পার্সেন্টেজ (%)</th>
+                    <th className="p-3 border-r border-white/20 text-right w-36">মোট সেল</th>
+                    <th className="p-3 border-r border-white/20 text-right w-36">কমিশন</th>
+                    <th className="p-3 border-r border-white/20 text-right w-36">সংগ্রহ (Cash)</th>
+                    <th className="p-3 text-center w-28">পার্সেন্টেজ (%)</th>
                   </>
                 ) : (
                   <>
@@ -654,17 +674,23 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName }) => {
                   ) : activeReport === 'COMPANY_SALES' ? (
                     <>
                       <td className="p-3 border-r border-black uppercase">
-                        <p className="font-black text-lg">{item.name}</p>
+                        <p className="font-black text-sm">{item.name}</p>
                       </td>
-                      <td className="p-3 border-r border-black text-right font-black italic text-xl text-indigo-700">
+                      <td className="p-3 border-r border-black text-right font-black italic text-base text-indigo-700">
                         ৳{Math.round(item.sales).toLocaleString()}
+                      </td>
+                      <td className="p-3 border-r border-black text-right font-black italic text-base text-rose-600">
+                        ৳{Math.round(item.commission).toLocaleString()}
+                      </td>
+                      <td className="p-3 border-r border-black text-right font-black italic text-base text-emerald-600">
+                        ৳{Math.round(item.collection).toLocaleString()}
                       </td>
                       <td className="p-3 text-center">
                         <div className="flex flex-col items-center">
-                          <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden mb-1 border border-slate-200">
+                          <div className="w-full bg-slate-100 h-1 rounded-full overflow-hidden mb-1 border border-slate-200">
                             <div className="bg-indigo-600 h-full" style={{ width: `${item.percentage}%` }}></div>
                           </div>
-                          <span className="font-black text-indigo-600">{item.percentage.toFixed(2)}%</span>
+                          <span className="font-black text-indigo-600 text-[9px]">{item.percentage.toFixed(1)}%</span>
                         </div>
                       </td>
                     </>
@@ -702,10 +728,31 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName }) => {
                   <span>{(summary.totalRemQty || 0)} Pcs</span>
                 </div>
               )}
-              <div className="flex justify-between text-3xl font-black text-black tracking-tighter leading-none pt-2">
-                <span className="uppercase">{activeReport === 'BOOKING_LOG' ? 'NET REQUIREMENT:' : 'NET TOTAL SUM:'}</span>
-                <span>৳{(summary.totalRemVal || 0).toLocaleString()}</span>
-              </div>
+              {activeReport === 'COMPANY_SALES' ? (
+                <div className="space-y-2">
+                  <div className="flex justify-between text-sm font-black text-indigo-700 italic border-b border-indigo-100 pb-1">
+                    <span>সার্বিক সেল (Across All):</span>
+                    <span>৳{(summary.totalRemVal || 0).toLocaleString()}</span>
+                  </div>
+                  <div className="flex justify-between text-sm font-black text-rose-600 italic border-b border-rose-100 pb-1">
+                    <span>মোট কমিশন (Expense):</span>
+                    <span>৳{(summary.totalComm || 0).toLocaleString()}</span>
+                  </div>
+                  <div className="flex justify-between text-sm font-black text-emerald-600 italic border-b border-emerald-100 pb-1">
+                    <span>মোট কালেকশন (Received):</span>
+                    <span>৳{(summary.totalColl || 0).toLocaleString()}</span>
+                  </div>
+                  <div className="flex justify-between text-2xl font-black text-black tracking-tighter leading-none pt-2">
+                    <span className="uppercase">NET OUTSTANDING (বাকি):</span>
+                    <span>৳{((summary.totalRemVal || 0) - (summary.totalColl || 0)).toLocaleString()}</span>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex justify-between text-3xl font-black text-black tracking-tighter leading-none pt-2">
+                  <span className="uppercase">{activeReport === 'BOOKING_LOG' ? 'NET REQUIREMENT:' : 'NET TOTAL SUM:'}</span>
+                  <span>৳{(summary.totalRemVal || 0).toLocaleString()}</span>
+                </div>
+              )}
             </div>
           </div>
 
