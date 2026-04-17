@@ -296,13 +296,10 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName }) => {
         setReportData(rows);
       }
       else if (type === 'PRODUCT_SALES_REPORT') {
-        const start = `${selectedDate}T00:00:00.000Z`;
-        const end = `${selectedDate}T23:59:59.999Z`;
-
         const [prodRes, txRes, bookRes] = await Promise.all([
           supabase.from('products').select('*').eq('company', dbCompany).order('name'),
-          supabase.from('transactions').select('items, payment_type, created_at').eq('company', dbCompany).gte('created_at', start).lte('created_at', end),
-          supabase.from('bookings').select('items, created_at').eq('company', dbCompany).gte('created_at', start).lte('created_at', end)
+          supabase.from('transactions').select('items, payment_type, created_at').eq('company', dbCompany),
+          supabase.from('bookings').select('items, created_at').eq('company', dbCompany)
         ]);
 
         const productsList = prodRes.data || [];
@@ -530,7 +527,7 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName }) => {
       <div className="flex justify-between items-center mb-8 no-print flex-wrap gap-4">
         <button onClick={() => setActiveReport('MAIN')} className="bg-slate-900 text-white px-8 py-5 rounded-[1.5rem] font-black text-[11px] uppercase">← ফিরে যান</button>
         <div className="flex gap-4 items-center bg-slate-50 p-3 rounded-[2rem] border">
-          {(activeReport === 'DELIVERY_LOG_A4' || activeReport === 'COLLECTION_REPORT' || activeReport === 'PRODUCT_SALES_REPORT') && (
+          {(activeReport === 'DELIVERY_LOG_A4' || activeReport === 'COLLECTION_REPORT') && (
             <input type="date" className="p-3 border rounded-[1.2rem] text-[10px] font-black" value={selectedDate} onChange={(e: any) => setSelectedDate(e.target.value)} />
           )}
           
