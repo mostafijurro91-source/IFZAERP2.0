@@ -301,8 +301,8 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName }) => {
 
         const [prodRes, txRes, bookRes] = await Promise.all([
           supabase.from('products').select('*').eq('company', dbCompany).order('name'),
-          supabase.from('transactions').select('items, payment_type, created_at').eq('company', dbCompany),
-          supabase.from('bookings').select('items, created_at').eq('company', dbCompany)
+          supabase.from('transactions').select('items, payment_type, created_at').eq('company', dbCompany).gte('created_at', start).lte('created_at', end),
+          supabase.from('bookings').select('items, created_at').eq('company', dbCompany).gte('created_at', start).lte('created_at', end)
         ]);
 
         const productsList = prodRes.data || [];
@@ -312,42 +312,31 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName }) => {
           statsMap[p.id] = { pos_sold: 0, booking_sold: 0, total_sold: 0, total_value: 0 };
         });
 
-        // Filter transactions by date if needed (using current pattern)
-        const filteredTxs = txRes.data?.filter(tx => {
-          if (!selectedDate) return true;
-          return tx.created_at >= start && tx.created_at <= end;
-        }) || [];
-
-        filteredTxs.forEach((tx: any) => tx.items?.forEach((it: any) => {
-          if (statsMap[it.id]) {
+        txRes.data?.forEach((tx: any) => tx.items?.forEach((it: any) => {
+          const pid = it.id || it.product_id;
+          if (statsMap[pid]) {
+            const qty = Number(it.qty || 0);
+            const val = qty * Number(it.tp || it.price || 0);
             if (it.action === 'SALE' || !it.action) {
-              const qty = Number(it.qty || 0);
-              statsMap[it.id].pos_sold += qty;
-              statsMap[it.id].total_sold += qty;
-              statsMap[it.id].total_value += qty * Number(it.tp || it.price || 0);
-            }
-            if (it.action === 'RETURN') {
-              const qty = Number(it.qty || 0);
-              statsMap[it.id].pos_sold -= qty;
-              statsMap[it.id].total_sold -= qty;
-              statsMap[it.id].total_value -= qty * Number(it.tp || it.price || 0);
+              statsMap[pid].pos_sold += qty;
+              statsMap[pid].total_sold += qty;
+              statsMap[pid].total_value += val;
+            } else if (it.action === 'RETURN') {
+              statsMap[pid].pos_sold -= qty;
+              statsMap[pid].total_sold -= qty;
+              statsMap[pid].total_value -= val;
             }
           }
         }));
 
-        // Filter bookings by date
-        const filteredBookings = bookRes.data?.filter(b => {
-          if (!selectedDate) return true;
-          return b.created_at >= start && b.created_at <= end;
-        }) || [];
-
-        filteredBookings.forEach((b: any) => b.items?.forEach((it: any) => {
-          if (statsMap[it.product_id || it.id]) {
-            const pid = it.product_id || it.id;
+        bookRes.data?.forEach((b: any) => b.items?.forEach((it: any) => {
+          const pid = it.product_id || it.id;
+          if (statsMap[pid]) {
             const qty = Number(it.delivered_qty || 0);
+            const val = qty * Number(it.unitPrice || 0);
             statsMap[pid].booking_sold += qty;
             statsMap[pid].total_sold += qty;
-            statsMap[pid].total_value += qty * Number(it.unitPrice || 0);
+            statsMap[pid].total_value += val;
           }
         }));
 
@@ -465,7 +454,8 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName }) => {
   const filteredData = useMemo(() => {
     const q = searchQuery.toLowerCase().trim();
     return reportData.filter((item: any) => {
-      const name = (item.name || item.customers?.name || item.item_name || "").toLowerCase();
+      if (!item) return false;
+      const name = (item.name || item.customers?.name || item.item_name || item.note || "").toLowerCase();
       return !q || name.includes(q);
     });
   }, [reportData, searchQuery]);
@@ -540,7 +530,9 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName }) => {
       <div className="flex justify-between items-center mb-8 no-print flex-wrap gap-4">
         <button onClick={() => setActiveReport('MAIN')} className="bg-slate-900 text-white px-8 py-5 rounded-[1.5rem] font-black text-[11px] uppercase">← ফিরে যান</button>
         <div className="flex gap-4 items-center bg-slate-50 p-3 rounded-[2rem] border">
-          {(activeReport === 'DELIVERY_LOG_A4' || activeReport === 'COLLECTION_REPORT') && <input type="date" className="p-3 border rounded-[1.2rem] text-[10px] font-black" value={selectedDate} onChange={(e: any) => setSelectedDate(e.target.value)} />}
+          {(activeReport === 'DELIVERY_LOG_A4' || activeReport === 'COLLECTION_REPORT' || activeReport === 'PRODUCT_SALES_REPORT') && (
+            <input type="date" className="p-3 border rounded-[1.2rem] text-[10px] font-black" value={selectedDate} onChange={(e: any) => setSelectedDate(e.target.value)} />
+          )}
           
           {activeReport === 'CUSTOMER_LEDGER' && (
             <select 
