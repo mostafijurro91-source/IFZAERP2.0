@@ -296,17 +296,26 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName }) => {
         setReportData(rows);
       }
       else if (type === 'PRODUCT_SALES_REPORT') {
-        const [prodRes, txRes, bookRes] = await Promise.all([
+        const weekStart = new Date();
+        weekStart.setDate(weekStart.getDate() - 7);
+        const weekStartISO = weekStart.toISOString();
+
+        const [prodRes, txRes, bookRes, replRes] = await Promise.all([
           supabase.from('products').select('*').eq('company', dbCompany).order('name'),
           supabase.from('transactions').select('items, payment_type, created_at').eq('company', dbCompany),
-          supabase.from('bookings').select('items, created_at').eq('company', dbCompany)
+          supabase.from('bookings').select('items, created_at').eq('company', dbCompany),
+          supabase.from('replacements').select('product_id, qty, created_at').eq('company', dbCompany)
         ]);
 
         const productsList = prodRes.data || [];
         const statsMap: Record<string, any> = {};
 
         productsList.forEach((p: Product) => {
-          statsMap[p.id] = { pos_sold: 0, booking_sold: 0, total_sold: 0, total_value: 0 };
+          statsMap[p.id] = { 
+            pos_total: 0, book_total: 0, repl_total: 0,
+            pos_week: 0, book_week: 0, repl_week: 0,
+            total_sold: 0, total_value: 0 
+          };
         });
 
         txRes.data?.forEach((tx: any) => tx.items?.forEach((it: any) => {
@@ -314,14 +323,18 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName }) => {
           if (statsMap[pid]) {
             const qty = Number(it.qty || 0);
             const val = qty * Number(it.tp || it.price || 0);
+            const isWeekly = tx.created_at >= weekStartISO;
+
             if (it.action === 'SALE' || !it.action) {
-              statsMap[pid].pos_sold += qty;
+              statsMap[pid].pos_total += qty;
               statsMap[pid].total_sold += qty;
               statsMap[pid].total_value += val;
+              if (isWeekly) statsMap[pid].pos_week += qty;
             } else if (it.action === 'RETURN') {
-              statsMap[pid].pos_sold -= qty;
+              statsMap[pid].pos_total -= qty;
               statsMap[pid].total_sold -= qty;
               statsMap[pid].total_value -= val;
+              if (isWeekly) statsMap[pid].pos_week -= qty;
             }
           }
         }));
@@ -331,16 +344,29 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName }) => {
           if (statsMap[pid]) {
             const qty = Number(it.delivered_qty || 0);
             const val = qty * Number(it.unitPrice || 0);
-            statsMap[pid].booking_sold += qty;
+            const isWeekly = b.created_at >= weekStartISO;
+
+            statsMap[pid].book_total += qty;
             statsMap[pid].total_sold += qty;
             statsMap[pid].total_value += val;
+            if (isWeekly) statsMap[pid].book_week += qty;
           }
         }));
+
+        replRes.data?.forEach((rp: any) => {
+          const pid = rp.product_id;
+          if (statsMap[pid]) {
+            const qty = Number(rp.qty || 0);
+            const isWeekly = rp.created_at >= weekStartISO;
+            statsMap[pid].repl_total += qty;
+            if (isWeekly) statsMap[pid].repl_week += qty;
+          }
+        });
 
         setReportData(productsList.map((p: Product) => ({
           ...p,
           ...statsMap[p.id]
-        })).filter(p => p.total_sold !== 0));
+        })).filter(p => p.total_sold !== 0 || p.repl_total !== 0));
       }
     } catch (err) { console.error("Report Fetch Error:", err); } finally { setLoading(false); }
   };
@@ -484,8 +510,9 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName }) => {
     }
     if (activeReport === 'PRODUCT_SALES_REPORT') {
       return {
-        totalPosSold: filteredData.reduce((s: number, i: any) => s + Number(i.pos_sold || 0), 0),
-        totalBookingSold: filteredData.reduce((s: number, i: any) => s + Number(i.booking_sold || 0), 0),
+        totalPosSold: filteredData.reduce((s: number, i: any) => s + Number(i.pos_total || 0), 0),
+        totalBookingSold: filteredData.reduce((s: number, i: any) => s + Number(i.book_total || 0), 0),
+        totalRepl: filteredData.reduce((s: number, i: any) => s + Number(i.repl_total || 0), 0),
         totalRemQty: filteredData.reduce((s: number, i: any) => s + Number(i.total_sold || 0), 0),
         totalRemVal: filteredData.reduce((s: number, i: any) => s + Number(i.total_value || 0), 0)
       };
@@ -635,10 +662,10 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName }) => {
                   </>
                 ) : activeReport === 'PRODUCT_SALES_REPORT' ? (
                   <>
-                    <th className="p-3 border-r border-white/20 text-left">পণ্যের নাম</th>
-                    <th className="p-3 border-r border-white/20 text-center w-24">নগদ/POS</th>
-                    <th className="p-3 border-r border-white/20 text-center w-24">বুকিং/বেচাকেনা</th>
-                    <th className="p-3 border-r border-white/20 text-center w-24 bg-indigo-900">মোট (পিস)</th>
+                    <th className="p-3 border-r border-white/20 text-left">পণ্যের বিবরণ</th>
+                    <th className="p-3 border-r border-white/20 text-center w-40">সাপ্তাহিক (বডি / বুক / রিপ)</th>
+                    <th className="p-3 border-r border-white/20 text-center w-40">এ যাবত (বডি / বুক / রিপ)</th>
+                    <th className="p-3 border-r border-white/20 text-center w-24 bg-indigo-900">মোট পিস</th>
                     <th className="p-3 text-right w-36">মোট মূল্য (TP)</th>
                   </>
                 ) : (
@@ -785,11 +812,29 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName }) => {
                   ) : activeReport === 'PRODUCT_SALES_REPORT' ? (
                     <>
                       <td className="p-3 border-r border-black uppercase text-[11px]">
-                        <p className="font-black">{item.name}</p>
-                        <p className="text-[8px] opacity-50 uppercase">Code: {item.id.slice(0,8)}</p>
+                        <p className="font-black leading-tight">{item.name}</p>
+                        <p className="text-[8px] opacity-50 uppercase mt-1">Code: {item.id.slice(0,8)}</p>
                       </td>
-                      <td className="p-3 border-r border-black text-center font-bold text-slate-500">{item.pos_sold || 0}</td>
-                      <td className="p-3 border-r border-black text-center font-bold text-slate-500">{item.booking_sold || 0}</td>
+                      <td className="p-3 border-r border-black text-center text-[10px] bg-slate-50">
+                        <div className="flex justify-center gap-1 font-black">
+                          <span className="text-blue-600">{item.pos_week || 0}</span>
+                          <span className="text-slate-300">/</span>
+                          <span className="text-indigo-600">{item.book_week || 0}</span>
+                          <span className="text-slate-300">/</span>
+                          <span className="text-rose-600">{item.repl_week || 0}</span>
+                        </div>
+                        <div className="text-[7px] opacity-40 uppercase font-bold mt-1">L7 Days</div>
+                      </td>
+                      <td className="p-3 border-r border-black text-center text-[10px]">
+                        <div className="flex justify-center gap-1 font-bold">
+                          <span className="text-blue-700">{item.pos_total || 0}</span>
+                          <span className="text-slate-200">/</span>
+                          <span className="text-indigo-700">{item.book_total || 0}</span>
+                          <span className="text-slate-200">/</span>
+                          <span className="text-rose-700">{item.repl_total || 0}</span>
+                        </div>
+                        <div className="text-[7px] opacity-30 uppercase font-bold mt-1">All History</div>
+                      </td>
                       <td className={`p-3 border-r border-black text-center font-black text-lg italic bg-indigo-50 text-indigo-700`}>
                         {item.total_sold || 0}
                       </td>
@@ -831,7 +876,26 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName }) => {
                   <span>{(summary.totalRemQty || 0)} Pcs</span>
                 </div>
               )}
-              {activeReport === 'COMPANY_SALES' ? (
+              {activeReport === 'PRODUCT_SALES_REPORT' ? (
+                <div className="space-y-1.5">
+                  <div className="flex justify-between text-[11px] font-black text-blue-600 italic border-b border-black/5 pb-1">
+                    <span>মোট নগদ (POS Total):</span>
+                    <span>{(summary.totalPosSold || 0).toLocaleString()} Pcs</span>
+                  </div>
+                  <div className="flex justify-between text-[11px] font-black text-indigo-600 italic border-b border-black/5 pb-1">
+                    <span>মোট বুকিং (Booking Total):</span>
+                    <span>{(summary.totalBookingSold || 0).toLocaleString()} Pcs</span>
+                  </div>
+                  <div className="flex justify-between text-[11px] font-black text-rose-600 italic border-b border-black/5 pb-1">
+                    <span>মোট রিপ্লেস (Replace Total):</span>
+                    <span>{(summary.totalRepl || 0).toLocaleString()} Pcs</span>
+                  </div>
+                  <div className="flex justify-between text-[22px] font-black text-black tracking-tighter leading-none pt-2">
+                    <span className="uppercase italic">TOTAL NET SALES:</span>
+                    <span>৳{(summary.totalRemVal || 0).toLocaleString()}</span>
+                  </div>
+                </div>
+              ) : activeReport === 'COMPANY_SALES' ? (
                 <div className="space-y-1.5">
                   <div className="flex justify-between text-[11px] font-black text-slate-500 italic border-b border-black/5 pb-1">
                     <span>সার্বিক সেল (Across All):</span>
