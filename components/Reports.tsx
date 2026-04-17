@@ -13,7 +13,7 @@ interface ReportsProps {
   userName?: string;
 }
 
-type ReportType = 'MAIN' | 'CUSTOMER_DUES' | 'STOCK_REPORT' | 'DELIVERY_LOG_A4' | 'PURCHASE_HISTORY' | 'BOOKING_LOG' | 'COLLECTION_REPORT' | 'CUSTOMER_LEDGER' | 'COMPANY_SALES';
+type ReportType = 'MAIN' | 'CUSTOMER_DUES' | 'STOCK_REPORT' | 'DELIVERY_LOG_A4' | 'PURCHASE_HISTORY' | 'BOOKING_LOG' | 'COLLECTION_REPORT' | 'CUSTOMER_LEDGER' | 'COMPANY_SALES' | 'PRODUCT_SALES_REPORT';
 
 const Reports: React.FC<ReportsProps> = ({ company, userRole, userName }) => {
   const [activeReport, setActiveReport] = useState<ReportType>('MAIN');
@@ -295,6 +295,67 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName }) => {
 
         setReportData(rows);
       }
+      else if (type === 'PRODUCT_SALES_REPORT') {
+        const start = `${selectedDate}T00:00:00.000Z`;
+        const end = `${selectedDate}T23:59:59.999Z`;
+
+        const [prodRes, txRes, bookRes] = await Promise.all([
+          supabase.from('products').select('*').eq('company', dbCompany).order('name'),
+          supabase.from('transactions').select('items, payment_type, created_at').eq('company', dbCompany),
+          supabase.from('bookings').select('items, created_at').eq('company', dbCompany)
+        ]);
+
+        const productsList = prodRes.data || [];
+        const statsMap: Record<string, any> = {};
+
+        productsList.forEach((p: Product) => {
+          statsMap[p.id] = { pos_sold: 0, booking_sold: 0, total_sold: 0, total_value: 0 };
+        });
+
+        // Filter transactions by date if needed (using current pattern)
+        const filteredTxs = txRes.data?.filter(tx => {
+          if (!selectedDate) return true;
+          return tx.created_at >= start && tx.created_at <= end;
+        }) || [];
+
+        filteredTxs.forEach((tx: any) => tx.items?.forEach((it: any) => {
+          if (statsMap[it.id]) {
+            if (it.action === 'SALE' || !it.action) {
+              const qty = Number(it.qty || 0);
+              statsMap[it.id].pos_sold += qty;
+              statsMap[it.id].total_sold += qty;
+              statsMap[it.id].total_value += qty * Number(it.tp || it.price || 0);
+            }
+            if (it.action === 'RETURN') {
+              const qty = Number(it.qty || 0);
+              statsMap[it.id].pos_sold -= qty;
+              statsMap[it.id].total_sold -= qty;
+              statsMap[it.id].total_value -= qty * Number(it.tp || it.price || 0);
+            }
+          }
+        }));
+
+        // Filter bookings by date
+        const filteredBookings = bookRes.data?.filter(b => {
+          if (!selectedDate) return true;
+          return b.created_at >= start && b.created_at <= end;
+        }) || [];
+
+        filteredBookings.forEach((b: any) => b.items?.forEach((it: any) => {
+          if (statsMap[it.product_id || it.id]) {
+            const pid = it.product_id || it.id;
+            const qty = Number(it.delivered_qty || 0);
+            statsMap[pid].booking_sold += qty;
+            statsMap[pid].total_sold += qty;
+            statsMap[pid].total_value += qty * Number(it.unitPrice || 0);
+          }
+        }));
+
+        setReportData(productsList.map((p: Product) => ({
+          ...p,
+          ...statsMap[p.id]
+        })).filter(p => p.total_sold !== 0));
+      }
     } catch (err) { console.error("Report Fetch Error:", err); } finally { setLoading(false); }
   };
 
@@ -434,6 +495,14 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName }) => {
         totalMyEarn: filteredData.length > 0 ? filteredData[0].grandTotalMyEarn : 0
       };
     }
+    if (activeReport === 'PRODUCT_SALES_REPORT') {
+      return {
+        totalPosSold: filteredData.reduce((s: number, i: any) => s + Number(i.pos_sold || 0), 0),
+        totalBookingSold: filteredData.reduce((s: number, i: any) => s + Number(i.booking_sold || 0), 0),
+        totalRemQty: filteredData.reduce((s: number, i: any) => s + Number(i.total_sold || 0), 0),
+        totalRemVal: filteredData.reduce((s: number, i: any) => s + Number(i.total_value || 0), 0)
+      };
+    }
     return {
       totalRemQty: 0,
       totalRemVal: filteredData.reduce((s: number, i: any) => s + Number(i.amount || 0), 0)
@@ -449,7 +518,8 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName }) => {
       { id: 'PURCHASE_HISTORY', title: 'PURCHASE LOG', icon: '📒', desc: 'কোম্পানি ক্রয় হিসাব' },
       { id: 'CUSTOMER_DUES', title: 'DUE REPORT', icon: '💸', desc: 'মার্কেট বকেয়া' },
       { id: 'CUSTOMER_LEDGER', title: 'SHOP LEDGER', icon: '📜', desc: 'দোকানদার লেজার রিপোর্ট' },
-      { id: 'COMPANY_SALES', title: 'COMPANY SALES', icon: '📊', desc: 'সব কোম্পানির সেলস রিপোর্ট' }
+      { id: 'COMPANY_SALES', title: 'COMPANY SALES', icon: '📊', desc: 'সব কোম্পানির সেলস রিপোর্ট' },
+      { id: 'PRODUCT_SALES_REPORT', title: 'ITEM SALES', icon: '📈', desc: 'পণ্য বিক্রয় রিপোর্ট' }
     ];
 
     return (
@@ -573,6 +643,14 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName }) => {
                     <th className="p-3 border-r border-white/20 text-right w-32 bg-indigo-900">আমার কমিশন</th>
                     <th className="p-3 border-r border-white/20 text-right w-32">সংগ্রহ (Cash)</th>
                     <th className="p-3 text-center w-24">পার্সেন্টেজ (%)</th>
+                  </>
+                ) : activeReport === 'PRODUCT_SALES_REPORT' ? (
+                  <>
+                    <th className="p-3 border-r border-white/20 text-left">পণ্যের নাম</th>
+                    <th className="p-3 border-r border-white/20 text-center w-24">নগদ/POS</th>
+                    <th className="p-3 border-r border-white/20 text-center w-24">বুকিং/বেচাকেনা</th>
+                    <th className="p-3 border-r border-white/20 text-center w-24 bg-indigo-900">মোট (পিস)</th>
+                    <th className="p-3 text-right w-36">মোট মূল্য (TP)</th>
                   </>
                 ) : (
                   <>
@@ -715,6 +793,21 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName }) => {
                         </div>
                       </td>
                     </>
+                  ) : activeReport === 'PRODUCT_SALES_REPORT' ? (
+                    <>
+                      <td className="p-3 border-r border-black uppercase text-[11px]">
+                        <p className="font-black">{item.name}</p>
+                        <p className="text-[8px] opacity-50 uppercase">Code: {item.id.slice(0,8)}</p>
+                      </td>
+                      <td className="p-3 border-r border-black text-center font-bold text-slate-500">{item.pos_sold || 0}</td>
+                      <td className="p-3 border-r border-black text-center font-bold text-slate-500">{item.booking_sold || 0}</td>
+                      <td className={`p-3 border-r border-black text-center font-black text-lg italic bg-indigo-50 text-indigo-700`}>
+                        {item.total_sold || 0}
+                      </td>
+                      <td className="p-3 text-right font-black italic text-sm">
+                        ৳{Math.round(item.total_value || 0).toLocaleString()}
+                      </td>
+                    </>
                   ) : (
                     <>
                       <td className="p-3 border-r border-black">
@@ -774,7 +867,7 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName }) => {
                 </div>
               ) : (
                 <div className="flex justify-between text-3xl font-black text-black tracking-tighter leading-none pt-2">
-                  <span className="uppercase">{activeReport === 'BOOKING_LOG' ? 'NET REQUIREMENT:' : 'NET TOTAL SUM:'}</span>
+                  <span className="uppercase">{activeReport === 'BOOKING_LOG' ? 'NET REQUIREMENT:' : activeReport === 'PRODUCT_SALES_REPORT' ? 'TOTAL NET SALES:' : 'NET TOTAL SUM:'}</span>
                   <span>৳{(summary.totalRemVal || 0).toLocaleString()}</span>
                 </div>
               )}
