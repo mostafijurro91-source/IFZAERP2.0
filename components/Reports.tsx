@@ -363,10 +363,14 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName }) => {
           }
         });
 
-        setReportData(productsList.map((p: Product) => ({
-          ...p,
-          ...statsMap[p.id]
-        })).filter(p => p.total_sold !== 0 || p.repl_total !== 0));
+        setReportData(productsList.map((p: Product) => {
+          const s = statsMap[p.id];
+          return {
+            ...p,
+            ...s,
+            total_gross: (s.total_sold || 0) + (s.repl_total || 0)
+          };
+        }).filter(p => p.total_sold !== 0 || p.repl_total !== 0));
       }
     } catch (err) { console.error("Report Fetch Error:", err); } finally { setLoading(false); }
   };
@@ -513,6 +517,7 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName }) => {
         totalPosSold: filteredData.reduce((s: number, i: any) => s + Number(i.pos_total || 0), 0),
         totalBookingSold: filteredData.reduce((s: number, i: any) => s + Number(i.book_total || 0), 0),
         totalRepl: filteredData.reduce((s: number, i: any) => s + Number(i.repl_total || 0), 0),
+        totalGross: filteredData.reduce((s: number, i: any) => s + Number(i.total_gross || 0), 0),
         totalRemQty: filteredData.reduce((s: number, i: any) => s + Number(i.total_sold || 0), 0),
         totalRemVal: filteredData.reduce((s: number, i: any) => s + Number(i.total_value || 0), 0)
       };
@@ -836,7 +841,7 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName }) => {
                         <div className="text-[7px] opacity-30 uppercase font-bold mt-1">All History</div>
                       </td>
                       <td className={`p-3 border-r border-black text-center font-black text-lg italic bg-indigo-50 text-indigo-700`}>
-                        {item.total_sold || 0}
+                        {item.total_gross || 0}
                       </td>
                       <td className="p-3 text-right font-black italic text-sm">
                         ৳{Math.round(item.total_value || 0).toLocaleString()}
@@ -889,6 +894,10 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName }) => {
                   <div className="flex justify-between text-[11px] font-black text-rose-600 italic border-b border-black/5 pb-1">
                     <span>মোট রিপ্লেস (Replace Total):</span>
                     <span>{(summary.totalRepl || 0).toLocaleString()} Pcs</span>
+                  </div>
+                  <div className="flex justify-between text-[11px] font-black text-slate-800 italic border-b border-black/5 pb-1 mt-2">
+                    <span>সর্বমোট (সেল + রিপ্লেস):</span>
+                    <span>{(summary.totalGross || 0).toLocaleString()} Pcs</span>
                   </div>
                   <div className="flex justify-between text-[22px] font-black text-black tracking-tighter leading-none pt-2">
                     <span className="uppercase italic">TOTAL NET SALES:</span>
