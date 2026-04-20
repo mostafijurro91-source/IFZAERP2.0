@@ -29,6 +29,10 @@ const Replacements: React.FC<ReplacementsProps> = ({ company, role, user }) => {
   const [splittingItem, setSplittingItem] = useState<any>(null);
   const [splitQty, setSplitQty] = useState<number>(1);
 
+  // Search & Surcharge State
+  const [mainSearch, setMainSearch] = useState("");
+  const [claimSurcharge, setClaimSurcharge] = useState<number>(0);
+
   // Claim Form State
   const [claimStep, setClaimStep] = useState(1);
   const [selectedCust, setSelectedCust] = useState<any>(null);
@@ -65,7 +69,8 @@ const Replacements: React.FC<ReplacementsProps> = ({ company, role, user }) => {
         product_name: product.name,
         product_id: product.id,
         qty: claimQty,
-        status: 'PENDING'
+        status: 'PENDING',
+        surcharge: claimSurcharge
       }]);
 
       if (error) throw error;
@@ -74,6 +79,7 @@ const Replacements: React.FC<ReplacementsProps> = ({ company, role, user }) => {
       setClaimStep(1);
       setSelectedCust(null);
       setClaimQty(1);
+      setClaimSurcharge(0);
       fetchData();
     } catch (err: any) {
       alert("ত্রুটি: " + err.message);
@@ -91,7 +97,8 @@ const Replacements: React.FC<ReplacementsProps> = ({ company, role, user }) => {
         .from('replacements')
         .update({ 
           qty: actualQty,
-          status: 'RECEIVED'
+          status: 'RECEIVED',
+          surcharge: actualQty > 0 ? selectedRp.surcharge : 0 // Keep or adjust if needed
         })
         .eq('id', selectedRp.id);
 
@@ -211,8 +218,14 @@ const Replacements: React.FC<ReplacementsProps> = ({ company, role, user }) => {
 
   const filteredCustomers = customers.filter(c => c.name.toLowerCase().includes(custSearch.toLowerCase()) || c.phone.includes(custSearch));
   const filteredProducts = products.filter(p => p.name.toLowerCase().includes(prodSearch.toLowerCase()));
-  const pendingClaims = replacements.filter(r => r.status === 'PENDING' || r.status === 'RECEIVED');
-  const sentClaims = replacements.filter(r => r.status === 'SENT_TO_COMPANY');
+  
+  const filteredReplacements = replacements.filter(r => 
+    r.product_name.toLowerCase().includes(mainSearch.toLowerCase()) || 
+    (r.customers?.name || "").toLowerCase().includes(mainSearch.toLowerCase())
+  );
+
+  const pendingClaims = filteredReplacements.filter(r => r.status === 'PENDING' || r.status === 'RECEIVED');
+  const sentClaims = filteredReplacements.filter(r => r.status === 'SENT_TO_COMPANY');
 
   const groupedPending = useMemo(() => {
     const groups: { [key: string]: any[] } = {};
@@ -241,31 +254,40 @@ const Replacements: React.FC<ReplacementsProps> = ({ company, role, user }) => {
              <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center text-white text-lg font-black italic shadow-lg">R</div>
              <div>
                 <h3 className="text-base font-black uppercase italic tracking-tighter leading-none">Replacement Hub</h3>
-                <p className="text-[7px] text-slate-400 font-bold uppercase mt-1">Efficient Return Management</p>
+                <p className="text-[10px] text-slate-400 font-bold uppercase mt-1">Efficient Return Management</p>
              </div>
           </div>
           <div className="flex items-center gap-2">
-             <button onClick={() => setIsGrouped(!isGrouped)} className={`px-3 py-2 rounded-xl font-black text-[8px] uppercase transition-all ${isGrouped ? 'bg-indigo-50 text-indigo-600' : 'bg-slate-50 text-slate-400'}`}>
+             <div className="relative group flex-1 min-w-[120px]">
+                <input 
+                   value={mainSearch}
+                   onChange={e => setMainSearch(e.target.value)}
+                   className="w-full bg-slate-50 border border-slate-100 p-2 rounded-xl text-xs font-bold outline-none focus:border-indigo-400 transition-all uppercase pl-7"
+                   placeholder="SEARCH..."
+                />
+                <span className="absolute left-2.5 top-2.5 text-sm opacity-30">🔍</span>
+             </div>
+             <button onClick={() => setIsGrouped(!isGrouped)} className={`px-3 py-2 rounded-xl font-black text-[11px] uppercase transition-all ${isGrouped ? 'bg-indigo-50 text-indigo-600' : 'bg-slate-50 text-slate-400'}`}>
                 {isGrouped ? '📦 Grouped' : '📜 List'}
              </button>
              <button onClick={fetchData} className="w-9 h-9 bg-slate-50 border rounded-lg flex items-center justify-center hover:bg-white transition-all shadow-sm">🔄</button>
-             <button onClick={() => setShowAddModal(true)} className="bg-indigo-600 text-white px-4 py-2.5 rounded-xl font-black uppercase text-[9px] tracking-widest shadow-md active:scale-95 transition-all">+ NEW</button>
+             <button onClick={() => setShowAddModal(true)} className="bg-indigo-600 text-white px-4 py-2.5 rounded-xl font-black uppercase text-xs tracking-widest shadow-md active:scale-95 transition-all">+ NEW</button>
           </div>
         </div>
 
         {/* Stats Row */}
         <div className="grid grid-cols-3 gap-2">
            <div className="bg-white p-3 rounded-2xl border border-slate-100 shadow-sm">
-              <p className="text-[7px] font-black text-slate-400 uppercase italic">Pending</p>
-              <p className="text-sm font-black italic text-slate-900">{stats.pending} <span className="text-[6px] text-slate-300">Pcs</span></p>
+              <p className="text-[10px] font-black text-slate-400 uppercase italic">Pending</p>
+              <p className="text-lg font-black italic text-slate-900">{stats.pending} <span className="text-[6px] text-slate-300">Pcs</span></p>
            </div>
            <div className="bg-white p-3 rounded-2xl border border-slate-100 shadow-sm">
-              <p className="text-[7px] font-black text-emerald-400 uppercase italic">Received</p>
-              <p className="text-sm font-black italic text-emerald-600">{stats.received} <span className="text-[6px] text-slate-300">Pcs</span></p>
+              <p className="text-[10px] font-black text-emerald-400 uppercase italic">Received</p>
+              <p className="text-lg font-black italic text-emerald-600">{stats.received} <span className="text-[6px] text-slate-300">Pcs</span></p>
            </div>
            <div className="bg-slate-900 p-3 rounded-2xl shadow-sm border border-slate-800">
-              <p className="text-[7px] font-black text-slate-500 uppercase italic">With Co.</p>
-              <p className="text-sm font-black italic text-white">{stats.sent} <span className="text-[6px] text-slate-600">Pcs</span></p>
+              <p className="text-[10px] font-black text-slate-500 uppercase italic">With Co.</p>
+              <p className="text-lg font-black italic text-white">{stats.sent} <span className="text-[6px] text-slate-600">Pcs</span></p>
            </div>
         </div>
       </div>
@@ -275,12 +297,12 @@ const Replacements: React.FC<ReplacementsProps> = ({ company, role, user }) => {
         {/* AREA 1: From Shops */}
         <div className="space-y-4">
            <div className="flex items-center justify-between px-2">
-              <h4 className="text-[9px] font-black uppercase tracking-widest text-slate-400 italic">১. কাস্টমার থেকে সংগ্রহ ({pendingClaims.length})</h4>
+              <h4 className="text-xs font-black uppercase tracking-widest text-slate-400 italic">১. কাস্টমার থেকে সংগ্রহ ({pendingClaims.length})</h4>
               <button onClick={() => {
                 const allIds = pendingClaims.map(r => r.id);
                 if (selectedIds.size === allIds.length) setSelectedIds(new Set());
                 else setSelectedIds(new Set(allIds));
-              }} className="text-[7px] font-black text-indigo-600 uppercase underline">Select All</button>
+              }} className="text-[10px] font-black text-indigo-600 uppercase underline">Select All</button>
            </div>
 
            <div className="space-y-3">
@@ -306,9 +328,9 @@ const Replacements: React.FC<ReplacementsProps> = ({ company, role, user }) => {
                                 }}
                                 className="w-3.5 h-3.5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
                              />
-                             <h4 className="text-[10px] font-black uppercase italic text-slate-800 truncate max-w-[150px]">{productName}</h4>
+                             <h4 className="text-sm font-black uppercase italic text-slate-800 truncate max-w-[150px]">{productName}</h4>
                           </div>
-                          <span className="px-2 py-0.5 bg-indigo-600 text-white text-[8px] font-black rounded-full">{totalQty} Pcs</span>
+                          <span className="px-2 py-0.5 bg-indigo-600 text-white text-[11px] font-black rounded-full">{totalQty} Pcs</span>
                        </div>
                        <div className="divide-y divide-slate-50">
                           {items.map(rp => (
@@ -320,16 +342,19 @@ const Replacements: React.FC<ReplacementsProps> = ({ company, role, user }) => {
                                   className="w-3 h-3 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
                                />
                                <div className="flex-1 min-w-0">
-                                  <p className="text-[8px] font-bold text-slate-400 uppercase leading-none">📍 {rp.customers?.name}</p>
-                                  <p className="text-[7px] text-slate-300 mt-1 uppercase italic">Qty: {rp.qty}</p>
+                                  <p className="text-[11px] font-bold text-slate-400 uppercase leading-none">📍 {rp.customers?.name}</p>
+                                  <div className="flex items-center gap-2 mt-1">
+                                     <p className="text-[10px] text-slate-300 uppercase italic">Qty: {rp.qty}</p>
+                                     {rp.surcharge > 0 && <span className="text-[10px] font-black text-rose-500 bg-rose-50 px-1 rounded uppercase">Fee: ৳{rp.surcharge}</span>}
+                                  </div>
                                </div>
                                <div className="flex gap-1">
                                   {rp.status === 'RECEIVED' ? (
-                                    <button onClick={() => { setSplittingItem(rp); setSplitQty(rp.qty); setShowSplitModal(true); }} className="px-2 py-1 bg-emerald-600 text-white rounded-md font-black text-[7px] uppercase shadow-sm">Send ➔</button>
+                                    <button onClick={() => { setSplittingItem(rp); setSplitQty(rp.qty); setShowSplitModal(true); }} className="px-2 py-1 bg-emerald-600 text-white rounded-md font-black text-[10px] uppercase shadow-sm">Send ➔</button>
                                   ) : (
                                     <div className="flex gap-1">
                                        <button onClick={() => updateStatusDirect(rp.id, 'RECEIVED')} className="w-7 h-7 bg-emerald-500 text-white rounded-md flex items-center justify-center font-black text-xs shadow-sm" title="Quick Get">✓</button>
-                                       <button onClick={() => { setSelectedRp(rp); setActualQty(rp.qty); setShowVerifyModal(true); }} className="px-2 py-1 bg-indigo-600 text-white rounded-md font-black text-[7px] uppercase shadow-sm">Get ✅</button>
+                                       <button onClick={() => { setSelectedRp(rp); setActualQty(rp.qty); setShowVerifyModal(true); }} className="px-2 py-1 bg-indigo-600 text-white rounded-md font-black text-[10px] uppercase shadow-sm">Get ✅</button>
                                     </div>
                                   )}
                                </div>
@@ -349,18 +374,21 @@ const Replacements: React.FC<ReplacementsProps> = ({ company, role, user }) => {
                         className="w-3.5 h-3.5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
                      />
                      <div className="flex-1 min-w-0">
-                        <h4 className="text-[10px] font-black uppercase italic text-slate-800 truncate leading-tight">{rp.product_name}</h4>
-                        <p className="text-[7px] font-bold text-slate-400 mt-0.5 uppercase leading-none">📍 {rp.customers?.name}</p>
+                        <h4 className="text-sm font-black uppercase italic text-slate-800 truncate leading-tight">{rp.product_name}</h4>
+                        <div className="flex items-center gap-2 mt-0.5">
+                           <p className="text-[10px] font-bold text-slate-400 uppercase leading-none">📍 {rp.customers?.name}</p>
+                           {rp.surcharge > 0 && <span className="text-[10px] font-black text-rose-500 bg-rose-50 px-1 rounded uppercase">৳{rp.surcharge}</span>}
+                        </div>
                      </div>
                      <div className="text-right flex flex-col items-end gap-1">
                         <p className="text-xs font-black italic text-slate-900">{rp.qty} <span className="text-[6px] text-slate-300 uppercase">Pcs</span></p>
                         <div className="flex gap-1">
                            {rp.status === 'RECEIVED' ? (
-                             <button onClick={() => { setSplittingItem(rp); setSplitQty(rp.qty); setShowSplitModal(true); }} className="px-2 py-1 bg-emerald-600 text-white rounded-md font-black text-[7px] uppercase">Send ➔</button>
+                             <button onClick={() => { setSplittingItem(rp); setSplitQty(rp.qty); setShowSplitModal(true); }} className="px-2 py-1 bg-emerald-600 text-white rounded-md font-black text-[10px] uppercase">Send ➔</button>
                            ) : (
                              <div className="flex gap-1">
                                 <button onClick={() => updateStatusDirect(rp.id, 'RECEIVED')} className="w-7 h-7 bg-emerald-500 text-white rounded-md flex items-center justify-center font-black text-xs shadow-sm" title="Quick Get">✓</button>
-                                <button onClick={() => { setSelectedRp(rp); setActualQty(rp.qty); setShowVerifyModal(true); }} className="px-2 py-1 bg-indigo-600 text-white rounded-md font-black text-[7px] uppercase">Get ✅</button>
+                                <button onClick={() => { setSelectedRp(rp); setActualQty(rp.qty); setShowVerifyModal(true); }} className="px-2 py-1 bg-indigo-600 text-white rounded-md font-black text-[10px] uppercase">Get ✅</button>
                              </div>
                            )}
                            <button onClick={async () => { if(confirm("ডিলিট?")) { await supabase.from('replacements').delete().eq('id', rp.id); fetchData(); } }} className="text-rose-400 font-black text-xs px-1">×</button>
@@ -369,14 +397,14 @@ const Replacements: React.FC<ReplacementsProps> = ({ company, role, user }) => {
                   </div>
                 ))
               )}
-              {pendingClaims.length === 0 && <div className="py-8 text-center opacity-10 font-black uppercase text-[9px] italic bg-white rounded-2xl border border-dashed">No Pending Claims</div>}
+              {pendingClaims.length === 0 && <div className="py-8 text-center opacity-10 font-black uppercase text-xs italic bg-white rounded-2xl border border-dashed">No Pending Claims</div>}
            </div>
         </div>
 
         {/* AREA 2: With Company */}
         <div className="space-y-4">
            <div className="flex items-center justify-between px-2">
-              <h4 className="text-[9px] font-black uppercase tracking-widest text-slate-400 italic">২. কোম্পানির নিকট প্রেরিত ({sentClaims.length})</h4>
+              <h4 className="text-xs font-black uppercase tracking-widest text-slate-400 italic">২. কোম্পানির নিকট প্রেরিত ({sentClaims.length})</h4>
               <div className="w-1 h-1 bg-emerald-500 rounded-full"></div>
            </div>
            <div className="grid grid-cols-1 gap-3">
@@ -385,9 +413,9 @@ const Replacements: React.FC<ReplacementsProps> = ({ company, role, user }) => {
                    <div className="relative z-10">
                       <div className="flex justify-between items-start mb-3">
                          <div className="min-w-0 pr-3">
-                            <span className="px-2 py-0.5 bg-emerald-500 text-white text-[7px] font-black rounded-md uppercase italic">With Company</span>
-                            <h4 className="text-[11px] font-black uppercase italic mt-2 leading-tight truncate">{rp.product_name}</h4>
-                            <p className="text-[7px] text-slate-500 font-bold uppercase mt-0.5">Shop: {rp.customers?.name}</p>
+                            <span className="px-2 py-0.5 bg-emerald-500 text-white text-[10px] font-black rounded-md uppercase italic">With Company</span>
+                            <h4 className="text-base font-black uppercase italic mt-2 leading-tight truncate">{rp.product_name}</h4>
+                            <p className="text-[10px] text-slate-500 font-bold uppercase mt-0.5">Shop: {rp.customers?.name}</p>
                          </div>
                          <p className="text-lg font-black italic text-emerald-400">{rp.qty}</p>
                       </div>
@@ -395,16 +423,16 @@ const Replacements: React.FC<ReplacementsProps> = ({ company, role, user }) => {
                          <button 
                            disabled={isSaving}
                            onClick={() => handleReturnToInventory(rp)} 
-                           className="flex-1 bg-white text-slate-900 py-2 rounded-lg font-black text-[8px] uppercase shadow-md active:scale-95 transition-all"
+                           className="flex-1 bg-white text-slate-900 py-2 rounded-lg font-black text-[11px] uppercase shadow-md active:scale-95 transition-all"
                          >
                             Add to Stock 📦
                          </button>
-                         <button onClick={async () => { if(confirm("ডিলিট?")) { await supabase.from('replacements').delete().eq('id', rp.id); fetchData(); } }} className="bg-white/10 text-white px-3 rounded-lg font-black text-[10px]">×</button>
+                         <button onClick={async () => { if(confirm("ডিলিট?")) { await supabase.from('replacements').delete().eq('id', rp.id); fetchData(); } }} className="bg-white/10 text-white px-3 rounded-lg font-black text-sm">×</button>
                       </div>
                    </div>
                 </div>
               ))}
-              {sentClaims.length === 0 && <div className="py-8 text-center opacity-10 font-black uppercase text-[9px] italic bg-white rounded-2xl border border-dashed">No Assets With Company</div>}
+              {sentClaims.length === 0 && <div className="py-8 text-center opacity-10 font-black uppercase text-xs italic bg-white rounded-2xl border border-dashed">No Assets With Company</div>}
            </div>
         </div>
 
@@ -415,20 +443,20 @@ const Replacements: React.FC<ReplacementsProps> = ({ company, role, user }) => {
                 <div className="flex items-center gap-3">
                    <div className="w-10 h-10 bg-indigo-600 rounded-2xl flex items-center justify-center font-black italic shadow-lg">{selectedIds.size}</div>
                    <div>
-                      <p className="text-[8px] font-black uppercase text-indigo-400 tracking-tighter">Selected Items</p>
-                      <p className="text-[10px] font-black italic uppercase leading-none">Bulk Actions</p>
+                      <p className="text-[11px] font-black uppercase text-indigo-400 tracking-tighter">Selected Items</p>
+                      <p className="text-sm font-black italic uppercase leading-none">Bulk Actions</p>
                    </div>
                 </div>
                 <div className="flex gap-2">
                    <button 
                       onClick={() => handleBulkUpdateStatus('RECEIVED')}
-                      className="bg-white text-slate-900 px-4 py-2.5 rounded-xl font-black text-[9px] uppercase shadow-lg active:scale-95 transition-all"
+                      className="bg-white text-slate-900 px-4 py-2.5 rounded-xl font-black text-xs uppercase shadow-lg active:scale-95 transition-all"
                    >
                       Get ✅
                    </button>
                    <button 
                       onClick={() => handleBulkUpdateStatus('SENT_TO_COMPANY')}
-                      className="bg-emerald-500 text-white px-4 py-2.5 rounded-xl font-black text-[9px] uppercase shadow-lg active:scale-95 transition-all"
+                      className="bg-emerald-500 text-white px-4 py-2.5 rounded-xl font-black text-xs uppercase shadow-lg active:scale-95 transition-all"
                    >
                       Send ➔
                    </button>
@@ -450,20 +478,20 @@ const Replacements: React.FC<ReplacementsProps> = ({ company, role, user }) => {
            <div className="bg-white rounded-[2rem] w-full max-w-sm shadow-2xl animate-reveal overflow-hidden border border-white/20">
               <div className="p-6 bg-slate-50 border-b flex justify-between items-center">
                  <div>
-                    <p className="text-[8px] font-black text-slate-400 uppercase italic mb-1">Company Transfer</p>
-                    <h3 className="text-sm font-black uppercase italic text-slate-900 leading-tight">কোম্পানিতে পাঠান</h3>
+                    <p className="text-[11px] font-black text-slate-400 uppercase italic mb-1">Company Transfer</p>
+                    <h3 className="text-lg font-black uppercase italic text-slate-900 leading-tight">কোম্পানিতে পাঠান</h3>
                  </div>
                  <button onClick={() => setShowSplitModal(false)} className="w-10 h-10 bg-white shadow-sm rounded-full flex items-center justify-center text-xl text-slate-300">✕</button>
               </div>
 
               <div className="p-8 space-y-6">
                  <div className="text-center">
-                    <p className="text-[11px] font-black uppercase italic text-slate-800 mb-1">{splittingItem.product_name}</p>
-                    <p className="text-[8px] font-bold text-slate-400 uppercase">Available: {splittingItem.qty} Pcs</p>
+                    <p className="text-base font-black uppercase italic text-slate-800 mb-1">{splittingItem.product_name}</p>
+                    <p className="text-[11px] font-bold text-slate-400 uppercase">Available: {splittingItem.qty} Pcs</p>
                  </div>
 
                  <div className="space-y-3">
-                    <label className="text-[8px] font-black uppercase text-slate-400 ml-1 italic text-center block">কত পিস পাঠাতে চান?</label>
+                    <label className="text-[11px] font-black uppercase text-slate-400 ml-1 italic text-center block">কত পিস পাঠাতে চান?</label>
                     <div className="flex items-center gap-6 justify-center bg-indigo-50 p-4 rounded-3xl border border-indigo-100">
                        <button onClick={() => setSplitQty(Math.max(1, splitQty - 1))} className="w-10 h-10 bg-white rounded-2xl shadow-sm font-black text-xl text-slate-300 active:scale-90 transition-all">-</button>
                        <input 
@@ -479,7 +507,7 @@ const Replacements: React.FC<ReplacementsProps> = ({ company, role, user }) => {
                  <button 
                    disabled={isSaving}
                    onClick={handlePartialSend}
-                   className="w-full bg-slate-900 text-white py-4 rounded-2xl font-black uppercase text-[10px] shadow-xl active:scale-95 transition-all"
+                   className="w-full bg-slate-900 text-white py-4 rounded-2xl font-black uppercase text-sm shadow-xl active:scale-95 transition-all"
                  >
                     {isSaving ? "প্রসেস হচ্ছে..." : `কনফার্ম ট্রান্সফার (${splitQty} পিস) ➔`}
                  </button>
@@ -493,16 +521,16 @@ const Replacements: React.FC<ReplacementsProps> = ({ company, role, user }) => {
         <div className="fixed inset-0 bg-slate-950/95 backdrop-blur-xl z-[4000] flex items-center justify-center p-3">
            <div className="bg-white rounded-3xl w-full max-w-lg h-[70vh] flex flex-col shadow-2xl animate-reveal overflow-hidden">
               <div className="p-4 bg-indigo-600 text-white flex justify-between items-center shrink-0">
-                 <h3 className="text-sm font-black uppercase italic">Add Claim</h3>
+                 <h3 className="text-lg font-black uppercase italic">Add Claim</h3>
                  <button onClick={() => { setShowAddModal(false); setClaimStep(1); }} className="text-xl text-white/50 hover:text-white font-black">✕</button>
               </div>
 
               {claimStep === 1 ? (
                 <div className="flex-1 flex flex-col overflow-hidden bg-slate-50">
                    <div className="p-4 space-y-3">
-                      <p className="text-[9px] font-black text-slate-400 uppercase italic tracking-widest ml-1">Step 1: Select Shop</p>
+                      <p className="text-xs font-black text-slate-400 uppercase italic tracking-widest ml-1">Step 1: Select Shop</p>
                       <input 
-                        className="w-full p-3 bg-white border border-slate-200 rounded-xl font-black text-[11px] uppercase outline-none focus:border-indigo-500 transition-all"
+                        className="w-full p-3 bg-white border border-slate-200 rounded-xl font-black text-base uppercase outline-none focus:border-indigo-500 transition-all"
                         placeholder="সার্চ দোকান..."
                         value={custSearch}
                         onChange={e => setCustSearch(e.target.value)}
@@ -512,8 +540,8 @@ const Replacements: React.FC<ReplacementsProps> = ({ company, role, user }) => {
                       {filteredCustomers.map(c => (
                         <div key={c.id} onClick={() => { setSelectedCust(c); setClaimStep(2); }} className="p-3 bg-white rounded-xl border border-slate-100 hover:border-indigo-500 transition-all cursor-pointer flex justify-between items-center group">
                            <div>
-                              <h4 className="font-black text-slate-800 uppercase italic text-[11px]">{c.name}</h4>
-                              <p className="text-[7px] font-bold text-slate-400 uppercase">📍 {c.address}</p>
+                              <h4 className="font-black text-slate-800 uppercase italic text-base">{c.name}</h4>
+                              <p className="text-[10px] font-bold text-slate-400 uppercase">📍 {c.address}</p>
                            </div>
                            <div className="text-indigo-600 text-base">➔</div>
                         </div>
@@ -524,11 +552,11 @@ const Replacements: React.FC<ReplacementsProps> = ({ company, role, user }) => {
                 <div className="flex-1 flex flex-col md:flex-row overflow-hidden">
                    <div className="w-full md:w-1/2 p-4 border-r flex flex-col gap-3 bg-slate-50">
                       <div className="flex justify-between items-center">
-                        <p className="text-[9px] font-black text-slate-400 uppercase italic">Step 2: Select Item</p>
-                        <button onClick={() => setClaimStep(1)} className="text-[7px] font-black text-indigo-600 uppercase underline">Change Shop</button>
+                        <p className="text-xs font-black text-slate-400 uppercase italic">Step 2: Select Item</p>
+                        <button onClick={() => setClaimStep(1)} className="text-[10px] font-black text-indigo-600 uppercase underline">Change Shop</button>
                       </div>
                       <input 
-                        className="w-full p-3 bg-white border border-slate-200 rounded-xl font-black text-[11px] outline-none"
+                        className="w-full p-3 bg-white border border-slate-200 rounded-xl font-black text-base outline-none"
                         placeholder="মডেল সার্চ..."
                         value={prodSearch}
                         onChange={e => setProdSearch(e.target.value)}
@@ -536,22 +564,34 @@ const Replacements: React.FC<ReplacementsProps> = ({ company, role, user }) => {
                       <div className="flex-1 overflow-y-auto custom-scroll space-y-2">
                          {filteredProducts.map(p => (
                            <div key={p.id} onClick={() => handleAddClaim(p)} className="p-3 bg-white rounded-xl border border-slate-100 hover:border-indigo-400 cursor-pointer flex justify-between items-center">
-                              <p className="text-[9px] font-black uppercase italic text-slate-800 truncate pr-3">{p.name}</p>
+                              <p className="text-xs font-black uppercase italic text-slate-800 truncate pr-3">{p.name}</p>
                               <div className="text-indigo-600 font-black">+</div>
                            </div>
                          ))}
                       </div>
                    </div>
                    <div className="w-full md:w-1/2 p-6 bg-white flex flex-col justify-center items-center text-center">
-                      <h4 className="text-[11px] font-black uppercase italic text-slate-900 mb-4">Quantity</h4>
+                      <h4 className="text-base font-black uppercase italic text-slate-900 mb-4">Quantity</h4>
                       <div className="flex items-center gap-4 bg-slate-50 p-3 rounded-2xl border border-slate-100 mb-6">
                          <button onClick={() => setClaimQty(Math.max(1, claimQty - 1))} className="w-8 h-8 rounded-full bg-white shadow text-lg font-black text-slate-300">-</button>
                          <input type="number" className="w-12 text-center bg-transparent text-2xl font-black italic outline-none" value={claimQty} onChange={e => setClaimQty(Math.max(1, Number(e.target.value)))} />
                          <button onClick={() => setClaimQty(claimQty + 1)} className="w-8 h-8 rounded-full bg-white shadow text-lg font-black text-slate-300">+</button>
                       </div>
-                      <div className="w-full p-4 bg-indigo-50 rounded-xl text-left">
-                         <p className="text-[7px] font-black text-indigo-400 uppercase italic mb-0.5">Customer:</p>
-                         <p className="font-black text-slate-800 uppercase italic text-[10px] truncate">{selectedCust?.name}</p>
+                      <div className="w-full space-y-4">
+                         <div className="p-4 bg-indigo-50 rounded-xl text-left">
+                            <p className="text-[10px] font-black text-indigo-400 uppercase italic mb-0.5">Customer:</p>
+                            <p className="font-black text-slate-800 uppercase italic text-sm truncate">{selectedCust?.name}</p>
+                         </div>
+                         <div className="text-left px-1">
+                            <label className="text-[11px] font-black uppercase text-slate-400 italic mb-1 block ml-1">Surcharge (সারচার্জ)</label>
+                            <input 
+                              type="number"
+                              className="w-full p-3 bg-slate-50 border border-slate-100 rounded-xl font-black text-base outline-none focus:border-indigo-500 transition-all"
+                              placeholder="অ্যামাউন্ট লিখুন..."
+                              value={claimSurcharge}
+                              onChange={e => setClaimSurcharge(Number(e.target.value))}
+                            />
+                         </div>
                       </div>
                    </div>
                 </div>
@@ -565,18 +605,18 @@ const Replacements: React.FC<ReplacementsProps> = ({ company, role, user }) => {
         <div className="fixed inset-0 bg-slate-950/90 backdrop-blur-xl z-[4000] flex items-center justify-center p-3">
            <div className="bg-white p-6 rounded-3xl w-full max-w-xs shadow-2xl animate-reveal text-black border border-white/20">
               <div className="flex justify-between items-center mb-4 border-b pb-3">
-                 <h3 className="text-sm font-black uppercase italic">মাল যাচাইকরণ</h3>
+                 <h3 className="text-lg font-black uppercase italic">মাল যাচাইকরণ</h3>
                  <button onClick={() => setShowVerifyModal(false)} className="text-xl text-slate-300">✕</button>
               </div>
               
               <div className="space-y-4">
                  <div className="text-center p-4 bg-slate-50 rounded-2xl">
-                    <p className="text-[8px] font-black uppercase text-slate-400 mb-1">Product Name</p>
-                    <p className="text-[12px] font-black uppercase italic leading-tight">{selectedRp.product_name}</p>
+                    <p className="text-[11px] font-black uppercase text-slate-400 mb-1">Product Name</p>
+                    <p className="text-sm font-bold uppercase italic leading-tight">{selectedRp.product_name}</p>
                  </div>
 
                  <div className="space-y-2">
-                    <label className="text-[8px] font-black uppercase text-slate-400 ml-1 italic text-center block">প্রাপ্ত পরিমাণ (Qty Received)</label>
+                    <label className="text-[11px] font-black uppercase text-slate-400 ml-1 italic text-center block">প্রাপ্ত পরিমাণ (Qty Received)</label>
                     <div className="flex items-center gap-4 justify-center bg-indigo-50 p-2 rounded-2xl border border-indigo-100">
                        <button onClick={() => setActualQty(Math.max(0, actualQty - 1))} className="w-8 h-8 bg-white rounded-full shadow font-black text-lg text-slate-300">-</button>
                        <input type="number" className="w-12 text-center bg-transparent text-2xl font-black italic text-indigo-600 outline-none" value={actualQty} onChange={e => setActualQty(Number(e.target.value))} />
@@ -587,7 +627,7 @@ const Replacements: React.FC<ReplacementsProps> = ({ company, role, user }) => {
                  <button 
                    disabled={isSaving}
                    onClick={handleVerifyReceipt}
-                   className="w-full bg-indigo-600 text-white py-3.5 rounded-xl font-black uppercase text-[10px] shadow-lg active:scale-95 transition-all mt-4"
+                   className="w-full bg-indigo-600 text-white py-3.5 rounded-xl font-black uppercase text-sm shadow-lg active:scale-95 transition-all mt-4"
                  >
                     {isSaving ? "সংরক্ষণ হচ্ছে..." : "কনফার্ম প্রাপ্তি ✅"}
                  </button>
@@ -596,7 +636,7 @@ const Replacements: React.FC<ReplacementsProps> = ({ company, role, user }) => {
         </div>
       )}
 
-      {loading && <div className="fixed inset-0 bg-white/30 backdrop-blur-sm z-[9999] flex items-center justify-center font-black uppercase italic text-blue-600 animate-pulse text-[10px] tracking-widest">Updating Returns...</div>}
+      {loading && <div className="fixed inset-0 bg-white/30 backdrop-blur-sm z-[9999] flex items-center justify-center font-black uppercase italic text-blue-600 animate-pulse text-sm tracking-widest">Updating Returns...</div>}
     </div>
     </>
   );
