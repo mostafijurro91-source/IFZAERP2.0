@@ -122,9 +122,17 @@ const Replacements: React.FC<ReplacementsProps> = ({ company, role, user }) => {
     }
   };
 
+  const updateStatusDirect = async (id: string, newStatus: string) => {
+    try {
+      const { error } = await supabase.from('replacements').update({ status: newStatus }).eq('id', id);
+      if (error) throw error;
+      fetchData();
+    } catch (err) { console.error(err); }
+  };
+
   const updateStatus = async (id: string, newStatus: string) => {
     try {
-      if(!confirm("এটি কোম্পানিতে পাঠাতে চান?")) return;
+      if(!confirm("এটি কি নিশ্চিত?")) return;
       const { error } = await supabase.from('replacements').update({ status: newStatus }).eq('id', id);
       if (error) throw error;
       fetchData();
@@ -223,6 +231,7 @@ const Replacements: React.FC<ReplacementsProps> = ({ company, role, user }) => {
   };
 
   return (
+    <>
     <div className="space-y-4 animate-reveal pb-32 text-slate-900 px-1">
       
       {/* 🚀 Advanced Header & Stats */}
@@ -318,7 +327,10 @@ const Replacements: React.FC<ReplacementsProps> = ({ company, role, user }) => {
                                   {rp.status === 'RECEIVED' ? (
                                     <button onClick={() => { setSplittingItem(rp); setSplitQty(rp.qty); setShowSplitModal(true); }} className="px-2 py-1 bg-emerald-600 text-white rounded-md font-black text-[7px] uppercase shadow-sm">Send ➔</button>
                                   ) : (
-                                    <button onClick={() => { setSelectedRp(rp); setActualQty(rp.qty); setShowVerifyModal(true); }} className="px-2 py-1 bg-indigo-600 text-white rounded-md font-black text-[7px] uppercase shadow-sm">Get ✅</button>
+                                    <div className="flex gap-1">
+                                       <button onClick={() => updateStatusDirect(rp.id, 'RECEIVED')} className="w-7 h-7 bg-emerald-500 text-white rounded-md flex items-center justify-center font-black text-xs shadow-sm" title="Quick Get">✓</button>
+                                       <button onClick={() => { setSelectedRp(rp); setActualQty(rp.qty); setShowVerifyModal(true); }} className="px-2 py-1 bg-indigo-600 text-white rounded-md font-black text-[7px] uppercase shadow-sm">Get ✅</button>
+                                    </div>
                                   )}
                                </div>
                             </div>
@@ -346,7 +358,10 @@ const Replacements: React.FC<ReplacementsProps> = ({ company, role, user }) => {
                            {rp.status === 'RECEIVED' ? (
                              <button onClick={() => { setSplittingItem(rp); setSplitQty(rp.qty); setShowSplitModal(true); }} className="px-2 py-1 bg-emerald-600 text-white rounded-md font-black text-[7px] uppercase">Send ➔</button>
                            ) : (
-                             <button onClick={() => { setSelectedRp(rp); setActualQty(rp.qty); setShowVerifyModal(true); }} className="px-2 py-1 bg-indigo-600 text-white rounded-md font-black text-[7px] uppercase">Get ✅</button>
+                             <div className="flex gap-1">
+                                <button onClick={() => updateStatusDirect(rp.id, 'RECEIVED')} className="w-7 h-7 bg-emerald-500 text-white rounded-md flex items-center justify-center font-black text-xs shadow-sm" title="Quick Get">✓</button>
+                                <button onClick={() => { setSelectedRp(rp); setActualQty(rp.qty); setShowVerifyModal(true); }} className="px-2 py-1 bg-indigo-600 text-white rounded-md font-black text-[7px] uppercase">Get ✅</button>
+                             </div>
                            )}
                            <button onClick={async () => { if(confirm("ডিলিট?")) { await supabase.from('replacements').delete().eq('id', rp.id); fetchData(); } }} className="text-rose-400 font-black text-xs px-1">×</button>
                         </div>
@@ -583,6 +598,7 @@ const Replacements: React.FC<ReplacementsProps> = ({ company, role, user }) => {
 
       {loading && <div className="fixed inset-0 bg-white/30 backdrop-blur-sm z-[9999] flex items-center justify-center font-black uppercase italic text-blue-600 animate-pulse text-[10px] tracking-widest">Updating Returns...</div>}
     </div>
+    </>
   );
 };
 
