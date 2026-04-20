@@ -344,7 +344,7 @@ const Replacements: React.FC<ReplacementsProps> = ({ company, role, user }) => {
                                <div className="flex-1 min-w-0">
                                   <p className="text-[11px] font-bold text-slate-400 uppercase leading-none">📍 {rp.customers?.name}</p>
                                   <div className="flex items-center gap-2 mt-1">
-                                     <p className="text-[10px] text-slate-300 uppercase italic">Qty: {rp.qty}</p>
+                                     <p className="text-[10px] text-rose-600 font-black uppercase italic">Qty: {rp.qty}</p>
                                      {rp.surcharge > 0 && <span className="text-[10px] font-black text-rose-500 bg-rose-50 px-1 rounded uppercase">Fee: ৳{rp.surcharge}</span>}
                                   </div>
                                </div>
@@ -381,7 +381,7 @@ const Replacements: React.FC<ReplacementsProps> = ({ company, role, user }) => {
                         </div>
                      </div>
                      <div className="text-right flex flex-col items-end gap-1">
-                        <p className="text-xs font-black italic text-slate-900">{rp.qty} <span className="text-[6px] text-slate-300 uppercase">Pcs</span></p>
+                        <p className="text-xs font-black italic text-rose-600">{rp.qty} <span className="text-[6px] text-slate-300 uppercase">Pcs</span></p>
                         <div className="flex gap-1">
                            {rp.status === 'RECEIVED' ? (
                              <button onClick={() => { setSplittingItem(rp); setSplitQty(rp.qty); setShowSplitModal(true); }} className="px-2 py-1 bg-emerald-600 text-white rounded-md font-black text-[10px] uppercase">Send ➔</button>
@@ -417,7 +417,7 @@ const Replacements: React.FC<ReplacementsProps> = ({ company, role, user }) => {
                             <h4 className="text-base font-black uppercase italic mt-2 leading-tight truncate">{rp.product_name}</h4>
                             <p className="text-[10px] text-slate-500 font-bold uppercase mt-0.5">Shop: {rp.customers?.name}</p>
                          </div>
-                         <p className="text-lg font-black italic text-emerald-400">{rp.qty}</p>
+                         <p className="text-lg font-black italic text-rose-500">{rp.qty}</p>
                       </div>
                       <div className="flex gap-2 mt-3 pt-3 border-t border-white/5">
                          <button 
