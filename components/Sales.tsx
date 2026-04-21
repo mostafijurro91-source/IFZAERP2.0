@@ -367,6 +367,16 @@ const Sales: React.FC<SalesProps> = ({ company, role, user }) => {
         type: 'MEMO'
       }]);
 
+      // --- অটোমেটিক এসএমএস পাঠানো (নতুন মেমো কনফার্মেশন) ---
+      if (selectedCust?.phone) {
+        try {
+          const msg = `প্রিয় কাস্টমার, ${company} থেকে আপনার নামে একটি নতুন মেমো #${memoNo} তৈরি করা হয়েছে। মেমো বিল: ৳${Math.round(totals.netTotal).toLocaleString()}। আপনার বর্তমান মোট বকেয়া: ৳${Math.round(totals.finalTotalBalance).toLocaleString()}। ধন্যবাদ - ইফজা ইআরপি`;
+          await sendSMS(selectedCust.phone, msg, selectedCust.id);
+        } catch (smsErr) {
+          console.error('Memo SMS failed:', smsErr);
+        }
+      }
+
       if (cashReceived > 0) {
         await supabase.from('transactions').insert([{
           customer_id: selectedCust.id, company: dbCo, amount: cashReceived, payment_type: 'COLLECTION',

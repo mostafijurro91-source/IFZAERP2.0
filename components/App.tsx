@@ -18,7 +18,7 @@ import MarketingPage from './components/MarketingPage';
 import CustomerPortal from './components/CustomerPortal';
 import Showroom from './components/Showroom';
 import Tracking from './components/Tracking';
-import { User, Company } from './types';
+import { User, Company, Customer } from './types';
 import { supabase, checkSupabaseConnection } from './lib/supabase';
 
 const App: React.FC = () => {
@@ -30,6 +30,7 @@ const App: React.FC = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [dbError, setDbError] = useState(false);
   const [toast, setToast] = useState<{title: string, message: string} | null>(null);
+  const [activeSRCustomer, setActiveSRCustomer] = useState<Customer | null>(null);
 
   // 🔔 Background & Real-time Notification Engine
   useEffect(() => {
@@ -212,16 +213,31 @@ const App: React.FC = () => {
             {activeTab === 'portal_dashboard' && <CustomerPortal type="DASHBOARD" user={user} />}
             {activeTab === 'portal_ledger' && <CustomerPortal type="LEDGER" user={user} />}
             {activeTab === 'portal_catalog' && <CustomerPortal type="CATALOG" user={user} />}
+            {activeTab === 'portal_order' && <CustomerPortal type="ORDER" user={user} />}
+            {activeTab === 'portal_order_history' && <CustomerPortal type="ORDER_HISTORY" user={user} />}
+            {activeTab === 'portal_booking' && <CustomerPortal type="BOOKING" user={user} />}
+            {activeTab === 'sr_order_entry' && activeSRCustomer && (
+              <CustomerPortal 
+                type="ORDER" 
+                user={{...user, role: 'CUSTOMER', customer_id: activeSRCustomer.id} as any} 
+                isSRMode={true}
+                srCustomer={activeSRCustomer}
+                onBack={() => {
+                  setActiveSRCustomer(null);
+                  setActiveTab('order_management');
+                }}
+              />
+            )}
             {activeTab === 'showroom' && <Showroom />}
             {activeTab === 'ad_manager' && <AdManager />}
             {activeTab === 'sales' && <Sales company={selectedCompany} role={user.role} user={user} />}
             {activeTab === 'collections' && <Collections company={selectedCompany} user={user} />}
-            {activeTab === 'order_management' && <OrderManagement company={selectedCompany} user={user} setActiveTab={setActiveTab} />}
+            {activeTab === 'order_management' && <OrderManagement company={selectedCompany} user={user} setActiveTab={setActiveTab} onStartOrder={() => setActiveTab('customers')} />}
             {activeTab === 'bookings' && <Bookings company={selectedCompany} role={user.role} user={user} />}
             {activeTab === 'replacements' && <Replacements company={selectedCompany} role={user.role} />}
             {activeTab === 'delivery_hub' && <DeliveryHub company={selectedCompany} user={user} />}
             {activeTab === 'inventory' && <Inventory company={selectedCompany} role={user.role} />}
-            {activeTab === 'customers' && <Customers company={selectedCompany} role={user.role} userName={user.name} />}
+            {activeTab === 'customers' && <Customers company={selectedCompany} role={user.role} userName={user.name} onTakeOrder={(c: any) => { setActiveSRCustomer(c); setActiveTab('sr_order_entry'); }} />}
             {activeTab === 'ledger' && <CompanyLedger company={selectedCompany} role={user.role} />}
             {activeTab === 'reports' && <Reports company={selectedCompany} userRole={user.role} userName={user.name} />}
             {activeTab === 'team' && <Team />}
