@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Company, User, Customer, CompanyRecord, formatCurrency } from '../types';
 import { supabase, mapToDbCompany, db } from '../lib/supabase';
+import { sendSMS } from '../lib/sms';
 
 interface CollectionsProps {
    company: Company;
@@ -217,6 +218,33 @@ const Collections: React.FC<CollectionsProps> = ({ company, user, companies }) =
             type: 'PAYMENT'
          }]);
          await supabase.from('collection_requests').delete().eq('id', req.id);
+
+         // --- অটোমেটিক এসএমএস পাঠানো ---
+         if (req.customers?.phone) {
+            try {
+               // লেটেস্ট ব্যালেন্স ক্যালকুলেট করা
+               const { data: allTxs } = await supabase
+                  .from('transactions')
+                  .select('amount, payment_type, items, meta')
+                  .eq('customer_id', req.customer_id)
+                  .eq('company', req.company);
+               
+               let totalDue = 0;
+               allTxs?.forEach(tx => {
+                  const a = Number(tx.amount) || 0;
+                  const isBk = tx.meta?.is_booking === true || tx.items?.[0]?.note?.includes('বুকিং');
+                  if (tx.payment_type === 'DUE') totalDue += a;
+                  else if (tx.payment_type === 'COLLECTION' && !isBk) totalDue -= a;
+               });
+
+               const msg = `প্রিয় কাস্টমার, আপনার ${req.company} কোম্পানির ${isBooking ? 'বুকিং বাবদ' : 'বকেয়া বাবদ'} ৳${Number(req.amount).toLocaleString()} জমা গ্রহণ করা হয়েছে। আপনার বর্তমান মোট বকেয়া ৳${totalDue.toLocaleString()}। ধন্যবাদ - ইফজা ইআরপি`;
+               
+               await sendSMS(req.customers.phone, msg, req.customer_id);
+            } catch (smsErr) {
+               console.error('SMS notification failed:', smsErr);
+            }
+         }
+
          fetchData();
       } catch (err: any) { alert("ত্রুটি: " + err.message); } finally { setIsSaving(false); }
    };
