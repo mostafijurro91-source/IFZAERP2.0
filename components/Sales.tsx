@@ -3,6 +3,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Company, UserRole, User, Product, formatCurrency } from '../types';
 import { supabase, db, mapToDbCompany } from '../lib/supabase';
 import { jsPDF } from 'jspdf';
+import { sendSMS } from '../lib/sms';
 import * as html2canvasModule from 'html2canvas';
 
 const html2canvas = (html2canvasModule as any).default || html2canvasModule;
@@ -373,12 +374,18 @@ const Sales: React.FC<SalesProps> = ({ company, role, user }) => {
           submitted_by: user.name
         }]);
 
-        await supabase.from('notifications').insert([{
+         await supabase.from('notifications').insert([{
           customer_id: selectedCust.id,
           title: `টাকা জমা রশিদ (${memoNo})`,
           message: `আপনার মেমো ${memoNo} পরিশোধ বাবদ ৳${Math.round(cashReceived).toLocaleString()} জমা করা হয়েছে।`,
           type: 'PAYMENT'
         }]);
+
+        // --- অটোমেটিক এসএমএস পাঠানো (Cash Received) ---
+        if (selectedCust?.phone) {
+          const msg = `প্রিয় কাস্টমার, মেমো #${memoNo} বাবদ আপনার ৳${Math.round(cashReceived).toLocaleString()} জমা গ্রহণ করা হয়েছে। আপনার বর্তমান মোট বকেয়া ৳${Math.round(totals.finalTotalBalance).toLocaleString()}। ধন্যবাদ - ইফজা ইআরপি`;
+          await sendSMS(selectedCust.phone, msg, selectedCust.id);
+        }
       }
 
       for (const item of cart) {
