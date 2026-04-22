@@ -45,7 +45,6 @@ export const sendSMS = async (phone: string, message: string, customerId?: strin
   };
 
   try {
-    // If no API key provided at all
     if (!apiKey || apiKey.includes('***')) {
       console.warn('Valid SMS API Key not found. SMS will not be sent. Configure in Settings.');
       await supabase.from('sms_logs').insert([{ ...logData, status: 'CONFIG_MISSING', meta: { error: 'API Key missing' } }]);
@@ -67,40 +66,25 @@ export const sendSMS = async (phone: string, message: string, customerId?: strin
     params.append('api_key', apiKey);
     params.append('to', cleanPhone);
     params.append('message', message);
-    params.append('type', 'unicode'); // Required for Bengali/Unicode support
+    params.append('type', 'unicode'); // Required for Bengali support
     
     if (senderId) {
       params.append('sender_id', senderId);
     }
 
-    console.log('Attempting to send SMS to:', cleanPhone, 'via POST', baseUrl);
+    // Using GET because many SMS gateways in BD don't support CORS for POST requests
+    const finalUrl = `${baseUrl}/sms/send?${params.toString()}`;
+    console.log('Attempting to send SMS to:', cleanPhone, 'via GET');
 
-    // Using POST is more robust for long Bengali messages
-    const response = await fetch(`${baseUrl}/sms/send`, {
-      method: 'POST',
+    const response = await fetch(finalUrl, {
+      method: 'GET',
       headers: {
         'Accept': 'application/json',
-        'Content-Type': 'application/x-www-form-urlencoded',
       },
-      body: params.toString(),
-      signal: AbortSignal.timeout(15000) // 15s timeout
+      signal: AbortSignal.timeout(15000)
     });
 
-    // If POST fails (some older gateways only support GET), we can fallback or log it.
-    // But most modern gateways support POST.
-    
     if (!response.ok) {
-      // Fallback to GET if POST is not supported (status 405 or 404)
-      if (response.status === 405 || response.status === 404) {
-        console.warn('POST method not supported, falling back to GET...');
-        const getUrl = `${baseUrl}/sms/send?${params.toString()}`;
-        const getResponse = await fetch(getUrl, { 
-          method: 'GET',
-          signal: AbortSignal.timeout(10000)
-        });
-        if (!getResponse.ok) throw new Error(`GET fallback failed with status ${getResponse.status}`);
-        return await handleResponse(getResponse, logData);
-      }
       throw new Error(`Gateway returned HTTP ${response.status}`);
     }
 
@@ -111,7 +95,7 @@ export const sendSMS = async (phone: string, message: string, customerId?: strin
     
     let errorMessage = String(error);
     if (errorMessage.includes('Failed to fetch')) {
-      errorMessage = 'কানেক্ট করা যাচ্ছে না। API URL বা ইন্টারনেট চেক করুন। (CORS issues possible in browser)';
+      errorMessage = 'কানেক্ট করা যাচ্ছে না। গেটওয়ে সার্ভার থেকে রেসপন্স পাওয়া যাচ্ছে না (CORS সমস্যা হতে পারে)।';
     }
     
     await supabase.from('sms_logs').insert([{ 
