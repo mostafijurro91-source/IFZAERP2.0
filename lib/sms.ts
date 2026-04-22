@@ -72,30 +72,58 @@ export const sendSMS = async (phone: string, message: string, customerId?: strin
       params.append('sender_id', senderId);
     }
 
-    // Using GET because many SMS gateways in BD don't support CORS for POST requests
-    const finalUrl = `${baseUrl}/sms/send?${params.toString()}`;
-    console.log('Attempting to send SMS to:', cleanPhone, 'via GET');
+    // Using a CORS proxy because many SMS gateways don't allow direct browser calls
+    const targetUrl = `${baseUrl}/sms/send?${params.toString()}`;
+    const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(targetUrl)}`;
+    
+    console.log('Attempting to send SMS via CORS Proxy to:', cleanPhone);
 
-    const response = await fetch(finalUrl, {
+    const response = await fetch(proxyUrl, {
       method: 'GET',
-      headers: {
-        'Accept': 'application/json',
-      },
-      signal: AbortSignal.timeout(15000)
+      signal: AbortSignal.timeout(20000) // Increased timeout for proxy
     });
 
     if (!response.ok) {
-      throw new Error(`Gateway returned HTTP ${response.status}`);
+      throw new Error(`Proxy or Gateway returned HTTP ${response.status}`);
     }
 
-    return await handleResponse(response, logData);
+    // Try to parse JSON from the proxy's raw response
+    const resultText = await response.text();
+    let result;
+    try {
+      result = JSON.parse(resultText);
+    } catch (e) {
+      result = { raw_response: resultText };
+    }
+    
+    console.log('SMS Gateway Response:', result);
+    
+    const isSuccess = result.status === 'success' || 
+                      result.code === '200' || 
+                      result.status === 'OK' || 
+                      result.msg === 'Success' ||
+                      result.success === true ||
+                      (typeof resultText === 'string' && resultText.toLowerCase().includes('success'));
+
+    // Update log with result
+    await supabase.from('sms_logs').insert([{ 
+      ...logData, 
+      status: isSuccess ? 'SENT' : 'FAILED',
+      meta: { ...result, proxy: true }
+    }]);
+
+    if (!isSuccess) {
+      return { success: false, error: result.message || result.msg || 'Gateway returned error', result };
+    }
+
+    return { success: true, result };
 
   } catch (error) {
     console.error('SMS Send Error:', error);
     
     let errorMessage = String(error);
     if (errorMessage.includes('Failed to fetch')) {
-      errorMessage = 'কানেক্ট করা যাচ্ছে না। গেটওয়ে সার্ভার থেকে রেসপন্স পাওয়া যাচ্ছে না (CORS সমস্যা হতে পারে)।';
+      errorMessage = 'কানেক্ট করা যাচ্ছে না। আপনার ইন্টারনেট বা প্রক্সি সার্ভার চেক করুন।';
     }
     
     await supabase.from('sms_logs').insert([{ 
@@ -107,32 +135,4 @@ export const sendSMS = async (phone: string, message: string, customerId?: strin
     return { success: false, error: errorMessage };
   }
 };
-
-/**
- * Internal helper to handle the API response
- */
-async function handleResponse(response: Response, logData: any) {
-  const result = await response.json();
-  console.log('SMS Gateway Response:', result);
-  
-  // Ummah Host BD typically returns { status: 'success', ... } or { status: 'error', ... }
-  const isSuccess = result.status === 'success' || 
-                    result.code === '200' || 
-                    result.status === 'OK' || 
-                    result.msg === 'Success' ||
-                    result.success === true;
-
-  // Update log with result
-  await supabase.from('sms_logs').insert([{ 
-    ...logData, 
-    status: isSuccess ? 'SENT' : 'FAILED',
-    meta: { ...result, method: response.url.includes('?') ? 'GET' : 'POST' }
-  }]);
-
-  if (!isSuccess) {
-    return { success: false, error: result.message || result.msg || 'Gateway returned error', result };
-  }
-
-  return { success: true, result };
-}
 
