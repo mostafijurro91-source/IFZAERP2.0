@@ -1,6 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
+import { sendSMS } from '../lib/sms';
 
 const SMSSettings: React.FC = () => {
   const [apiKey, setApiKey] = useState('');
@@ -10,10 +11,14 @@ const SMSSettings: React.FC = () => {
   const [balance, setBalance] = useState<string | null>(null);
   const [isLoadingBalance, setIsLoadingBalance] = useState(false);
 
+  // Test SMS state
+  const [testPhone, setTestPhone] = useState('');
+  const [isTesting, setIsTesting] = useState(false);
+
   useEffect(() => {
     // Load settings from localStorage
-    const savedApiKey = localStorage.getItem('sms_api_key') || '484d**********d6b4'; // Default from user
-    const savedSenderId = localStorage.getItem('sms_sender_id') || '8809617632427'; // Default from user
+    const savedApiKey = localStorage.getItem('sms_api_key') || ''; 
+    const savedSenderId = localStorage.getItem('sms_sender_id') || ''; 
     const savedBaseUrl = localStorage.getItem('sms_base_url') || 'https://sms.ummahhostbd.com/api/v1';
 
     setApiKey(savedApiKey);
@@ -26,6 +31,7 @@ const SMSSettings: React.FC = () => {
   }, []);
 
   const fetchBalance = async (key: string, url: string) => {
+    if (!key || key.includes('***')) return;
     setIsLoadingBalance(true);
     try {
       const response = await fetch(`${url}/user/balance?api_key=${key}`);
@@ -58,6 +64,23 @@ const SMSSettings: React.FC = () => {
     }, 500);
   };
 
+  const handleSendTest = async () => {
+    if (!testPhone) return alert('টেস্ট করার জন্য একটি মোবাইল নাম্বার দিন।');
+    setIsTesting(true);
+    try {
+      const result = await sendSMS(testPhone, "এটি ইফজা ইআরপি থেকে একটি টেস্ট মেসেজ।");
+      if (result.success) {
+        alert('টেস্ট এসএমএস সফলভাবে পাঠানো হয়েছে! ✅');
+      } else {
+        alert('এসএমএস পাঠানো যায়নি: ' + result.error);
+      }
+    } catch (err: any) {
+      alert('ত্রুটি: ' + err.message);
+    } finally {
+      setIsTesting(false);
+    }
+  };
+
   return (
     <div className="space-y-8 pb-32 font-sans text-slate-900 animate-reveal">
       <div className="bg-[#0f172a] p-10 md:p-14 rounded-[4rem] text-white shadow-2xl relative overflow-hidden">
@@ -69,7 +92,8 @@ const SMSSettings: React.FC = () => {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        <div className="lg:col-span-2">
+        <div className="lg:col-span-2 space-y-8">
+          {/* Main Settings Form */}
           <div className="bg-white p-8 md:p-12 rounded-[3rem] shadow-xl border border-slate-100">
             <form onSubmit={handleSave} className="space-y-8">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -85,7 +109,7 @@ const SMSSettings: React.FC = () => {
                   />
                 </div>
                 <div className="space-y-2">
-                  <label className="text-[10px] font-black uppercase text-slate-400 ml-4 italic tracking-widest">Sender ID</label>
+                  <label className="text-[10px] font-black uppercase text-slate-400 ml-4 italic tracking-widest">Center ID (সেন্টার আইডি)</label>
                   <input 
                     type="text" 
                     value={senderId}
@@ -116,6 +140,28 @@ const SMSSettings: React.FC = () => {
                 </button>
               </div>
             </form>
+          </div>
+
+          {/* Test SMS Section */}
+          <div className="bg-slate-50 p-8 md:p-10 rounded-[3rem] border border-dashed border-slate-200">
+             <h4 className="text-sm font-black uppercase italic mb-6">টেস্ট এসএমএস পাঠান</h4>
+             <div className="flex flex-col md:flex-row gap-4">
+                <input 
+                  type="text" 
+                  placeholder="মোবাইল নাম্বার (যেমন: 01712345678)"
+                  className="flex-1 p-5 bg-white border-2 border-slate-100 rounded-2xl outline-none font-bold text-sm focus:border-blue-600"
+                  value={testPhone}
+                  onChange={(e) => setTestPhone(e.target.value)}
+                />
+                <button 
+                  onClick={handleSendTest}
+                  disabled={isTesting || !apiKey}
+                  className="px-8 bg-slate-900 text-white py-5 rounded-2xl font-black uppercase text-[10px] tracking-widest hover:bg-black transition-all disabled:opacity-20"
+                >
+                  {isTesting ? 'পাঠানো হচ্ছে...' : 'টেস্ট করুন ➔'}
+                </button>
+             </div>
+             <p className="text-[9px] text-slate-400 font-bold mt-4 uppercase italic">দ্রষ্টব্য: টেস্ট করার আগে উপরের সেটিংস সেভ করে নিন।</p>
           </div>
         </div>
 
@@ -148,7 +194,7 @@ const SMSSettings: React.FC = () => {
               <div className="pt-6 border-t border-white/5">
                 <p className="text-[9px] font-bold text-white/50 leading-relaxed italic">
                   <span className="text-blue-400 block mb-1">প্রোটোকল নোট:</span>
-                  সবগুলো SMS অপারেশন `POST /sms/send` এন্ডপয়েন্ট ব্যবহার করে সম্পন্ন করা হবে। মোবাইল নাম্বার ফরমেট অবশ্যই `01XXXXXXXXX` অথবা `8801XXXXXXXXX` হতে হবে।
+                  সবগুলো SMS অপারেশন `POST` এন্ডপয়েন্ট ব্যবহার করে সম্পন্ন করা হবে। মোবাইল নাম্বার ফরমেট অবশ্যই `01XXXXXXXXX` অথবা `8801XXXXXXXXX` হতে হবে। সেন্টার আইডি (Center ID) ফিল্ডটি সঠিক থাকলে মেমো এবং টাকা জমার কনফার্মেশন মেসেজ স্বয়ংক্রিয়ভাবে চলে যাবে।
                 </p>
               </div>
             </div>
