@@ -28,9 +28,12 @@ export const sendWhatsApp = (phone: string, message: string) => {
  */
 export const sendSMS = async (phone: string, message: string, customerId?: string) => {
   // Use localStorage OR default credentials if not set
-  const apiKey = localStorage.getItem('sms_api_key') || '484d**********d6b4'; 
-  const senderId = localStorage.getItem('sms_sender_id') || '8809617632427';
-  const baseUrl = localStorage.getItem('sms_base_url') || 'https://sms.ummahhostbd.com/api/v1';
+  const apiKey = localStorage.getItem('sms_api_key');
+  const senderId = localStorage.getItem('sms_sender_id'); // This is what the user calls "Center ID"
+  let baseUrl = localStorage.getItem('sms_base_url') || 'https://sms.ummahhostbd.com/api/v1';
+
+  // Clean baseUrl: remove trailing slash
+  baseUrl = baseUrl.replace(/\/$/, '');
 
   // Log the attempt in Supabase
   const logData = {
@@ -42,12 +45,15 @@ export const sendSMS = async (phone: string, message: string, customerId?: strin
   };
 
   try {
-    // If no API key provided at all (even default is masked or empty)
+    // If no API key provided at all
     if (!apiKey || apiKey.includes('***')) {
-      console.warn('Valid SMS API Key not found. Falling back to WhatsApp.');
-      sendWhatsApp(phone, message);
-      await supabase.from('sms_logs').insert([{ ...logData, status: 'WA_FALLBACK', gateway: 'WhatsApp' }]);
-      return { success: true, method: 'WhatsApp' };
+      console.warn('Valid SMS API Key not found. SMS will not be sent. Configure in Settings.');
+      await supabase.from('sms_logs').insert([{ ...logData, status: 'CONFIG_MISSING', meta: { error: 'API Key missing' } }]);
+      return { success: false, error: 'API Key missing' };
+    }
+
+    if (!phone) {
+      return { success: false, error: 'Mobile number is missing' };
     }
 
     // Clean phone number for SMS
@@ -56,56 +62,93 @@ export const sendSMS = async (phone: string, message: string, customerId?: strin
       cleanPhone = '88' + cleanPhone;
     }
 
-    // Build URL with query params (GET is often more reliable for SMS Gateways)
-    const url = new URL(`${baseUrl}/sms/send`);
-    url.searchParams.append('api_key', apiKey);
-    url.searchParams.append('to', cleanPhone);
-    url.searchParams.append('message', message);
+    // Prepare parameters
+    const params = new URLSearchParams();
+    params.append('api_key', apiKey);
+    params.append('to', cleanPhone);
+    params.append('message', message);
+    params.append('type', 'unicode'); // Required for Bengali/Unicode support
+    
     if (senderId) {
-      url.searchParams.append('sender_id', senderId);
+      params.append('sender_id', senderId);
     }
 
-    console.log('Sending SMS to:', cleanPhone);
+    console.log('Attempting to send SMS to:', cleanPhone, 'via POST', baseUrl);
 
-    const response = await fetch(url.toString(), {
-      method: 'GET',
+    // Using POST is more robust for long Bengali messages
+    const response = await fetch(`${baseUrl}/sms/send`, {
+      method: 'POST',
       headers: {
         'Accept': 'application/json',
-      }
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: params.toString(),
+      signal: AbortSignal.timeout(15000) // 15s timeout
     });
 
-    const result = await response.json();
-    console.log('SMS Gateway Response:', result);
+    // If POST fails (some older gateways only support GET), we can fallback or log it.
+    // But most modern gateways support POST.
     
-    // Ummah Host BD typically returns { status: 'success', ... } or { status: 'error', ... }
-    const isSuccess = result.status === 'success' || result.code === '200' || result.status === 'OK';
-
-    // Update log with result
-    await supabase.from('sms_logs').insert([{ 
-      ...logData, 
-      status: isSuccess ? 'SENT' : 'FAILED',
-      meta: result 
-    }]);
-
-    if (!isSuccess) {
-      throw new Error(result.message || 'Gateway returned error');
+    if (!response.ok) {
+      // Fallback to GET if POST is not supported (status 405 or 404)
+      if (response.status === 405 || response.status === 404) {
+        console.warn('POST method not supported, falling back to GET...');
+        const getUrl = `${baseUrl}/sms/send?${params.toString()}`;
+        const getResponse = await fetch(getUrl, { 
+          method: 'GET',
+          signal: AbortSignal.timeout(10000)
+        });
+        if (!getResponse.ok) throw new Error(`GET fallback failed with status ${getResponse.status}`);
+        return await handleResponse(getResponse, logData);
+      }
+      throw new Error(`Gateway returned HTTP ${response.status}`);
     }
 
-    return { success: true, result };
+    return await handleResponse(response, logData);
+
   } catch (error) {
     console.error('SMS Send Error:', error);
     
-    // Fallback to WhatsApp on error
-    console.warn('Falling back to WhatsApp due to SMS error');
-    sendWhatsApp(phone, message);
+    let errorMessage = String(error);
+    if (errorMessage.includes('Failed to fetch')) {
+      errorMessage = 'কানেক্ট করা যাচ্ছে না। API URL বা ইন্টারনেট চেক করুন। (CORS issues possible in browser)';
+    }
     
     await supabase.from('sms_logs').insert([{ 
       ...logData, 
-      status: 'ERROR_WA_FALLBACK', 
-      meta: { error: String(error) } 
+      status: 'ERROR', 
+      meta: { error: errorMessage, type: 'CATCH_BLOCK' } 
     }]);
     
-    return { success: false, error, method: 'WhatsApp_Fallback' };
+    return { success: false, error: errorMessage };
   }
 };
+
+/**
+ * Internal helper to handle the API response
+ */
+async function handleResponse(response: Response, logData: any) {
+  const result = await response.json();
+  console.log('SMS Gateway Response:', result);
+  
+  // Ummah Host BD typically returns { status: 'success', ... } or { status: 'error', ... }
+  const isSuccess = result.status === 'success' || 
+                    result.code === '200' || 
+                    result.status === 'OK' || 
+                    result.msg === 'Success' ||
+                    result.success === true;
+
+  // Update log with result
+  await supabase.from('sms_logs').insert([{ 
+    ...logData, 
+    status: isSuccess ? 'SENT' : 'FAILED',
+    meta: { ...result, method: response.url.includes('?') ? 'GET' : 'POST' }
+  }]);
+
+  if (!isSuccess) {
+    return { success: false, error: result.message || result.msg || 'Gateway returned error', result };
+  }
+
+  return { success: true, result };
+}
 
