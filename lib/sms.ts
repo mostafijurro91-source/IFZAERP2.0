@@ -72,48 +72,43 @@ export const sendSMS = async (phone: string, message: string, customerId?: strin
       params.append('sender_id', senderId);
     }
 
-    // Using a CORS proxy because many SMS gateways don't allow direct browser calls
-    const targetUrl = `${baseUrl}/sms/send?${params.toString()}`;
-    const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(targetUrl)}`;
-    
-    console.log('Attempting to send SMS via CORS Proxy to:', cleanPhone);
+    // Build URL for GET request (Restoring original logic)
+    const url = new URL(`${baseUrl}/sms/send`);
+    url.searchParams.append('api_key', apiKey);
+    url.searchParams.append('to', cleanPhone);
+    url.searchParams.append('message', message);
+    if (senderId) {
+      url.searchParams.append('sender_id', senderId);
+    }
 
-    const response = await fetch(proxyUrl, {
+    console.log('Attempting to send SMS to:', cleanPhone, 'via', baseUrl);
+
+    const response = await fetch(url.toString(), {
       method: 'GET',
-      signal: AbortSignal.timeout(20000) // Increased timeout for proxy
+      headers: {
+        'Accept': 'application/json',
+      },
+      signal: AbortSignal.timeout(10000) 
     });
 
     if (!response.ok) {
-      throw new Error(`Proxy or Gateway returned HTTP ${response.status}`);
+      throw new Error(`Gateway returned HTTP ${response.status}`);
     }
 
-    // Try to parse JSON from the proxy's raw response
-    const resultText = await response.text();
-    let result;
-    try {
-      result = JSON.parse(resultText);
-    } catch (e) {
-      result = { raw_response: resultText };
-    }
-    
+    const result = await response.json();
     console.log('SMS Gateway Response:', result);
     
-    const isSuccess = result.status === 'success' || 
-                      result.code === '200' || 
-                      result.status === 'OK' || 
-                      result.msg === 'Success' ||
-                      result.success === true ||
-                      (typeof resultText === 'string' && resultText.toLowerCase().includes('success'));
+    const isSuccess = result.status === 'success' || result.code === '200' || result.status === 'OK' || result.msg === 'Success';
 
     // Update log with result
     await supabase.from('sms_logs').insert([{ 
       ...logData, 
       status: isSuccess ? 'SENT' : 'FAILED',
-      meta: { ...result, proxy: true }
+      meta: result 
     }]);
 
     if (!isSuccess) {
-      return { success: false, error: result.message || result.msg || 'Gateway returned error', result };
+      return { success: false, error: result.message || 'Gateway returned error', result };
     }
 
     return { success: true, result };
@@ -123,16 +118,44 @@ export const sendSMS = async (phone: string, message: string, customerId?: strin
     
     let errorMessage = String(error);
     if (errorMessage.includes('Failed to fetch')) {
-      errorMessage = 'কানেক্ট করা যাচ্ছে না। আপনার ইন্টারনেট বা প্রক্সি সার্ভার চেক করুন।';
+      errorMessage = 'কানেক্ট করা যাচ্ছে না (Connection Failed)। অনুগ্রহ করে আপনার ইন্টারনেট এবং API URL চেক করুন।';
     }
     
     await supabase.from('sms_logs').insert([{ 
       ...logData, 
       status: 'ERROR', 
-      meta: { error: errorMessage, type: 'CATCH_BLOCK' } 
+      meta: { error: errorMessage } 
     }]);
     
     return { success: false, error: errorMessage };
   }
 };
+
+/**
+ * Internal helper to handle the API response
+ */
+async function handleResponse(response: Response, logData: any) {
+  const result = await response.json();
+  console.log('SMS Gateway Response:', result);
+  
+  // Ummah Host BD typically returns { status: 'success', ... } or { status: 'error', ... }
+  const isSuccess = result.status === 'success' || 
+                    result.code === '200' || 
+                    result.status === 'OK' || 
+                    result.msg === 'Success' ||
+                    result.success === true;
+
+  // Update log with result
+  await supabase.from('sms_logs').insert([{ 
+    ...logData, 
+    status: isSuccess ? 'SENT' : 'FAILED',
+    meta: { ...result, method: response.url.includes('?') ? 'GET' : 'POST' }
+  }]);
+
+  if (!isSuccess) {
+    return { success: false, error: result.message || result.msg || 'Gateway returned error', result };
+  }
+
+  return { success: true, result };
+}
 
