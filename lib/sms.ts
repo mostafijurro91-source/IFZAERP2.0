@@ -28,7 +28,7 @@ export const sendWhatsApp = (phone: string, message: string) => {
  */
 export const sendSMS = async (phone: string, message: string, customerId?: string) => {
   // Use localStorage OR default credentials if not set
-  const apiKey = localStorage.getItem('sms_api_key');
+  const apiToken = localStorage.getItem('sms_api_token') || localStorage.getItem('sms_api_key');
   const senderId = localStorage.getItem('sms_sender_id'); // This is what the user calls "Center ID"
   let baseUrl = localStorage.getItem('sms_base_url') || 'https://sms.ummahhostbd.com/api/v1';
 
@@ -45,10 +45,10 @@ export const sendSMS = async (phone: string, message: string, customerId?: strin
   };
 
   try {
-    if (!apiKey || apiKey.includes('***')) {
-      console.warn('Valid SMS API Key not found. SMS will not be sent. Configure in Settings.');
-      await supabase.from('sms_logs').insert([{ ...logData, status: 'CONFIG_MISSING', meta: { error: 'API Key missing' } }]);
-      return { success: false, error: 'API Key missing' };
+    if (!apiToken || apiToken.includes('***')) {
+      console.warn('Valid SMS API Token not found. SMS will not be sent. Configure in Settings.');
+      await supabase.from('sms_logs').insert([{ ...logData, status: 'CONFIG_MISSING', meta: { error: 'API Token missing' } }]);
+      return { success: false, error: 'API Token missing' };
     }
 
     if (!phone) {
@@ -63,7 +63,7 @@ export const sendSMS = async (phone: string, message: string, customerId?: strin
 
     // Prepare parameters
     const params = new URLSearchParams();
-    params.append('api_key', apiKey);
+    params.append('api_token', apiToken);
     params.append('to', cleanPhone);
     params.append('message', message);
     params.append('type', 'unicode'); // Required for Bengali support
@@ -74,7 +74,7 @@ export const sendSMS = async (phone: string, message: string, customerId?: strin
 
     // Prepare full URL for sending
     const url = new URL(`${baseUrl}/sms/send`);
-    url.searchParams.append('api_key', apiKey);
+    url.searchParams.append('api_token', apiToken);
     url.searchParams.append('to', cleanPhone);
     url.searchParams.append('message', message);
     url.searchParams.append('type', 'unicode'); // Support Bengali
