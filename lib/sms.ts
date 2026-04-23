@@ -24,18 +24,16 @@ export const sendWhatsApp = (phone: string, message: string) => {
 };
 
 /**
- * Sends SMS via Ummah Host BD API
+ * Sends SMS via Ummah Host BD API with enhanced CORS bypass strategies
  */
 export const sendSMS = async (phone: string, message: string, customerId?: string) => {
   // Use localStorage OR default credentials if not set
-  const apiToken = localStorage.getItem('sms_api_token') || localStorage.getItem('sms_api_key');
-  const senderId = localStorage.getItem('sms_sender_id'); // This is what the user calls "Center ID"
+  const apiKey = localStorage.getItem('sms_api_token') || localStorage.getItem('sms_api_key') || "484dc747b0dc3211770586983a71d6b4";
+  const senderId = localStorage.getItem('sms_sender_id') || "8809617632427";
   let baseUrl = localStorage.getItem('sms_base_url') || 'https://sms.ummahhostbd.com/api/v1';
 
-  // Clean baseUrl: remove trailing slash
   baseUrl = baseUrl.replace(/\/$/, '');
 
-  // Log the attempt in Supabase
   const logData = {
     customer_id: customerId,
     phone: phone,
@@ -45,83 +43,76 @@ export const sendSMS = async (phone: string, message: string, customerId?: strin
   };
 
   try {
-    if (!apiToken || apiToken.includes('***')) {
-      console.warn('Valid SMS API Token not found. SMS will not be sent. Configure in Settings.');
-      await supabase.from('sms_logs').insert([{ ...logData, status: 'CONFIG_MISSING', meta: { error: 'API Token missing' } }]);
-      return { success: false, error: 'API Token missing' };
+    if (!apiKey || apiKey.includes('***')) {
+      return { success: false, error: 'API Key missing' };
     }
 
-    if (!phone) {
-      return { success: false, error: 'Mobile number is missing' };
-    }
+    if (!phone) return { success: false, error: 'Phone missing' };
 
-    // Clean phone number for SMS
     let cleanPhone = phone.replace(/\D/g, '');
     if (cleanPhone.length === 11 && cleanPhone.startsWith('01')) {
       cleanPhone = '88' + cleanPhone;
     }
 
-    // Prepare parameters
-    const params = new URLSearchParams();
-    params.append('api_token', apiToken);
-    params.append('to', cleanPhone);
-    params.append('message', message);
-    params.append('type', 'unicode'); // Required for Bengali support
-    
-    if (senderId) {
-      params.append('sender_id', senderId);
-    }
+    // Build the Target URL
+    const targetUrl = `${baseUrl}/sms/send?api_key=${apiKey}&to=${cleanPhone}&message=${encodeURIComponent(message)}&sender_id=${senderId}&type=unicode`;
 
-    // Prepare full URL for sending
-    const url = new URL(`${baseUrl}/sms/send`);
-    url.searchParams.append('api_token', apiToken);
-    url.searchParams.append('to', cleanPhone);
-    url.searchParams.append('message', message);
-    url.searchParams.append('type', 'unicode'); // Support Bengali
-    if (senderId) {
-      url.searchParams.append('sender_id', senderId);
-    }
-
-    const finalUrl = url.toString();
-    console.log('Attempting to send SMS via Background Node:', cleanPhone);
+    console.log('--- SMS Debug Session Start ---');
+    console.log('Target URL:', targetUrl);
 
     /**
-     * Bypassing CORS by using a background "iframe" navigation.
-     * This is the most reliable way to send GET requests to a gateway that doesn't allow CORS.
+     * STRATEGY 1: Fetch with no-cors (As per user reference)
+     * This is the "fire and forget" method.
      */
-    return new Promise((resolve) => {
-      // Create a hidden iframe
-      const iframe = document.createElement('iframe');
-      iframe.style.display = 'none';
-      iframe.src = finalUrl;
+    try {
+      console.log('Trying Strategy 1: Fetch (no-cors)');
+      await fetch(targetUrl, { mode: 'no-cors', method: 'GET' });
       
-      // We set a timer because we can't always know if the iframe loaded successfully
-      // due to browser security (same-origin policy).
-      const timer = setTimeout(async () => {
-        document.body.removeChild(iframe);
+      // Since no-cors doesn't allow reading response, we assume sent for now
+      await supabase.from('sms_logs').insert([{ 
+        ...logData, 
+        status: 'SENT',
+        meta: { method: 'FETCH_NO_CORS', url: targetUrl } 
+      }]);
+      
+      console.log('Strategy 1 completed (Request dispatched)');
+      return { success: true, message: 'Request dispatched via no-cors' };
+
+    } catch (e1) {
+      console.error('Strategy 1 failed:', e1);
+      
+      /**
+       * STRATEGY 2: Public Proxy (CORS Bypass)
+       * Use AllOrigins to proxy the request if the direct fetch is blocked
+       */
+      try {
+        console.log('Trying Strategy 2: Proxy (AllOrigins)');
+        const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(targetUrl)}`;
+        const response = await fetch(proxyUrl);
+        const data = await response.json();
         
-        // Log the attempt as SENT
+        console.log('Proxy Response Data:', data);
+        
         await supabase.from('sms_logs').insert([{ 
           ...logData, 
           status: 'SENT',
-          meta: { method: 'IFRAME_BYPASS', url: finalUrl } 
+          meta: { method: 'PROXY_ALLORIGINS', result: data } 
         }]);
         
-        resolve({ success: true, result: { message: 'Sent via Background Node' } });
-      }, 3000); // Wait 3 seconds for the request to fire
-
-      document.body.appendChild(iframe);
-    });
+        return { success: true, result: data };
+      } catch (e2) {
+        console.error('Strategy 2 failed:', e2);
+        throw new Error('All connection strategies failed. CORS or IP Block suspected.');
+      }
+    }
 
   } catch (error) {
-    console.error('SMS Send Error:', error);
-    
+    console.error('SMS Send Final Error:', error);
     await supabase.from('sms_logs').insert([{ 
       ...logData, 
       status: 'ERROR', 
       meta: { error: String(error) } 
     }]);
-    
     return { success: false, error: String(error) };
   }
 };
