@@ -41,7 +41,7 @@ const SMSSettings: React.FC = () => {
     setIsLoadingBalance(true);
     try {
       // Use AllOrigins proxy for balance check to avoid CORS
-      const targetUrl = `${url.replace(/\/$/, '')}/user/balance?api_token=${key}`;
+      const targetUrl = `${url.replace(/\/$/, '')}/user/balance?api_key=${key}`;
       const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(targetUrl)}`;
       
       const response = await fetch(proxyUrl);
@@ -142,13 +142,13 @@ const SMSSettings: React.FC = () => {
                 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                   <div className="space-y-3">
-                    <label className="text-[10px] font-black uppercase text-slate-500 ml-4 italic tracking-widest">Gateway API Token</label>
+                    <label className="text-[10px] font-black uppercase text-slate-500 ml-4 italic tracking-widest">Gateway API Key</label>
                     <input 
                       required
                       type="password" 
                       value={apiToken}
                       onChange={(e) => setApiToken(e.target.value)}
-                      placeholder="আপনার API Token এখানে দিন"
+                      placeholder="আপনার API Key এখানে দিন"
                       className="w-full p-6 bg-slate-50 border-2 border-slate-100 rounded-[2rem] outline-none font-bold text-sm focus:border-blue-600 focus:bg-white transition-all shadow-inner"
                     />
                   </div>
