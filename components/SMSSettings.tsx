@@ -4,7 +4,7 @@ import { supabase } from '../lib/supabase';
 import { sendSMS } from '../lib/sms';
 
 const SMSSettings: React.FC = () => {
-  const [apiKey, setApiKey] = useState('');
+  const [apiToken, setApiToken] = useState('');
   const [senderId, setSenderId] = useState('');
   const [baseUrl, setBaseUrl] = useState('https://sms.ummahhostbd.com/api/v1');
   const [panelUrl, setPanelUrl] = useState('https://bill.ummahhostbd.com/panel.php');
@@ -19,20 +19,20 @@ const SMSSettings: React.FC = () => {
 
   useEffect(() => {
     // Load settings from localStorage
-    const savedApiKey = localStorage.getItem('sms_api_key') || ''; 
+    const savedApiToken = localStorage.getItem('sms_api_token') || localStorage.getItem('sms_api_key') || ''; 
     const savedSenderId = localStorage.getItem('sms_sender_id') || ''; 
     const savedBaseUrl = localStorage.getItem('sms_base_url') || 'https://sms.ummahhostbd.com/api/v1';
     const savedPanelUrl = localStorage.getItem('sms_panel_url') || 'https://bill.ummahhostbd.com/panel.php';
     const savedServerIp = localStorage.getItem('sms_server_ip') || '';
 
-    setApiKey(savedApiKey);
+    setApiToken(savedApiToken);
     setSenderId(savedSenderId);
     setBaseUrl(savedBaseUrl);
     setPanelUrl(savedPanelUrl);
     setServerIp(savedServerIp);
 
-    if (savedApiKey) {
-      fetchBalance(savedApiKey, savedBaseUrl);
+    if (savedApiToken) {
+      fetchBalance(savedApiToken, savedBaseUrl);
     }
   }, []);
 
@@ -41,7 +41,7 @@ const SMSSettings: React.FC = () => {
     setIsLoadingBalance(true);
     try {
       // Use AllOrigins proxy for balance check to avoid CORS
-      const targetUrl = `${url.replace(/\/$/, '')}/user/balance?api_key=${key}`;
+      const targetUrl = `${url.replace(/\/$/, '')}/user/balance?api_token=${key}`;
       const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(targetUrl)}`;
       
       const response = await fetch(proxyUrl);
@@ -63,7 +63,7 @@ const SMSSettings: React.FC = () => {
     e.preventDefault();
     setIsSaving(true);
     
-    localStorage.setItem('sms_api_key', apiKey);
+    localStorage.setItem('sms_api_token', apiToken);
     localStorage.setItem('sms_sender_id', senderId);
     localStorage.setItem('sms_base_url', baseUrl);
     localStorage.setItem('sms_panel_url', panelUrl);
@@ -72,7 +72,7 @@ const SMSSettings: React.FC = () => {
     setTimeout(() => {
       setIsSaving(false);
       alert('এসএমএস ইন্টিগ্রেশন সেটিংস সফলভাবে সেভ করা হয়েছে! ✅');
-      fetchBalance(apiKey, baseUrl);
+      fetchBalance(apiToken, baseUrl);
     }, 500);
   };
 
@@ -120,7 +120,7 @@ const SMSSettings: React.FC = () => {
             ) : (
               <span className="text-3xl font-black italic text-blue-400 tracking-tighter">৳ {balance || '0.00'}</span>
             )}
-            <button onClick={() => fetchBalance(apiKey, baseUrl)} className="mt-3 text-[8px] font-black uppercase text-white/60 hover:text-white transition-all">রিফ্রেশ 🔄</button>
+            <button onClick={() => fetchBalance(apiToken, baseUrl)} className="mt-3 text-[8px] font-black uppercase text-white/60 hover:text-white transition-all">রিফ্রেশ 🔄</button>
           </div>
         </div>
       </div>
@@ -142,13 +142,13 @@ const SMSSettings: React.FC = () => {
                 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                   <div className="space-y-3">
-                    <label className="text-[10px] font-black uppercase text-slate-500 ml-4 italic tracking-widest">User API Key</label>
+                    <label className="text-[10px] font-black uppercase text-slate-500 ml-4 italic tracking-widest">Gateway API Token</label>
                     <input 
                       required
                       type="password" 
-                      value={apiKey}
-                      onChange={(e) => setApiKey(e.target.value)}
-                      placeholder="আপনার API Key এখানে দিন"
+                      value={apiToken}
+                      onChange={(e) => setApiToken(e.target.value)}
+                      placeholder="আপনার API Token এখানে দিন"
                       className="w-full p-6 bg-slate-50 border-2 border-slate-100 rounded-[2rem] outline-none font-bold text-sm focus:border-blue-600 focus:bg-white transition-all shadow-inner"
                     />
                   </div>
@@ -235,7 +235,7 @@ const SMSSettings: React.FC = () => {
                   />
                   <button 
                     onClick={handleSendTest}
-                    disabled={isTesting || !apiKey}
+                    disabled={isTesting || !apiToken}
                     className="px-10 bg-emerald-600 text-white py-5 rounded-2xl font-black uppercase text-[10px] tracking-widest hover:bg-emerald-500 transition-all shadow-xl shadow-emerald-900/20 disabled:opacity-20"
                   >
                     {isTesting ? 'টেস্ট হচ্ছে...' : 'টেস্ট ➔'}
