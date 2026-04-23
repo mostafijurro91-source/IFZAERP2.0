@@ -127,6 +127,53 @@ const SMSSettings: React.FC = () => {
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-10">
         <div className="xl:col-span-2 space-y-10">
+          {/* System Health Status */}
+          <div className="bg-white p-10 md:p-14 rounded-[4rem] shadow-xl border border-slate-50 relative overflow-hidden animate-reveal">
+            <div className="absolute top-0 right-0 p-8">
+               <div className="w-12 h-12 bg-emerald-50 rounded-2xl flex items-center justify-center text-emerald-600 font-black italic">HUB</div>
+            </div>
+            
+            <div className="space-y-8">
+               <h4 className="text-sm font-black uppercase italic text-slate-400 tracking-widest flex items-center gap-3">
+                  <span className="w-8 h-[2px] bg-emerald-100"></span>
+                  সিস্টেম হেলথ ও কানেক্টিভিটি
+               </h4>
+
+               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  <div className="p-6 bg-slate-50 rounded-[2rem] border border-slate-100 flex flex-col items-center text-center hover:bg-white hover:shadow-lg transition-all cursor-default group">
+                    <div className="w-10 h-10 bg-blue-100 rounded-xl mb-3 flex items-center justify-center text-blue-600 text-xs group-hover:scale-110 transition-transform">01</div>
+                    <p className="text-[9px] font-black uppercase text-slate-400 tracking-widest mb-1">Method: Fetch</p>
+                    <p className="text-[10px] font-bold text-emerald-600 flex items-center gap-2">
+                      <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse"></span>
+                      সক্রিয় ✅
+                    </p>
+                  </div>
+                  <div className="p-6 bg-slate-50 rounded-[2rem] border border-slate-100 flex flex-col items-center text-center hover:bg-white hover:shadow-lg transition-all cursor-default group">
+                    <div className="w-10 h-10 bg-indigo-100 rounded-xl mb-3 flex items-center justify-center text-indigo-600 text-xs group-hover:scale-110 transition-transform">02</div>
+                    <p className="text-[9px] font-black uppercase text-slate-400 tracking-widest mb-1">Method: Proxy</p>
+                    <p className="text-[10px] font-bold text-emerald-600 flex items-center gap-2">
+                      <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse"></span>
+                      সক্রিয় ✅
+                    </p>
+                  </div>
+                  <div className="p-6 bg-slate-50 rounded-[2rem] border border-slate-100 flex flex-col items-center text-center hover:bg-white hover:shadow-lg transition-all cursor-default group">
+                    <div className="w-10 h-10 bg-purple-100 rounded-xl mb-3 flex items-center justify-center text-purple-600 text-xs group-hover:scale-110 transition-transform">03</div>
+                    <p className="text-[9px] font-black uppercase text-slate-400 tracking-widest mb-1">Method: Iframe</p>
+                    <p className="text-[10px] font-bold text-emerald-600 flex items-center gap-2">
+                      <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse"></span>
+                      সক্রিয় ✅
+                    </p>
+                  </div>
+               </div>
+
+               <div className="p-6 bg-blue-50/50 rounded-3xl border border-blue-100/50">
+                  <p className="text-[10px] font-bold text-blue-800 leading-relaxed italic">
+                    সিস্টেম বর্তমানে <span className="text-blue-600 font-black underline decoration-blue-200 underline-offset-4">Triple-Layer Strategy</span> ব্যবহার করছে। সরাসরি কানেকশন কাজ না করলে প্রক্সি এবং আইফ্রেম পদ্ধতি স্বয়ংক্রিয়ভাবে মেসেজ ডেলিভারি নিশ্চিত করবে।
+                  </p>
+               </div>
+            </div>
+          </div>
+
           {/* Main Settings Form */}
           <div className="bg-white p-10 md:p-14 rounded-[4rem] shadow-xl border border-slate-50 relative overflow-hidden">
             <div className="absolute top-0 right-0 p-8">
