@@ -55,6 +55,8 @@ const Sales: React.FC<SalesProps> = ({ company, role, user }) => {
   const [showGift, setShowGift] = useState(false); 
   const [viewingArchiveMemo, setViewingArchiveMemo] = useState<any>(null);
   const [activeProcessingOrderId, setActiveProcessingOrderId] = useState<string | null>(null);
+  const [showNotificationModal, setShowNotificationModal] = useState(false);
+  const [pendingNotification, setPendingNotification] = useState<{phone: string, msg: string} | null>(null);
 
   const [nextMemoSerial, setNextMemoSerial] = useState<number | null>(null);
   const invoiceRef = useRef<HTMLDivElement>(null);
@@ -367,14 +369,11 @@ const Sales: React.FC<SalesProps> = ({ company, role, user }) => {
         type: 'MEMO'
       }]);
 
-      // --- অটোমেটিক এসএমএস পাঠানো (নতুন মেমো কনফার্মেশন) ---
+      let finalMsg = '';
+
+      // --- Prepare manual notification (Memo Confirmation) ---
       if (selectedCust?.phone) {
-        try {
-          const msg = `প্রিয় কাস্টমার, ${company} থেকে আপনার নামে একটি নতুন মেমো #${memoNo} তৈরি করা হয়েছে। মেমো বিল: ৳${Math.round(totals.netTotal).toLocaleString()}। আপনার বর্তমান মোট বকেয়া: ৳${Math.round(totals.finalTotalBalance).toLocaleString()}। ধন্যবাদ - ইফজা ইআরপি`;
-          await sendSMS(selectedCust.phone, msg, selectedCust.id);
-        } catch (smsErr) {
-          console.error('Memo SMS failed:', smsErr);
-        }
+        finalMsg = `প্রিয় কাস্টমার, ${company} থেকে আপনার নামে একটি নতুন মেমো #${memoNo} তৈরি করা হয়েছে। মেমো বিল: ৳${Math.round(totals.netTotal).toLocaleString()}। আপনার বর্তমান মোট বকেয়া: ৳${Math.round(totals.finalTotalBalance).toLocaleString()}। ধন্যবাদ - ইফজা ইআরপি`;
       }
 
       if (cashReceived > 0) {
@@ -391,11 +390,16 @@ const Sales: React.FC<SalesProps> = ({ company, role, user }) => {
           type: 'PAYMENT'
         }]);
 
-        // --- অটোমেটিক এসএমএস পাঠানো (Cash Received) ---
+        // --- Prepare manual notification (Cash Received) ---
         if (selectedCust?.phone) {
-          const msg = `প্রিয় কাস্টমার, মেমো #${memoNo} বাবদ আপনার ৳${Math.round(cashReceived).toLocaleString()} জমা গ্রহণ করা হয়েছে। আপনার বর্তমান মোট বকেয়া ৳${Math.round(totals.finalTotalBalance).toLocaleString()}। ধন্যবাদ - ইফজা ইআরপি`;
-          await sendSMS(selectedCust.phone, msg, selectedCust.id);
+          finalMsg = `প্রিয় কাস্টমার, মেমো #${memoNo} বাবদ আপনার ৳${Math.round(cashReceived).toLocaleString()} জমা গ্রহণ করা হয়েছে। মেমো বিল: ৳${Math.round(totals.netTotal).toLocaleString()}। আপনার বর্তমান মোট বকেয়া ৳${Math.round(totals.finalTotalBalance).toLocaleString()}। ধন্যবাদ - ইফজা ইআরপি`;
         }
+      }
+
+      // Show manual notification modal if phone exists
+      if (selectedCust?.phone && finalMsg) {
+        setPendingNotification({ phone: selectedCust.phone, msg: finalMsg });
+        setShowNotificationModal(true);
       }
 
       for (const item of cart) {
@@ -963,17 +967,3 @@ const Sales: React.FC<SalesProps> = ({ company, role, user }) => {
                 </div>
 
                 <div className="text-center mt-auto pt-10">
-                  <p className="text-[7px] font-bold uppercase italic tracking-[0.2em] text-black">POWERED BY IFZAERP.COM</p>
-                </div>
-              </div>
-            );
-          })()}
-        </div>
-      )}
-
-      {loading && <div className="fixed inset-0 bg-white/50 backdrop-blur-sm z-[9999] flex items-center justify-center font-black uppercase italic text-blue-600 animate-pulse tracking-[0.3em]">Syncing POS Terminal...</div>}
-    </div>
-  );
-};
-
-export default Sales;
