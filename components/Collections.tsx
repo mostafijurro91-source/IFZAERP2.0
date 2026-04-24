@@ -242,11 +242,20 @@ const Collections: React.FC<CollectionsProps> = ({ company, user, companies }) =
 
                const msg = `প্রিয় কাস্টমার, আপনার ${req.company} কোম্পানির ${isBooking ? 'বুকিং বাবদ' : 'বকেয়া বাবদ'} ৳${Number(req.amount).toLocaleString()} জমা গ্রহণ করা হয়েছে। আপনার বর্তমান মোট বকেয়া ৳${totalDue.toLocaleString()}। ধন্যবাদ - ইফজা ইআরপি`;
                
+               // Try automatic SMS
+               await sendSMS(req.customers.phone, msg, req.customer_id);
+
                // Set notification and show modal manually
                setPendingNotification({ phone: req.customers.phone, msg: msg });
                setShowNotificationModal(true);
             } catch (smsErr) {
+               console.error('SMS notification failed:', smsErr);
                console.error('Notification preparation failed:', smsErr);
+               
+               // Fallback: Still show modal if automatic attempt fails
+               const msg = `প্রিয় কাস্টমার, আপনার ${req.company} কোম্পানির ${isBooking ? 'বুকিং বাবদ' : 'বকেয়া বাবদ'} ৳${Number(req.amount).toLocaleString()} জমা গ্রহণ করা হয়েছে। আপনার বর্তমান মোট বকেয়া ৳${totalDue.toLocaleString()}। ধন্যবাদ - ইফজা ইআরপি`;
+               setPendingNotification({ phone: req.customers.phone, msg: msg });
+               setShowNotificationModal(true);
             }
          }
 
