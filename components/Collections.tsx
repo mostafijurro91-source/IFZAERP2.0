@@ -32,6 +32,9 @@ const Collections: React.FC<CollectionsProps> = ({ company, user, companies }) =
    const [custSearch, setCustSearch] = useState<string>("");
    const dropdownRef = useRef<HTMLDivElement>(null);
 
+   const [showNotificationModal, setShowNotificationModal] = useState(false);
+   const [pendingNotification, setPendingNotification] = useState<{phone: string, msg: string} | null>(null);
+
    const [custBalances, setCustBalances] = useState<Record<string, MultiBalance>>({});
 
    const [globalStats, setGlobalStats] = useState<any>({
@@ -239,9 +242,11 @@ const Collections: React.FC<CollectionsProps> = ({ company, user, companies }) =
 
                const msg = `প্রিয় কাস্টমার, আপনার ${req.company} কোম্পানির ${isBooking ? 'বুকিং বাবদ' : 'বকেয়া বাবদ'} ৳${Number(req.amount).toLocaleString()} জমা গ্রহণ করা হয়েছে। আপনার বর্তমান মোট বকেয়া ৳${totalDue.toLocaleString()}। ধন্যবাদ - ইফজা ইআরপি`;
                
-               await sendSMS(req.customers.phone, msg, req.customer_id);
+               // Set notification and show modal manually
+               setPendingNotification({ phone: req.customers.phone, msg: msg });
+               setShowNotificationModal(true);
             } catch (smsErr) {
-               console.error('SMS notification failed:', smsErr);
+               console.error('Notification preparation failed:', smsErr);
             }
          }
 
@@ -469,6 +474,62 @@ const Collections: React.FC<CollectionsProps> = ({ company, user, companies }) =
                </div>
             </div>
          </div>
+
+         {/* 🔔 MANUAL NOTIFICATION TRIGGER MODAL */}
+         {showNotificationModal && pendingNotification && (
+            <div className="fixed inset-0 bg-slate-950/90 backdrop-blur-md z-[6000] flex items-center justify-center p-6">
+               <div className="bg-white rounded-[3.5rem] w-full max-w-lg p-10 space-y-8 animate-reveal border-4 border-blue-600 shadow-[0_30px_90px_rgba(37,99,235,0.4)]">
+                  <div className="flex justify-between items-start">
+                     <div>
+                        <h3 className="text-2xl font-black uppercase italic tracking-tighter text-slate-900">মেসেজ কনফার্মেশন</h3>
+                        <p className="text-[10px] text-blue-600 font-bold uppercase mt-2 tracking-widest italic">Manual Dispatch Hub</p>
+                     </div>
+                     <button onClick={() => setShowNotificationModal(false)} className="text-3xl text-slate-300 hover:text-rose-500 font-black">✕</button>
+                  </div>
+
+                  <div className="space-y-6">
+                     <div className="space-y-2">
+                        <label className="text-[10px] font-black uppercase text-slate-400 ml-4 italic tracking-widest">Recipient</label>
+                        <div className="p-5 bg-slate-50 border-2 border-slate-100 rounded-2xl font-black text-blue-700 text-sm italic">
+                           {pendingNotification.phone}
+                        </div>
+                     </div>
+
+                     <div className="space-y-2">
+                        <label className="text-[10px] font-black uppercase text-slate-400 ml-4 italic tracking-widest">Message Content</label>
+                        <div className="p-6 bg-slate-50 border-2 border-slate-100 rounded-3xl font-bold text-slate-700 text-[13px] leading-relaxed italic">
+                           {pendingNotification.msg}
+                        </div>
+                     </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 gap-3 pt-4">
+                     <button 
+                        onClick={() => {
+                           const cleanPhone = pendingNotification.phone.replace(/\D/g, '');
+                           const waPhone = cleanPhone.length === 11 && cleanPhone.startsWith('01') ? '88' + cleanPhone : cleanPhone;
+                           window.open(`https://wa.me/${waPhone}?text=${encodeURIComponent(pendingNotification.msg)}`, '_blank');
+                        }}
+                        className="w-full bg-[#25D366] text-white py-5 rounded-2xl font-black uppercase text-[11px] tracking-widest shadow-xl flex items-center justify-center gap-3 active:scale-95 transition-all"
+                     >
+                        <span className="text-xl">💬</span> WhatsApp এ পাঠান
+                     </button>
+                     <button 
+                        onClick={() => {
+                           navigator.clipboard.writeText(pendingNotification.msg);
+                           const panelUrl = localStorage.getItem('sms_panel_url') || 'https://bill.ummahhostbd.com/panel.php';
+                           alert('Message copied to clipboard! Opening SMS panel...');
+                           window.open(panelUrl, '_blank');
+                        }}
+                        className="w-full bg-slate-900 text-white py-5 rounded-2xl font-black uppercase text-[11px] tracking-widest shadow-xl flex items-center justify-center gap-3 active:scale-95 transition-all"
+                     >
+                        <span className="text-xl">📨</span> Ummah Host (Copy & Open)
+                     </button>
+                     <button onClick={() => setShowNotificationModal(false)} className="w-full py-4 text-slate-400 font-black uppercase text-[10px] tracking-widest">এখন নয় (Close)</button>
+                  </div>
+               </div>
+            </div>
+         )}
 
          {loading && (
             <div className="fixed inset-0 bg-white/60 backdrop-blur-sm z-[9999] flex flex-col items-center justify-center font-black uppercase italic text-blue-600 tracking-[0.4em]">
