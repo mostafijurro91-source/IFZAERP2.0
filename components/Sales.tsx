@@ -361,56 +361,12 @@ const Sales: React.FC<SalesProps> = ({ company, role, user }) => {
 
       const memoNo = getMemoNo(txData.id, txData.created_at, txData.meta);
 
-      // 🔔 Trigger Notification to Customer
-      await supabase.from('notifications').insert([{
-        customer_id: selectedCust.id,
-        title: `নতুন সেলস মেমো ${memoNo}`,
-        message: `${company} থেকে আপনার নামে ৳${Math.round(totals.netTotal).toLocaleString()} টাকার একটি মেমো তৈরি করা হয়েছে। (${memoNo})`,
-        type: 'MEMO'
-      }]);
-
-      let finalMsg = '';
-
-      // --- Prepare manual notification (Memo Confirmation) ---
-      if (selectedCust?.phone) {
-        finalMsg = `প্রিয় কাস্টমার, ${company} থেকে আপনার নামে একটি নতুন মেমো #${memoNo} তৈরি করা হয়েছে। মেমো বিল: ৳${Math.round(totals.netTotal).toLocaleString()}। আপনার বর্তমান মোট বকেয়া: ৳${Math.round(totals.finalTotalBalance).toLocaleString()}। ধন্যবাদ - ইফজা ইআরপি`;
-      }
-
       if (cashReceived > 0) {
         await supabase.from('transactions').insert([{
           customer_id: selectedCust.id, company: dbCo, amount: cashReceived, payment_type: 'COLLECTION',
           items: [{ note: `নগদ গ্রহণ (মেমো ${memoNo})` }],
           submitted_by: user.name
         }]);
-
-         await supabase.from('notifications').insert([{
-          customer_id: selectedCust.id,
-          title: `টাকা জমা রশিদ (${memoNo})`,
-          message: `আপনার মেমো ${memoNo} পরিশোধ বাবদ ৳${Math.round(cashReceived).toLocaleString()} জমা করা হয়েছে।`,
-          type: 'PAYMENT'
-        }]);
-
-        // --- Prepare manual notification (Cash Received) ---
-        if (selectedCust?.phone) {
-          finalMsg = `প্রিয় কাস্টমার, মেমো #${memoNo} বাবদ আপনার ৳${Math.round(cashReceived).toLocaleString()} জমা গ্রহণ করা হয়েছে। মেমো বিল: ৳${Math.round(totals.netTotal).toLocaleString()}। আপনার বর্তমান মোট বকেয়া ৳${Math.round(totals.finalTotalBalance).toLocaleString()}। ধন্যবাদ - ইফজা ইআরপি`;
-        }
-      }
-
-      // Show manual notification modal if phone exists
-      if (selectedCust?.phone && finalMsg) {
-        try {
-          // Try automatic SMS first
-          await sendSMS(selectedCust.phone, finalMsg, selectedCust.id);
-          
-          // Then show manual notification modal for confirmation/fallback
-          setPendingNotification({ phone: selectedCust.phone, msg: finalMsg });
-          setShowNotificationModal(true);
-        } catch (smsErr) {
-          console.error('SMS notification failed:', smsErr);
-          // Fallback: Still show modal if automatic attempt fails
-          setPendingNotification({ phone: selectedCust.phone, msg: finalMsg });
-          setShowNotificationModal(true);
-        }
       }
 
       for (const item of cart) {
