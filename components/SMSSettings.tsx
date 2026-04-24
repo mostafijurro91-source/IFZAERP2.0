@@ -13,6 +13,10 @@ const SMSSettings: React.FC = () => {
   const [balance, setBalance] = useState<string | null>(null);
   const [isLoadingBalance, setIsLoadingBalance] = useState(false);
 
+  // Manual Notification State
+  const [manualPhone, setManualPhone] = useState('');
+  const [manualMsg, setManualMsg] = useState('');
+
   // Test SMS state
   const [testPhone, setTestPhone] = useState('');
   const [isTesting, setIsTesting] = useState(false);
@@ -25,11 +29,17 @@ const SMSSettings: React.FC = () => {
     const savedPanelUrl = localStorage.getItem('sms_panel_url') || 'https://bill.ummahhostbd.com/panel.php';
     const savedServerIp = localStorage.getItem('sms_server_ip') || '';
 
+    // Load manual message drafts
+    const savedManualPhone = localStorage.getItem('sms_manual_phone') || '';
+    const savedManualMsg = localStorage.getItem('sms_manual_message') || '';
+
     setApiToken(savedApiToken);
     setSenderId(savedSenderId);
     setBaseUrl(savedBaseUrl);
     setPanelUrl(savedPanelUrl);
     setServerIp(savedServerIp);
+    setManualPhone(savedManualPhone);
+    setManualMsg(savedManualMsg);
 
     if (savedApiToken) {
       fetchBalance(savedApiToken, savedBaseUrl);
@@ -93,7 +103,21 @@ const SMSSettings: React.FC = () => {
     }
   };
 
-  const openPanel = () => {
+  const handleOpenWhatsApp = () => {
+    if (!manualPhone || !manualMsg) return alert('Recipient and Message are required!');
+    
+    let cleanPhone = manualPhone.replace(/\D/g, '');
+    if (cleanPhone.length === 11 && cleanPhone.startsWith('01')) cleanPhone = '88' + cleanPhone;
+    else if (cleanPhone.startsWith('1')) cleanPhone = '880' + cleanPhone;
+
+    const url = `https://wa.me/${cleanPhone}?text=${encodeURIComponent(manualMsg)}`;
+    window.open(url, '_blank');
+  };
+
+  const handleCopyAndOpenPanel = () => {
+    if (!manualMsg) return alert('Message is required!');
+    navigator.clipboard.writeText(manualMsg);
+    alert('Message copied to clipboard! Opening Ummah Host panel...');
     window.open(panelUrl, '_blank');
   };
 
@@ -293,6 +317,73 @@ const SMSSettings: React.FC = () => {
         </div>
 
         <div className="xl:col-span-1 space-y-10">
+          {/* Manual Notification Terminal - New Section */}
+          <div className="bg-white p-10 md:p-14 rounded-[4rem] shadow-xl border-4 border-blue-50 relative overflow-hidden animate-reveal">
+            <div className="absolute top-0 right-0 p-8">
+               <div className="w-12 h-12 bg-blue-600 rounded-2xl flex items-center justify-center text-white font-black italic shadow-lg">M</div>
+            </div>
+
+            <div className="space-y-8">
+              <div>
+                <h4 className="text-xl font-black uppercase italic tracking-tighter text-slate-800">ম্যানুয়াল মেসেজ টার্মিনাল</h4>
+                <p className="text-[10px] text-slate-400 font-bold uppercase mt-2 tracking-widest italic leading-relaxed">
+                   যেকোনো নাম্বারে কাস্টম মেসেজ ড্রাফট করে পাঠান
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <div className="space-y-3">
+                   <label className="text-[10px] font-black uppercase text-slate-500 ml-4 italic tracking-widest">রিসিভ প্রিন্ট (Recipient Phone)</label>
+                   <input 
+                     type="text" 
+                     className="w-full p-6 bg-slate-50 border-2 border-slate-100 rounded-[2rem] outline-none font-bold text-sm focus:border-blue-600 focus:bg-white transition-all shadow-inner"
+                     placeholder="01XXXXXXXXX"
+                     value={manualPhone}
+                     onChange={(e) => {
+                       setManualPhone(e.target.value);
+                       localStorage.setItem('sms_manual_phone', e.target.value);
+                     }}
+                   />
+                </div>
+                <div className="space-y-3">
+                   <label className="text-[10px] font-black uppercase text-slate-500 ml-4 italic tracking-widest">Center ID (Pre-configured)</label>
+                   <div className="w-full p-6 bg-slate-100 border-2 border-slate-100 rounded-[2rem] font-black text-xs text-slate-400 flex items-center">
+                      {senderId || 'Not Set'}
+                   </div>
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                 <label className="text-[10px] font-black uppercase text-slate-500 ml-4 italic tracking-widest">মেসেজ (Message Content)</label>
+                 <textarea 
+                   rows={4}
+                   className="w-full p-6 bg-slate-50 border-2 border-slate-100 rounded-[2.5rem] outline-none font-bold text-sm focus:border-blue-600 focus:bg-white transition-all shadow-inner resize-none"
+                   placeholder="আপনার মেসেজ এখানে লিখুন..."
+                   value={manualMsg}
+                   onChange={(e) => {
+                     setManualMsg(e.target.value);
+                     localStorage.setItem('sms_manual_message', e.target.value);
+                   }}
+                 />
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4">
+                 <button 
+                   onClick={handleOpenWhatsApp}
+                   className="flex-1 bg-[#25D366] text-white py-6 rounded-[2rem] font-black uppercase text-[10px] tracking-widest shadow-xl shadow-green-200 active:scale-95 transition-all flex items-center justify-center gap-3"
+                 >
+                   <span className="text-xl">💬</span> WhatsApp এ পাঠান
+                 </button>
+                 <button 
+                   onClick={handleCopyAndOpenPanel}
+                   className="flex-1 bg-slate-900 text-white py-6 rounded-[2rem] font-black uppercase text-[10px] tracking-widest shadow-xl active:scale-95 transition-all flex items-center justify-center gap-3"
+                 >
+                   <span className="text-xl">📨</span> Ummah Host এ পাঠান
+                 </button>
+              </div>
+            </div>
+          </div>
+
           {/* Quick Access Panel */}
           <div className="bg-white p-10 rounded-[3.5rem] shadow-xl border border-slate-100 flex flex-col items-center text-center space-y-8 h-full">
             <div className="w-24 h-24 bg-indigo-50 rounded-[2.5rem] flex items-center justify-center text-4xl shadow-inner">🌐</div>
