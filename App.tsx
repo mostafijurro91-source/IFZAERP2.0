@@ -23,7 +23,6 @@ import DatabaseExplorer from './components/DatabaseExplorer';
 import { User, Company, CompanyRecord } from './types';
 import { supabase, checkSupabaseConnection, db } from './lib/supabase';
 import CompanySettings from './components/CompanySettings';
-import SMSSettings from './components/SMSSettings';
 
 const App: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
@@ -293,7 +292,6 @@ const App: React.FC = () => {
             {activeTab === 'db_explorer' && <DatabaseExplorer />}
             {activeTab === 'github_sync' && <Tracking />}
             {activeTab === 'company_settings' && <CompanySettings onUpdate={() => db.getCompanies().then(setCompanies)} />}
-            {activeTab === 'sms_settings' && <SMSSettings />}
           </div>
         </div>
       </main>
