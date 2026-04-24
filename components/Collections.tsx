@@ -222,10 +222,10 @@ const Collections: React.FC<CollectionsProps> = ({ company, user, companies }) =
          }]);
          await supabase.from('collection_requests').delete().eq('id', req.id);
 
-         // --- অটোমেটিক এসএমএস পাঠানো ---
+         // --- ম্যানুয়াল মেসেজ টার্মিনাল ওপেন করা ---
          if (req.customers?.phone) {
             try {
-               // লেটেস্ট ব্যালেন্স ক্যালকুলেট করা
+               // লেটেস্ট ব্যালেন্স ক্যালকুলেট করা (মেসেজের জন্য)
                const { data: allTxs } = await supabase
                   .from('transactions')
                   .select('amount, payment_type, items, meta')
@@ -242,20 +242,11 @@ const Collections: React.FC<CollectionsProps> = ({ company, user, companies }) =
 
                const msg = `প্রিয় কাস্টমার, আপনার ${req.company} কোম্পানির ${isBooking ? 'বুকিং বাবদ' : 'বকেয়া বাবদ'} ৳${Number(req.amount).toLocaleString()} জমা গ্রহণ করা হয়েছে। আপনার বর্তমান মোট বকেয়া ৳${totalDue.toLocaleString()}। ধন্যবাদ - ইফজা ইআরপি`;
                
-               // Try automatic SMS
-               await sendSMS(req.customers.phone, msg, req.customer_id);
-
-               // Set notification and show modal manually
+               // Set notification and show modal manually (No automatic API call as requested)
                setPendingNotification({ phone: req.customers.phone, msg: msg });
                setShowNotificationModal(true);
-            } catch (smsErr) {
-               console.error('SMS notification failed:', smsErr);
-               console.error('Notification preparation failed:', smsErr);
-               
-               // Fallback: Still show modal if automatic attempt fails
-               const msg = `প্রিয় কাস্টমার, আপনার ${req.company} কোম্পানির ${isBooking ? 'বুকিং বাবদ' : 'বকেয়া বাবদ'} ৳${Number(req.amount).toLocaleString()} জমা গ্রহণ করা হয়েছে। আপনার বর্তমান মোট বকেয়া ৳${totalDue.toLocaleString()}। ধন্যবাদ - ইফজা ইআরপি`;
-               setPendingNotification({ phone: req.customers.phone, msg: msg });
-               setShowNotificationModal(true);
+            } catch (err) {
+               console.error('Notification preparation failed:', err);
             }
          }
 
@@ -472,8 +463,24 @@ const Collections: React.FC<CollectionsProps> = ({ company, user, companies }) =
                               </div>
                               <div className="flex items-center gap-4">
                                  <p className="text-lg font-black italic text-emerald-700">৳{safeFormat(tx.amount)}</p>
+                                 <button 
+                                    onClick={() => {
+                                       if (tx.customers?.phone) {
+                                          const msg = `প্রিয় কাস্টমার, আপনার ${tx.company} কোম্পানির বকেয়া বাবদ ৳${Number(tx.amount).toLocaleString()} জমা গ্রহণ করা হয়েছে। ধন্যবাদ - ইফজা ইআরপি`;
+                                          const cleanPhone = tx.customers.phone.replace(/\D/g, '');
+                                          const waPhone = cleanPhone.length === 11 && cleanPhone.startsWith('01') ? '88' + cleanPhone : cleanPhone;
+                                          window.open(`https://wa.me/${waPhone}?text=${encodeURIComponent(msg)}`, '_blank');
+                                       } else {
+                                          alert('কাস্টমারের ফোন নাম্বার পাওয়া যায়নি!');
+                                       }
+                                    }}
+                                    className="text-emerald-500 hover:text-emerald-700 transition-all text-sm"
+                                    title="WhatsApp এ পাঠান"
+                                 >
+                                    💬
+                                 </button>
                                  {(isAdmin || (isStaff && tx.submitted_by === user.name)) && (
-                                    <button onClick={() => handleDeleteTransaction(tx)} className="text-rose-300 hover:text-rose-600 opacity-0 group-hover:opacity-100">🗑️</button>
+                                    <button onClick={() => handleDeleteTransaction(tx)} className="text-rose-300 hover:text-rose-600 opacity-0 group-hover:opacity-100 transition-all">🗑️</button>
                                  )}
                               </div>
                            </div>
