@@ -398,8 +398,19 @@ const Sales: React.FC<SalesProps> = ({ company, role, user }) => {
 
       // Show manual notification modal if phone exists
       if (selectedCust?.phone && finalMsg) {
-        setPendingNotification({ phone: selectedCust.phone, msg: finalMsg });
-        setShowNotificationModal(true);
+        try {
+          // Try automatic SMS first
+          await sendSMS(selectedCust.phone, finalMsg, selectedCust.id);
+          
+          // Then show manual notification modal for confirmation/fallback
+          setPendingNotification({ phone: selectedCust.phone, msg: finalMsg });
+          setShowNotificationModal(true);
+        } catch (smsErr) {
+          console.error('SMS notification failed:', smsErr);
+          // Fallback: Still show modal if automatic attempt fails
+          setPendingNotification({ phone: selectedCust.phone, msg: finalMsg });
+          setShowNotificationModal(true);
+        }
       }
 
       for (const item of cart) {
