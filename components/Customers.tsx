@@ -525,6 +525,9 @@ const Customers: React.FC<CustomerProps> = ({ company, role, userName }) => {
                   <p className={`text-[9px] font-bold tracking-widest uppercase italic ${!c.phone || c.phone.trim() === "" ? 'text-rose-500 animate-pulse' : 'text-slate-400'}`}>
                     {(!c.phone || c.phone.trim() === "") ? "📵 নাম্বার নেই!" : `📱 ${c.phone}`}
                   </p>
+                  <p className="text-[8px] font-bold text-slate-400 uppercase italic mt-0.5 truncate">
+                    📍 {c.address || "ঠিকানা নেই"}
+                  </p>
                 </div>
                 <div className={isCompact ? `col-span-3 text-right font-black italic text-[14px] ${regBal > 1 ? 'text-rose-600' : 'text-emerald-600'}` : "mt-6 pt-6 border-t relative z-10 flex justify-between"}>
                   {!isCompact && <p className="text-[8px] text-slate-400 uppercase tracking-widest italic">Regular Due</p>}
