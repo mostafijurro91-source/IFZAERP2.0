@@ -40,6 +40,7 @@ const Customers: React.FC<CustomerProps> = ({ company, role, userName }) => {
   const [selectedMemo, setSelectedMemo] = useState<any>(null);
   const [areaSearch, setAreaSearch] = useState("");
   const [showAreaDropdown, setShowAreaDropdown] = useState(false);
+  const [missingPhoneOnly, setMissingPhoneOnly] = useState(false);
   const areaDropdownRef = useRef<HTMLDivElement>(null);
   const ledgerRef = useRef<HTMLDivElement>(null);
   const memoRef = useRef<HTMLDivElement>(null);
@@ -439,8 +440,9 @@ const Customers: React.FC<CustomerProps> = ({ company, role, userName }) => {
 
     const matchesSearch = !q || name.includes(q) || phone.includes(q) || portalId.includes(q);
     const matchesArea = !selectedArea || c.address === selectedArea;
+    const matchesNoPhone = !missingPhoneOnly || !c.phone || c.phone.trim() === "";
 
-    return matchesSearch && matchesArea;
+    return matchesSearch && matchesArea && matchesNoPhone;
   });
 
   return (
@@ -491,6 +493,13 @@ const Customers: React.FC<CustomerProps> = ({ company, role, userName }) => {
               )}
             </div>
             <button onClick={() => setIsCompact(!isCompact)} className="bg-white p-4 rounded-2xl shadow-sm border border-slate-200 text-xl active:scale-90 transition-transform">{isCompact ? "🔳" : "☰"}</button>
+            <button 
+              onClick={() => setMissingPhoneOnly(!missingPhoneOnly)} 
+              className={`p-4 rounded-2xl shadow-sm border transition-all text-xl active:scale-90 ${missingPhoneOnly ? 'bg-rose-600 text-white border-rose-700 shadow-rose-200' : 'bg-white border-slate-200'}`}
+              title={missingPhoneOnly ? "সকল কাস্টমার দেখুন" : "মোবাইল নাম্বার নেই এমন কাস্টমার দেখুন"}
+            >
+              📵
+            </button>
             {isAdmin && <button onClick={() => { setEditingCustomer(null); setFormData({ name: '', phone: '', address: '', money_amount: '', portal_username: '', portal_password: '' }); setShowModal(true); }} className="bg-blue-600 text-white px-8 py-4 rounded-3xl font-black uppercase text-[10px] shadow-xl">+ দোকান যোগ</button>}
           </div>
         </div>
@@ -513,7 +522,9 @@ const Customers: React.FC<CustomerProps> = ({ company, role, userName }) => {
               <div key={c.id} className={isCompact ? "grid grid-cols-12 p-6 border-b border-slate-50 items-center animate-reveal hover:bg-slate-50 transition-all group" : "bg-white p-8 rounded-[3.5rem] border border-slate-100 shadow-lg hover:shadow-2xl transition-all duration-500 hover:-translate-y-1 animate-reveal relative overflow-hidden"} style={{ animationDelay: `${idx * 0.03}s` }}>
                 <div className={isCompact ? "col-span-3 pr-4" : "mb-6 relative z-10"}>
                   <p className="font-black text-[13px] uppercase italic text-slate-800 truncate mb-1 group-hover:text-blue-600 transition-colors">{c.name}</p>
-                  <p className="text-[9px] font-bold text-slate-400 tracking-widest uppercase italic">📱 {c.phone}</p>
+                  <p className={`text-[9px] font-bold tracking-widest uppercase italic ${!c.phone || c.phone.trim() === "" ? 'text-rose-500 animate-pulse' : 'text-slate-400'}`}>
+                    {(!c.phone || c.phone.trim() === "") ? "📵 নাম্বার নেই!" : `📱 ${c.phone}`}
+                  </p>
                 </div>
                 <div className={isCompact ? `col-span-3 text-right font-black italic text-[14px] ${regBal > 1 ? 'text-rose-600' : 'text-emerald-600'}` : "mt-6 pt-6 border-t relative z-10 flex justify-between"}>
                   {!isCompact && <p className="text-[8px] text-slate-400 uppercase tracking-widest italic">Regular Due</p>}
