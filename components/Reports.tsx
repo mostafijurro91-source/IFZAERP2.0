@@ -207,7 +207,22 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName }) => {
           if (!dues[cid]) dues[cid] = 0;
           dues[cid] += (tx.payment_type === 'COLLECTION' ? -Number(tx.amount || 0) : Number(tx.amount || 0));
         });
-        setReportData(custs?.map((c: any) => ({ ...c, balance: dues[c.id] || 0 })).filter((c: any) => Math.abs(c.balance) > 1) || []);
+        
+        const finalData = custs?.map((c: any) => ({ ...c, balance: dues[c.id] || 0 })).filter((c: any) => Math.abs(c.balance) > 1) || [];
+        
+        // Sort by address then name using localeCompare for proper Bengali support
+        finalData.sort((a: any, b: any) => {
+          const addrA = (a.address || '').trim();
+          const addrB = (b.address || '').trim();
+          const addrCmp = addrA.localeCompare(addrB, 'bn');
+          if (addrCmp !== 0) return addrCmp;
+          
+          const nameA = (a.name || '').trim();
+          const nameB = (b.name || '').trim();
+          return nameA.localeCompare(nameB, 'bn');
+        });
+
+        setReportData(finalData);
       }
       else if (type === 'CUSTOMER_LEDGER') {
         if (!selectedCustomerId) {
