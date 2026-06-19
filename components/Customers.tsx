@@ -83,7 +83,7 @@ const Customers: React.FC<CustomerProps> = ({ company, role, userName }) => {
       const dbCompany = mapToDbCompany(company);
       const { data: custData, error: ce } = await supabase.from('customers').select('*').order('name');
       if (ce) console.error("Customer fetch error:", ce);
-      
+
       let allTx: any[] = [];
       let page = 0;
       while (true) {
@@ -92,7 +92,7 @@ const Customers: React.FC<CustomerProps> = ({ company, role, userName }) => {
           .eq('company', dbCompany)
           .order('created_at', { ascending: false })
           .range(page * 1000, (page + 1) * 1000 - 1);
-          
+
         if (te) { console.error("Transaction fetch error:", te); break; }
         if (txData) {
           allTx = allTx.concat(txData);
@@ -102,7 +102,7 @@ const Customers: React.FC<CustomerProps> = ({ company, role, userName }) => {
       }
 
       // DEBUG: show a small sample of fetched transactions to compare with per-customer ledger
-      try { console.debug('DEBUG fetchCustomers tx sample', allTx.slice(0, 20)); } catch (e) {}
+      try { console.debug('DEBUG fetchCustomers tx sample', allTx.slice(0, 20)); } catch (e) { }
 
       // using shared parseAmount from lib/utils
 
@@ -240,7 +240,7 @@ const Customers: React.FC<CustomerProps> = ({ company, role, userName }) => {
       setLedgerHistory(data || []);
 
       // DEBUG: show a small sample of ledger transactions for this customer
-      try { console.debug('DEBUG fetchCustomerLedger tx sample', (data as any)?.slice?.(0, 20)); } catch (e) {}
+      try { console.debug('DEBUG fetchCustomerLedger tx sample', (data as any)?.slice?.(0, 20)); } catch (e) { }
 
       // Calculate totals
       let totalR = 0;
@@ -251,7 +251,7 @@ const Customers: React.FC<CustomerProps> = ({ company, role, userName }) => {
       (data as unknown as Transaction[])?.forEach(tx => {
         const amt = parseAmount(tx.amount);
         const isBooking = tx.meta?.is_booking === true || tx.items?.[0]?.note?.includes('বুকিং');
-        
+
         if (tx.payment_type === 'COLLECTION') {
           lifetimePaid += amt;
           if (isBooking) {
@@ -268,7 +268,7 @@ const Customers: React.FC<CustomerProps> = ({ company, role, userName }) => {
         }
       });
       // DEBUG: log ledger totals for modal
-      try { console.debug('DEBUG ledger totals', { customerId: cust.id, totalR, totalB, lifetimeSales, lifetimePaid }); } catch (e) {}
+      try { console.debug('DEBUG ledger totals', { customerId: cust.id, totalR, totalB, lifetimeSales, lifetimePaid }); } catch (e) { }
       setCurrentLedgerStats({ regularDue: totalR, bookingAdvance: totalB, totalSales: lifetimeSales, totalPaid: lifetimePaid });
     } catch (err: any) {
       console.error('Error fetching ledger:', err);
@@ -330,7 +330,7 @@ const Customers: React.FC<CustomerProps> = ({ company, role, userName }) => {
     setIsSaving(true);
     try {
       const dbCo = mapToDbCompany(company);
-      
+
       // 1. Create adjustment transaction to add back the commission
       const { error: txErr } = await supabase.from('transactions').insert([{
         customer_id: tx.customer_id,
@@ -339,7 +339,7 @@ const Customers: React.FC<CustomerProps> = ({ company, role, userName }) => {
         payment_type: 'DUE',
         items: [{ note: `কমিশন বাতিল (মেমো #${memoIdShort} সময়মতো বিল না দেওয়ার কারণে)` }],
         submitted_by: userName,
-        meta: { 
+        meta: {
           related_tx_id: tx.id,
           adjustment_type: 'COMMISSION_REVOCATION'
         }
@@ -353,10 +353,10 @@ const Customers: React.FC<CustomerProps> = ({ company, role, userName }) => {
 
       alert("কমিশন সফলভাবে বাতিল করা হয়েছে! ✅");
       if (selectedLedgerCust) fetchCustomerLedger(selectedLedgerCust);
-    } catch (err: any) { 
-      alert("ত্রুটি: " + err.message); 
-    } finally { 
-      setIsSaving(false); 
+    } catch (err: any) {
+      alert("ত্রুটি: " + err.message);
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -404,7 +404,7 @@ const Customers: React.FC<CustomerProps> = ({ company, role, userName }) => {
       const pdfHeight = pdf.internal.pageSize.getHeight();
       const imgWidth = canvas.width;
       const imgHeight = (canvas.height * pdfWidth) / imgWidth;
-      
+
       let heightLeft = imgHeight;
       let position = 0;
 
@@ -526,8 +526,8 @@ const Customers: React.FC<CustomerProps> = ({ company, role, userName }) => {
               )}
             </div>
             <button onClick={() => setIsCompact(!isCompact)} className="bg-white p-4 rounded-2xl shadow-sm border border-slate-200 text-xl active:scale-90 transition-transform">{isCompact ? "🔳" : "☰"}</button>
-            <button 
-              onClick={() => setMissingPhoneOnly(!missingPhoneOnly)} 
+            <button
+              onClick={() => setMissingPhoneOnly(!missingPhoneOnly)}
               className={`p-4 rounded-2xl shadow-sm border transition-all text-xl active:scale-90 ${missingPhoneOnly ? 'bg-rose-600 text-white border-rose-700 shadow-rose-200' : 'bg-white border-slate-200'}`}
               title={missingPhoneOnly ? "সকল কাস্টমার দেখুন" : "মোবাইল নাম্বার নেই এমন কাস্টমার দেখুন"}
             >
@@ -751,14 +751,13 @@ const Customers: React.FC<CustomerProps> = ({ company, role, userName }) => {
                                 {tx.meta?.total_commission > 0 && (
                                   <div className="flex flex-col items-center mr-2">
                                     <div className="flex items-center gap-1">
-                                      <span className={`text-[8px] font-black uppercase px-2 py-0.5 rounded-full ${
-                                        tx.meta.commission_status === 'REVOKED' ? 'bg-rose-100 text-rose-600' : 
-                                        tx.meta.commission_status === 'COMPLETED' ? 'bg-emerald-100 text-emerald-600' : 'bg-blue-100 text-blue-600'
-                                      }`}>
+                                      <span className={`text-[8px] font-black uppercase px-2 py-0.5 rounded-full ${tx.meta.commission_status === 'REVOKED' ? 'bg-rose-100 text-rose-600' :
+                                          tx.meta.commission_status === 'COMPLETED' ? 'bg-emerald-100 text-emerald-600' : 'bg-blue-100 text-blue-600'
+                                        }`}>
                                         Com: ৳{Math.round(tx.meta.total_commission).toLocaleString()}
                                       </span>
                                       {isAdmin && (
-                                        <button 
+                                        <button
                                           onClick={() => {
                                             setSelectedPolicyTx(tx);
                                             setNewPolicyDate(tx.meta.expiry_date ? new Date(tx.meta.expiry_date).toISOString().split('T')[0] : "");
@@ -775,13 +774,13 @@ const Customers: React.FC<CustomerProps> = ({ company, role, userName }) => {
                                     {tx.meta.commission_status === 'PENDING' && (
                                       <div className="flex flex-col gap-1 mt-2">
                                         <div className="flex gap-1">
-                                          <button 
+                                          <button
                                             onClick={() => handleCompleteCommission(tx)}
                                             className="bg-emerald-600 text-white text-[7px] font-black px-2 py-1.5 rounded shadow-lg hover:bg-emerald-700 transition-all flex-1"
                                           >
                                             COMPLETE (সম্পন্ন)
                                           </button>
-                                          <button 
+                                          <button
                                             onClick={() => handleRevokeCommission(tx)}
                                             className="bg-rose-600 text-white text-[7px] font-black px-2 py-1.5 rounded shadow-lg hover:bg-rose-700 transition-all flex-1"
                                           >
@@ -919,7 +918,7 @@ const Customers: React.FC<CustomerProps> = ({ company, role, userName }) => {
             <div className="p-8 space-y-6">
               <div className="space-y-2">
                 <label className="text-[9px] font-black text-slate-400 uppercase italic ml-2">পেমেন্ট ডেডলাইন (শর্ত)</label>
-                <input 
+                <input
                   type="date"
                   className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none font-bold text-sm"
                   value={newPolicyDate}
@@ -930,7 +929,7 @@ const Customers: React.FC<CustomerProps> = ({ company, role, userName }) => {
 
               <div className="space-y-2">
                 <label className="text-[9px] font-black text-slate-400 uppercase italic ml-2">বর্তমান স্থিতি (Status)</label>
-                <select 
+                <select
                   className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none font-bold text-sm"
                   value={newPolicyStatus}
                   onChange={e => setNewPolicyStatus(e.target.value)}
@@ -941,7 +940,7 @@ const Customers: React.FC<CustomerProps> = ({ company, role, userName }) => {
                 </select>
               </div>
 
-              <button 
+              <button
                 onClick={handleUpdatePolicy}
                 disabled={isSaving}
                 className="w-full bg-blue-600 text-white py-5 rounded-2xl font-black uppercase text-[10px] tracking-widest shadow-xl active:scale-95 transition-all"
