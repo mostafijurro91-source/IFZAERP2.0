@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Company, UserRole, formatCurrency, Transaction, Customer, CustomerFinancials } from '../types';
 import { supabase, mapToDbCompany } from '../lib/supabase';
+import { parseAmount, toLocale } from '../lib/utils';
 import { jsPDF } from 'jspdf';
 import * as html2canvasModule from 'html2canvas';
 
@@ -82,14 +83,34 @@ const Customers: React.FC<CustomerProps> = ({ company, role, userName }) => {
       const dbCompany = mapToDbCompany(company);
       const { data: custData, error: ce } = await supabase.from('customers').select('*').order('name');
       if (ce) console.error("Customer fetch error:", ce);
-      const { data: txData, error: te } = await supabase.from('transactions').select('customer_id, amount, payment_type, meta, items').eq('company', dbCompany);
-      if (te) console.error("Transaction fetch error:", te);
+      
+      let allTx: any[] = [];
+      let page = 0;
+      while (true) {
+        const { data: txData, error: te } = await supabase.from('transactions')
+          .select('customer_id, amount, payment_type, meta, items')
+          .eq('company', dbCompany)
+          .order('created_at', { ascending: false })
+          .range(page * 1000, (page + 1) * 1000 - 1);
+          
+        if (te) { console.error("Transaction fetch error:", te); break; }
+        if (txData) {
+          allTx = allTx.concat(txData);
+        }
+        if (!txData || txData.length < 1000) break;
+        page++;
+      }
+
+      // DEBUG: show a small sample of fetched transactions to compare with per-customer ledger
+      try { console.debug('DEBUG fetchCustomers tx sample', allTx.slice(0, 20)); } catch (e) {}
+
+      // using shared parseAmount from lib/utils
 
       const regMap: Record<string, number> = {};
       const bookMap: Record<string, number> = {};
 
-      (txData as unknown as Transaction[])?.forEach(tx => {
-        const amt = Number(tx.amount) || 0;
+      allTx.forEach(tx => {
+        const amt = parseAmount(tx.amount);
         const cid = tx.customer_id;
         const isBooking = tx.meta?.is_booking === true || tx.items?.[0]?.note?.includes('বুকিং');
 
@@ -103,6 +124,13 @@ const Customers: React.FC<CustomerProps> = ({ company, role, userName }) => {
           }
         }
       });
+
+      // DEBUG: expose small sample of maps to console to trace list-vs-ledger issues
+      try {
+        // show top 10 entries for quick inspection in browser console
+        console.debug('DEBUG regMap sample', Object.entries(regMap).slice(0, 10));
+        console.debug('DEBUG bookMap sample', Object.entries(bookMap).slice(0, 10));
+      } catch (e) { /* ignore */ }
 
       setCustomers(custData || []);
       setRegularDues(regMap);
@@ -140,7 +168,7 @@ const Customers: React.FC<CustomerProps> = ({ company, role, userName }) => {
 
       // Handle Opening Balance Adjustment
       if (formData.money_amount !== '' && customerId) {
-        const newAmt = Number(formData.money_amount) || 0;
+        const newAmt = parseAmount(formData.money_amount);
         const { data: existingTx } = await supabase
           .from('transactions')
           .select('id')
@@ -211,6 +239,9 @@ const Customers: React.FC<CustomerProps> = ({ company, role, userName }) => {
       if (error) throw error;
       setLedgerHistory(data || []);
 
+      // DEBUG: show a small sample of ledger transactions for this customer
+      try { console.debug('DEBUG fetchCustomerLedger tx sample', (data as any)?.slice?.(0, 20)); } catch (e) {}
+
       // Calculate totals
       let totalR = 0;
       let totalB = 0;
@@ -218,7 +249,7 @@ const Customers: React.FC<CustomerProps> = ({ company, role, userName }) => {
       let lifetimePaid = 0;
 
       (data as unknown as Transaction[])?.forEach(tx => {
-        const amt = Number(tx.amount);
+        const amt = parseAmount(tx.amount);
         const isBooking = tx.meta?.is_booking === true || tx.items?.[0]?.note?.includes('বুকিং');
         
         if (tx.payment_type === 'COLLECTION') {
@@ -236,6 +267,8 @@ const Customers: React.FC<CustomerProps> = ({ company, role, userName }) => {
           }
         }
       });
+      // DEBUG: log ledger totals for modal
+      try { console.debug('DEBUG ledger totals', { customerId: cust.id, totalR, totalB, lifetimeSales, lifetimePaid }); } catch (e) {}
       setCurrentLedgerStats({ regularDue: totalR, bookingAdvance: totalB, totalSales: lifetimeSales, totalPaid: lifetimePaid });
     } catch (err: any) {
       console.error('Error fetching ledger:', err);
@@ -290,7 +323,7 @@ const Customers: React.FC<CustomerProps> = ({ company, role, userName }) => {
   const handleRevokeCommission = async (tx: Transaction) => {
     if (!isAdmin || isSaving) return;
     const memoIdShort = String(tx.id).slice(-6).toUpperCase();
-    const commAmt = Number(tx.meta?.total_commission) || 0;
+    const commAmt = parseAmount(tx.meta?.total_commission) || 0;
 
     if (!confirm(`কমিশন বাতিল নিশ্চিত? এতে কাস্টমারের বকেয়া ৳${commAmt.toLocaleString()} বেড়ে যাবে (মেমো #${memoIdShort})।`)) return;
 
@@ -700,7 +733,7 @@ const Customers: React.FC<CustomerProps> = ({ company, role, userName }) => {
                             </td>
                             <td className="py-4 text-right pr-2">
                               {tx.payment_type === 'DUE' && !returnItem ? (
-                                <span className="text-[14px] font-black italic text-rose-600">৳{Number(tx.amount).toLocaleString()}</span>
+                                <span className="text-[14px] font-black italic text-rose-600">৳{toLocale(tx.amount)}</span>
                               ) : '-'}
                             </td>
                             <td className="py-4 text-right pr-2">
@@ -710,7 +743,7 @@ const Customers: React.FC<CustomerProps> = ({ company, role, userName }) => {
                             </td>
                             <td className="py-4 text-right pr-2">
                               {tx.payment_type === 'COLLECTION' ? (
-                                <span className="text-[14px] font-black italic text-emerald-600">৳{Number(tx.amount).toLocaleString()}</span>
+                                <span className="text-[14px] font-black italic text-emerald-600">৳{toLocale(tx.amount)}</span>
                               ) : '-'}
                             </td>
                             <td className="py-4 text-center pr-4">
