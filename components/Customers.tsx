@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Company, UserRole, formatCurrency, Transaction, Customer, CustomerFinancials } from '../types';
 import { supabase, mapToDbCompany } from '../lib/supabase';
-import { parseAmount, toLocale } from '../lib/utils';
+// import removed to fix vercel build error
 import { jsPDF } from 'jspdf';
 import * as html2canvasModule from 'html2canvas';
 
@@ -13,6 +13,15 @@ interface CustomerProps {
   role: UserRole;
   userName: string;
 }
+
+export const parseAmount = (v: any): number => {
+  if (v === null || v === undefined) return 0;
+  const s = String(v).replace(/[,\s]/g, '');
+  const n = Number(s);
+  return Number.isFinite(n) ? n : 0;
+};
+
+export const toLocale = (v: any) => parseAmount(v).toLocaleString();
 
 const Customers: React.FC<CustomerProps> = ({ company, role, userName }) => {
   const [customers, setCustomers] = useState<Customer[]>([]);
