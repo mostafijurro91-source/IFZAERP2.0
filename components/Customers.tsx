@@ -722,7 +722,7 @@ const Customers: React.FC<CustomerProps> = ({ company, role, userName }) => {
                         <tr><td colSpan={6} className="py-20 text-center opacity-30 font-black uppercase italic">কোনো লেনদেন রেকর্ড পাওয়া যায়নি</td></tr>
                       ) : ledgerHistory.map((tx) => {
                         const returnItem = tx.items?.find((it: any) => it.action === 'RETURN');
-                        const returnAmount = returnItem ? Math.abs(tx.items?.reduce((s: number, it: any) => it.action === 'RETURN' ? s + (Number(it.total) || 0) : s, 0) || 0) : 0;
+                        const returnAmount = returnItem ? Math.abs(tx.items?.reduce((s: number, it: any) => it.action === 'RETURN' ? s + parseAmount(it.total) : s, 0) || 0) : 0;
 
                         return (
                           <tr key={tx.id} className="group hover:bg-slate-50/50 transition-colors">
@@ -880,7 +880,7 @@ const Customers: React.FC<CustomerProps> = ({ company, role, userName }) => {
                       <td className="py-2 text-center">৳{it.action === 'REPLACE' ? '0' : it.price}</td>
                       <td className="py-2 text-center">{it.qty}</td>
                       <td className="py-2 text-right">
-                        {it.action === 'REPLACE' ? '৳0' : (it.action === 'RETURN' ? '-' : '') + '৳' + Math.round(Number(it.total) || 0).toLocaleString()}
+                        {it.action === 'REPLACE' ? '৳0' : (it.action === 'RETURN' ? '-' : '') + '৳' + Math.round(parseAmount(it.total)).toLocaleString()}
                       </td>
                     </tr>
                   ))}
@@ -892,7 +892,7 @@ const Customers: React.FC<CustomerProps> = ({ company, role, userName }) => {
               <div className="w-56 space-y-1 font-black italic text-[10px] text-black">
                 <div className="flex justify-between border-t-2 border-black pt-2 text-[15px] text-blue-600">
                   <span className="uppercase">নিট বিল:</span>
-                  <span>৳{Math.round(Number(selectedMemo.amount) || 0).toLocaleString()}</span>
+                  <span>৳{Math.round(parseAmount(selectedMemo.amount)).toLocaleString()}</span>
                 </div>
               </div>
             </div>
