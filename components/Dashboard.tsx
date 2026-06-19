@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Company, UserRole, formatCurrency } from '../types';
 import { supabase, mapToDbCompany } from '../lib/supabase';
+import { parseAmount } from '../lib/utils';
 
 interface DashboardProps {
   company: Company;
@@ -20,47 +21,75 @@ const Dashboard: React.FC<DashboardProps> = ({ company, role }) => {
 
   useEffect(() => { fetchDashboardData(); }, [company]);
 
+  // Realtime updates: refresh dashboard when transactions or related tables change
+  useEffect(() => {
+    const channel = supabase
+      .channel('dashboard-realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'transactions' }, () => fetchDashboardData())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'collection_requests' }, () => fetchDashboardData())
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, [company]);
+
   const fetchDashboardData = async () => {
     setLoading(true);
     try {
       const dbCompany = mapToDbCompany(company);
       const today = new Date(); today.setHours(0, 0, 0, 0);
-      const todayStr = today.toISOString().split('T')[0];
+      const todayStr = today.toISOString().slice(0, 10);
       const thirtyDaysAgo = new Date();
       thirtyDaysAgo.setDate(today.getDate() - 30);
 
-      const [txRes, prodRes] = await Promise.all([
-        supabase.from('transactions').select('customer_id, amount, payment_type, created_at, meta, items, customers(name, phone, address)').eq('company', dbCompany),
+      const [prodRes] = await Promise.all([
         supabase.from('products').select('tp, stock').eq('company', dbCompany)
       ]);
 
+      let allTx: any[] = [];
+      let page = 0;
+      while (true) {
+        const txRes = await supabase.from('transactions')
+          .select('customer_id, amount, payment_type, created_at, meta, items, customers(name, phone, address)')
+          .eq('company', dbCompany)
+          .range(page * 1000, (page + 1) * 1000 - 1);
+        
+        if (txRes.data) {
+          allTx = allTx.concat(txRes.data);
+        }
+        if (!txRes.data || txRes.data.length < 1000) break;
+        page++;
+      }
+
+      const monthNames = ["জানুয়ারি", "ফেব্রুয়ারি", "মার্চ", "এপ্রিল", "মে", "জুন", "জুলাই", "আগস্ট", "সেপ্টেম্বর", "অক্টোবর", "নভেম্বর", "ডিসেম্বর"];
+      const monthlyMap: Record<string, { month: string, sales: number, tpSales: number, collection: number, returns: number, commission: number, gift: number }> = {};
+      const rollingMonths: string[] = [];
+      for (let i = 11; i >= 0; i--) {
+        const d = new Date(today.getFullYear(), today.getMonth() - i, 1);
+        const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+        rollingMonths.push(key);
+        monthlyMap[key] = {
+          month: `${monthNames[d.getMonth()]} ${d.getFullYear()}`,
+          sales: 0,
+          tpSales: 0,
+          collection: 0,
+          returns: 0,
+          commission: 0,
+          gift: 0
+        };
+      }
+
       let t_sales = 0, t_coll = 0, reg_due = 0, book_adv = 0;
-      let dueTxCount = 0; // For temporary debugging
-
       const recent: any[] = [];
-      const monthlyMap: Record<string, { month: string, sales: number, tpSales: number, collection: number, returns: number }> = {};
-      const monthNames = ["জানুয়ারি", "ফেব্রুয়ারি", "মার্চ", "এপ্রিল", "মে", "জুন", "জুলাই", "আগস্ট", "সেপ্টেম্বর", "অক্টোবর", "নভেম্বর", "ডিসেম্বর"];
-      monthNames.forEach((name, idx) => {
-        const key = `${today.getFullYear()}-${(idx + 1).toString().padStart(2, '0')}`;
-        monthlyMap[key] = { month: name, sales: 0, tpSales: 0, collection: 0, returns: 0 };
-      });
-
       const customerStatsMap: Record<string, { name: string, phone: string, address: string, due: number, lastTxDate: Date }> = {};
 
-      txRes.data?.forEach(tx => {
-        const amt = Number(tx.amount) || 0;
-        const txDateStr = tx.created_at.split('T')[0];
-        const txMonth = tx.created_at.slice(0, 7);
+      allTx.forEach(tx => {
+        const amt = parseAmount(tx.amount);
         const txDate = new Date(tx.created_at);
+        const txDateStr = tx.created_at.slice(0, 10);
+        const txMonth = tx.created_at.slice(0, 7);
         const isBooking = tx.meta?.is_booking === true || tx.items?.[0]?.note?.includes('বুকিং');
         const cid = tx.customer_id;
-
-        const returnItem = tx.items?.find((it: any) => it.action === 'RETURN');
-        const returnAmount = returnItem ? Math.abs(tx.items.reduce((s: number, it: any) => it.action === 'RETURN' ? s + (Number(it.total) || 0) : s, 0)) : 0;
-
-        if (returnAmount > 0 && monthlyMap[txMonth]) {
-          monthlyMap[txMonth].returns += returnAmount;
-        }
+        const returnAmount = Math.abs(tx.items?.reduce((s: number, it: any) => it.action === 'RETURN' ? s + parseAmount(it.total) : s, 0) || 0);
 
         if (cid) {
           if (!customerStatsMap[cid]) {
@@ -89,14 +118,22 @@ const Dashboard: React.FC<DashboardProps> = ({ company, role }) => {
           if (monthlyMap[txMonth]) monthlyMap[txMonth].collection += amt;
         } else if (tx.payment_type === 'DUE') {
           if (txDateStr === todayStr) t_sales += amt;
-          reg_due += amt;
-          if (cid) customerStatsMap[cid].due += amt;
+          if (!returnAmount) {
+            reg_due += amt;
+            if (cid) customerStatsMap[cid].due += amt;
+          }
           if (monthlyMap[txMonth]) {
-            monthlyMap[txMonth].sales += amt;
-            const comm = Number(tx.meta?.total_commission) || 0;
-            monthlyMap[txMonth].tpSales += (amt + comm);
+            const comm = parseAmount(tx.meta?.total_commission) || 0;
+            const gift = parseAmount(tx.meta?.total_gift) || 0;
+            const netMemo = amt - returnAmount;
+            monthlyMap[txMonth].sales += netMemo;
+            monthlyMap[txMonth].tpSales += netMemo + comm;
+            monthlyMap[txMonth].commission += comm;
+            monthlyMap[txMonth].gift += gift;
+            if (returnAmount > 0) monthlyMap[txMonth].returns += returnAmount;
           }
         }
+
         if (txDateStr === todayStr) {
           const cust = Array.isArray(tx.customers) ? tx.customers[0] : tx.customers;
           recent.push({ name: cust?.name || 'Unknown', amount: amt, date: tx.created_at, type: tx.payment_type === 'COLLECTION' ? 'C' : 'S' });
@@ -107,56 +144,32 @@ const Dashboard: React.FC<DashboardProps> = ({ company, role }) => {
         .filter(c => c.due > 0 && c.lastTxDate < thirtyDaysAgo)
         .sort((a, b) => b.due - a.due);
 
-      let currSales = 0;
-      let totalSales = 0;
-      let totalCollection = 0;
-      let activeMonths = 0;
-      
-      let currMonthTP = 0, currMonthMemo = 0, currMonthOffer = 0, currMonthGift = 0;
-
-      const currentMonthKey = `${today.getFullYear()}-${(today.getMonth() + 1).toString().padStart(2, '0')}`;
-      
-      txRes.data?.forEach(tx => {
-        const txMonth = tx.created_at.slice(0, 7);
-        if (txMonth === currentMonthKey && tx.payment_type === 'DUE') {
-          const amt = Number(tx.amount) || 0;
-          const comm = Number(tx.meta?.total_commission) || 0;
-          const gift = Number(tx.meta?.total_gift) || 0;
-          currMonthMemo += amt;
-          currMonthOffer += comm;
-          currMonthGift += gift;
-          currMonthTP += (amt + comm);
-        }
+      const currentMonthKey = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
+      const currentMonth = monthlyMap[currentMonthKey];
+      const activeMonths = rollingMonths.filter(key => {
+        const m = monthlyMap[key];
+        return m && (m.sales > 0 || m.collection > 0 || m.returns > 0 || m.commission > 0);
       });
+      const totalSales = activeMonths.reduce((sum, key) => sum + monthlyMap[key].sales, 0);
+      const totalCollection = activeMonths.reduce((sum, key) => sum + monthlyMap[key].collection, 0);
 
-      if (monthlyMap[currentMonthKey]) currSales = monthlyMap[currentMonthKey].sales;
-
-      Object.values(monthlyMap).forEach(m => {
-        if (m.sales > 0 || m.collection > 0 || m.returns > 0) activeMonths++;
-        totalSales += m.sales;
-        totalCollection += m.collection;
-      });
-
-      const avgSales = activeMonths > 0 ? totalSales / activeMonths : 0;
-      const avgCollection = activeMonths > 0 ? totalCollection / activeMonths : 0;
-
-      const sValue = prodRes.data?.reduce((acc, p) => acc + (Number(p.tp) * Number(p.stock)), 0) || 0;
+      const sValue = prodRes.data?.reduce((acc, p) => acc + (parseAmount(p.tp) * parseAmount(p.stock)), 0) || 0;
       setStats({
         todaySales: t_sales,
         todayCollection: t_coll,
         regularDue: reg_due,
         bookingAdvance: book_adv,
         stockValue: sValue,
-        currentMonthSales: currSales,
-        avgMonthSales: avgSales,
-        avgMonthCollection: avgCollection,
-        currentMonthTP: currMonthTP,
-        currentMonthMemo: currMonthMemo,
-        currentMonthOffer: currMonthOffer,
-        currentMonthGift: currMonthGift
+        currentMonthSales: currentMonth?.sales || 0,
+        avgMonthSales: activeMonths.length > 0 ? totalSales / activeMonths.length : 0,
+        avgMonthCollection: activeMonths.length > 0 ? totalCollection / activeMonths.length : 0,
+        currentMonthTP: currentMonth?.tpSales || 0,
+        currentMonthMemo: currentMonth?.sales || 0,
+        currentMonthOffer: currentMonth?.commission || 0,
+        currentMonthGift: currentMonth?.gift || 0
       });
       setRecentActivity(recent.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).slice(0, 10));
-      setMonthlyData(Object.values(monthlyMap));
+      setMonthlyData(rollingMonths.map(key => monthlyMap[key]));
       setInactiveDefaulters(defaulters);
     } finally { setLoading(false); }
   };
@@ -226,8 +239,9 @@ const Dashboard: React.FC<DashboardProps> = ({ company, role }) => {
                   <th className="px-6 py-4 text-center">টিপিরেট (TP)</th>
                   <th className="px-6 py-4 text-center">ম্যামো (Memo)</th>
                   <th className="px-6 py-4 text-center">কমিশন (Comm)</th>
+                  <th className="px-6 py-4 text-center">গিফট</th>
                   <th className="px-6 py-4 text-center">রিটার্ন</th>
-                  <th className="px-6 py-4 text-right">আদায়</th>
+                  <th className="px-6 py-4 text-right">আদায়</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50 text-[11px] font-bold uppercase italic">
@@ -236,7 +250,8 @@ const Dashboard: React.FC<DashboardProps> = ({ company, role }) => {
                     <td className="px-6 py-4 text-slate-700 font-black">{d.month}</td>
                     <td className="px-6 py-4 text-center text-blue-600 font-black">{Math.round(d.tpSales).toLocaleString()}৳</td>
                     <td className="px-6 py-4 text-center text-slate-900">{Math.round(d.sales).toLocaleString()}৳</td>
-                    <td className="px-6 py-4 text-center text-emerald-500">{Math.round(d.tpSales - d.sales).toLocaleString()}৳</td>
+                    <td className="px-6 py-4 text-center text-emerald-500">{Math.round(d.commission).toLocaleString()}৳</td>
+                    <td className="px-6 py-4 text-center text-pink-500">{Math.round(d.gift).toLocaleString()}৳</td>
                     <td className="px-6 py-4 text-center text-rose-500">{d.returns > 0 ? `-${Math.round(d.returns).toLocaleString()}৳` : '-'}</td>
                     <td className="px-6 py-4 text-right text-emerald-600 font-black">+{Math.round(d.collection).toLocaleString()}৳</td>
                   </tr>
