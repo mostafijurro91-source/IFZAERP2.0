@@ -1,10 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Company, UserRole, formatCurrency } from '../types';
 import { supabase, mapToDbCompany } from '../lib/supabase';
-import { 
-  ComposedChart, Area, Bar, XAxis, YAxis, CartesianGrid, 
-  Tooltip as RechartsTooltip, ResponsiveContainer, Legend, Line 
-} from 'recharts';
 
 // Inlined parseAmount to fix Vercel missing utils.ts error
 const parseAmount = (v: any): number => {
@@ -46,8 +42,8 @@ const Dashboard: React.FC<DashboardProps> = ({ company, role }) => {
     setLoading(true);
     try {
       const dbCompany = mapToDbCompany(company);
-      const today = new Date(); today.setHours(0, 0, 0, 0);
-      const todayStr = today.toISOString().slice(0, 10);
+      const today = new Date();
+      const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
       const thirtyDaysAgo = new Date();
       thirtyDaysAgo.setDate(today.getDate() - 30);
 
@@ -62,6 +58,7 @@ const Dashboard: React.FC<DashboardProps> = ({ company, role }) => {
         const txRes = await supabase.from('transactions')
           .select('customer_id, amount, payment_type, created_at, meta, items, customers(name, phone, address)')
           .eq('company', dbCompany)
+          .order('created_at', { ascending: false })
           .range(page * 1000, (page + 1) * 1000 - 1);
         
         if (txRes.data) {
@@ -96,8 +93,8 @@ const Dashboard: React.FC<DashboardProps> = ({ company, role }) => {
       allTx.forEach(tx => {
         const amt = parseAmount(tx.amount);
         const txDate = new Date(tx.created_at);
-        const txDateStr = tx.created_at.slice(0, 10);
-        const txMonth = tx.created_at.slice(0, 7);
+        const txDateStr = `${txDate.getFullYear()}-${String(txDate.getMonth() + 1).padStart(2, '0')}-${String(txDate.getDate()).padStart(2, '0')}`;
+        const txMonth = `${txDate.getFullYear()}-${String(txDate.getMonth() + 1).padStart(2, '0')}`;
         const isBooking = tx.meta?.is_booking === true || tx.items?.[0]?.note?.includes('বুকিং');
         const cid = tx.customer_id;
         const returnAmount = Math.abs(tx.items?.reduce((s: number, it: any) => it.action === 'RETURN' ? s + parseAmount(it.total) : s, 0) || 0);
@@ -240,45 +237,44 @@ const Dashboard: React.FC<DashboardProps> = ({ company, role }) => {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* 📈 Beautiful Recharts Area */}
-        <div className="lg:col-span-2 bg-white rounded-[2.5rem] shadow-xl border border-slate-100 overflow-hidden relative">
-          <div className="p-8 border-b border-slate-50 flex justify-between items-center bg-slate-50/50">
+        {/* Monthly Graph Table */}
+        <div className="lg:col-span-2 bg-white rounded-[2.5rem] shadow-lg border border-slate-100 overflow-hidden relative">
+          <div className="p-6 border-b border-slate-50 flex justify-between items-center bg-slate-50/30">
             <div>
               <h3 className="text-lg font-black tracking-tight text-slate-800 flex items-center gap-2">
                 📊 মাসিক লেনদেন প্রবাহ
               </h3>
               <p className="text-xs text-slate-400 font-medium mt-1">বিগত ১২ মাসের টিপি, সেলস এবং কালেকশন</p>
             </div>
+            <span className="bg-indigo-50 text-indigo-600 px-4 py-1 rounded-full text-[10px] font-black uppercase italic animate-pulse">Synced ✓</span>
           </div>
-          <div className="p-6 h-[400px] w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <ComposedChart data={monthlyData} margin={{ top: 20, right: 20, left: 0, bottom: 0 }}>
-                <defs>
-                  <linearGradient id="colorTp" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#818cf8" stopOpacity={0.4}/>
-                    <stop offset="95%" stopColor="#818cf8" stopOpacity={0}/>
-                  </linearGradient>
-                  <linearGradient id="colorSales" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#fbbf24" stopOpacity={0.4}/>
-                    <stop offset="95%" stopColor="#fbbf24" stopOpacity={0}/>
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-                <XAxis dataKey="month" tick={{fill: '#64748b', fontSize: 10, fontWeight: 600}} axisLine={false} tickLine={false} dy={10} />
-                <YAxis tickFormatter={(val) => `৳${(val/1000)}k`} tick={{fill: '#64748b', fontSize: 10, fontWeight: 600}} axisLine={false} tickLine={false} dx={-10} />
-                <RechartsTooltip 
-                  formatter={(value: number) => `৳${value.toLocaleString()}`}
-                  contentStyle={{ borderRadius: '1rem', border: 'none', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1)', padding: '12px 16px', fontWeight: 'bold' }}
-                  itemStyle={{ fontWeight: 800 }}
-                  labelStyle={{ color: '#94a3b8', fontSize: '12px', marginBottom: '8px', textTransform: 'uppercase' }}
-                />
-                <Legend wrapperStyle={{ paddingTop: '20px', fontSize: '12px', fontWeight: 700 }} iconType="circle" />
-                <Area type="monotone" dataKey="tpSales" name="টিপি (TP)" fill="url(#colorTp)" stroke="#6366f1" strokeWidth={3} />
-                <Area type="monotone" dataKey="sales" name="ম্যামো (Sales)" fill="url(#colorSales)" stroke="#f59e0b" strokeWidth={3} />
-                <Bar dataKey="collection" name="আদায় (Collection)" barSize={16} fill="#10b981" radius={[4, 4, 0, 0]} />
-                <Line type="monotone" dataKey="returns" name="রিটার্ন (Returns)" stroke="#ef4444" strokeWidth={3} dot={{r: 4, strokeWidth: 2}} activeDot={{r: 6}} />
-              </ComposedChart>
-            </ResponsiveContainer>
+          <div className="overflow-x-auto custom-scroll">
+            <table className="w-full text-left">
+              <thead>
+                <tr className="text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-50">
+                  <th className="px-6 py-4">মাস (Month Index)</th>
+                  <th className="px-6 py-4 text-center">টিপিরেট (TP)</th>
+                  <th className="px-6 py-4 text-center">ম্যামো (Memo)</th>
+                  <th className="px-6 py-4 text-center">কমিশন (Comm)</th>
+                  <th className="px-6 py-4 text-center">গিফট</th>
+                  <th className="px-6 py-4 text-center">রিটার্ন</th>
+                  <th className="px-6 py-4 text-right">আদায়</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-50 text-[12px] font-bold uppercase italic">
+                {monthlyData.map((d, i) => (
+                  <tr key={i} className="hover:bg-indigo-50/20 transition-all group">
+                    <td className="px-6 py-4 text-slate-700 font-black">{d.month}</td>
+                    <td className="px-6 py-4 text-center text-blue-600 font-black">{Math.round(d.tpSales).toLocaleString()}৳</td>
+                    <td className="px-6 py-4 text-center text-slate-900">{Math.round(d.sales).toLocaleString()}৳</td>
+                    <td className="px-6 py-4 text-center text-emerald-500">{Math.round(d.commission).toLocaleString()}৳</td>
+                    <td className="px-6 py-4 text-center text-pink-500">{Math.round(d.gift).toLocaleString()}৳</td>
+                    <td className="px-6 py-4 text-center text-rose-500">{d.returns > 0 ? `-${Math.round(d.returns).toLocaleString()}৳` : '-'}</td>
+                    <td className="px-6 py-4 text-right text-emerald-600 font-black">+{Math.round(d.collection).toLocaleString()}৳</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         </div>
 
@@ -326,17 +322,17 @@ const Dashboard: React.FC<DashboardProps> = ({ company, role }) => {
               </span>
             </div>
 
-            <div className="overflow-x-auto custom-scroll relative z-10">
-              <table className="w-full text-left">
-                <thead>
-                  <tr className="bg-rose-50/30 text-[10px] font-black text-rose-400 uppercase tracking-widest border-b border-rose-50">
+            <div className="overflow-auto custom-scroll relative z-10 max-h-[400px]">
+              <table className="w-full text-left relative">
+                <thead className="sticky top-0 bg-rose-50/90 backdrop-blur-md shadow-sm z-20">
+                  <tr className="text-[10px] font-black text-rose-400 uppercase tracking-widest border-b border-rose-50">
                     <th className="px-6 py-4">দোকানের নাম</th>
                     <th className="px-6 py-4">শেষ লেনদেন</th>
                     <th className="px-6 py-4 text-right">বকেয়া পরিমাণ</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-50 text-sm font-bold">
-                  {inactiveDefaulters.slice(0, 5).map((c, i) => {
+                  {inactiveDefaulters.map((c, i) => {
                     const daysInactive = Math.floor((new Date().getTime() - c.lastTxDate.getTime()) / (1000 * 3600 * 24));
                     return (
                       <tr key={i} className="hover:bg-rose-50/20 transition-colors">
@@ -361,13 +357,6 @@ const Dashboard: React.FC<DashboardProps> = ({ company, role }) => {
                 </tbody>
               </table>
             </div>
-            {inactiveDefaulters.length > 5 && (
-              <div className="p-3 bg-rose-50/50 text-center border-t border-rose-50">
-                <p className="text-xs font-bold text-rose-600 hover:text-rose-700 cursor-pointer flex items-center justify-center gap-1">
-                  আরও {inactiveDefaulters.length - 5} টি দেখুন
-                </p>
-              </div>
-            )}
           </div>
         )}
 
