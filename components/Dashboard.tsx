@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo } from 'react';
 import { Company, UserRole, formatCurrency } from '../types';
 import { supabase, mapToDbCompany } from '../lib/supabase';
