@@ -71,12 +71,14 @@ const Dashboard: React.FC<DashboardProps> = ({ company, role }) => {
       const monthNames = ["জানুয়ারি", "ফেব্রুয়ারি", "মার্চ", "এপ্রিল", "মে", "জুন", "জুলাই", "আগস্ট", "সেপ্টেম্বর", "অক্টোবর", "নভেম্বর", "ডিসেম্বর"];
       const monthlyMap: Record<string, { month: string, sales: number, tpSales: number, collection: number, returns: number, commission: number, gift: number }> = {};
       const rollingMonths: string[] = [];
-      for (let i = 11; i >= 0; i--) {
-        const d = new Date(today.getFullYear(), today.getMonth() - i, 1);
-        const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      const currentYear = today.getFullYear();
+      
+      // শুধুমাত্র বর্তমান বছরের ১২ মাস (জানুয়ারি - ডিসেম্বর)
+      for (let i = 0; i < 12; i++) {
+        const key = `${currentYear}-${String(i + 1).padStart(2, '0')}`;
         rollingMonths.push(key);
         monthlyMap[key] = {
-          month: `${monthNames[d.getMonth()]} ${d.getFullYear().toString().slice(2)}`,
+          month: monthNames[i],
           sales: 0,
           tpSales: 0,
           collection: 0,
@@ -249,30 +251,39 @@ const Dashboard: React.FC<DashboardProps> = ({ company, role }) => {
             <span className="bg-indigo-50 text-indigo-600 px-4 py-1 rounded-full text-[10px] font-black uppercase italic animate-pulse">Synced ✓</span>
           </div>
           <div className="overflow-x-auto custom-scroll">
-            <table className="w-full text-left">
+            <table className="w-full text-left border-collapse">
               <thead>
-                <tr className="text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-50">
-                  <th className="px-6 py-4">মাস (Month Index)</th>
-                  <th className="px-6 py-4 text-center">টিপিরেট (TP)</th>
-                  <th className="px-6 py-4 text-center">ম্যামো (Memo)</th>
-                  <th className="px-6 py-4 text-center">কমিশন (Comm)</th>
-                  <th className="px-6 py-4 text-center">গিফট</th>
-                  <th className="px-6 py-4 text-center">রিটার্ন</th>
-                  <th className="px-6 py-4 text-right">আদায়</th>
+                <tr className="bg-slate-50 text-[11px] font-black text-slate-500 uppercase tracking-widest">
+                  <th className="px-6 py-5 rounded-tl-2xl">মাস ({new Date().getFullYear()})</th>
+                  <th className="px-6 py-5 text-center">টিপিরেট (TP)</th>
+                  <th className="px-6 py-5 text-center">ম্যামো (Memo)</th>
+                  <th className="px-6 py-5 text-center">কমিশন (Comm)</th>
+                  <th className="px-6 py-5 text-center">গিফট</th>
+                  <th className="px-6 py-5 text-center">রিটার্ন</th>
+                  <th className="px-6 py-5 text-right rounded-tr-2xl">আদায়</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-50 text-[12px] font-bold uppercase italic">
-                {monthlyData.map((d, i) => (
-                  <tr key={i} className="hover:bg-indigo-50/20 transition-all group">
-                    <td className="px-6 py-4 text-slate-700 font-black">{d.month}</td>
-                    <td className="px-6 py-4 text-center text-blue-600 font-black">{Math.round(d.tpSales).toLocaleString()}৳</td>
-                    <td className="px-6 py-4 text-center text-slate-900">{Math.round(d.sales).toLocaleString()}৳</td>
-                    <td className="px-6 py-4 text-center text-emerald-500">{Math.round(d.commission).toLocaleString()}৳</td>
-                    <td className="px-6 py-4 text-center text-pink-500">{Math.round(d.gift).toLocaleString()}৳</td>
-                    <td className="px-6 py-4 text-center text-rose-500">{d.returns > 0 ? `-${Math.round(d.returns).toLocaleString()}৳` : '-'}</td>
-                    <td className="px-6 py-4 text-right text-emerald-600 font-black">+{Math.round(d.collection).toLocaleString()}৳</td>
-                  </tr>
-                ))}
+              <tbody className="divide-y divide-slate-100 text-[13px] font-bold">
+                {monthlyData.map((d, i) => {
+                  const isActive = d.sales > 0 || d.collection > 0 || d.tpSales > 0;
+                  return (
+                    <tr key={i} className={`transition-all duration-300 hover:bg-slate-50/80 hover:shadow-sm ${isActive ? 'bg-white' : 'bg-slate-50/30 opacity-70'}`}>
+                      <td className="px-6 py-4">
+                        <span className={`px-3 py-1.5 rounded-xl text-xs font-black tracking-wide ${isActive ? 'bg-indigo-50 text-indigo-700' : 'bg-slate-100 text-slate-500'}`}>
+                          {d.month}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 text-center text-blue-700 bg-blue-50/30 font-black">{Math.round(d.tpSales).toLocaleString()} ৳</td>
+                      <td className="px-6 py-4 text-center text-slate-800">{Math.round(d.sales).toLocaleString()} ৳</td>
+                      <td className="px-6 py-4 text-center text-emerald-600 bg-emerald-50/30">{Math.round(d.commission).toLocaleString()} ৳</td>
+                      <td className="px-6 py-4 text-center text-pink-600 bg-pink-50/30">{Math.round(d.gift).toLocaleString()} ৳</td>
+                      <td className="px-6 py-4 text-center text-rose-500">{d.returns > 0 ? `-${Math.round(d.returns).toLocaleString()} ৳` : '-'}</td>
+                      <td className="px-6 py-4 text-right text-emerald-600 font-black text-[14px]">
+                        {d.collection > 0 ? `+${Math.round(d.collection).toLocaleString()} ৳` : '-'}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
