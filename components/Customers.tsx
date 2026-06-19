@@ -42,6 +42,7 @@ const Customers: React.FC<CustomerProps> = ({ company, role, userName }) => {
   const [areaSearch, setAreaSearch] = useState("");
   const [showAreaDropdown, setShowAreaDropdown] = useState(false);
   const [missingPhoneOnly, setMissingPhoneOnly] = useState(false);
+  const [showDueOnly, setShowDueOnly] = useState(false);
   const areaDropdownRef = useRef<HTMLDivElement>(null);
   const ledgerRef = useRef<HTMLDivElement>(null);
   const memoRef = useRef<HTMLDivElement>(null);
@@ -474,8 +475,10 @@ const Customers: React.FC<CustomerProps> = ({ company, role, userName }) => {
     const matchesSearch = !q || name.includes(q) || phone.includes(q) || portalId.includes(q);
     const matchesArea = !selectedArea || c.address === selectedArea;
     const matchesNoPhone = !missingPhoneOnly || !c.phone || c.phone.trim() === "";
+    const regBal = regularDues[c.id] || 0;
+    const matchesDue = !showDueOnly || regBal > 0;
 
-    return matchesSearch && matchesArea && matchesNoPhone;
+    return matchesSearch && matchesArea && matchesNoPhone && matchesDue;
   });
 
   return (
@@ -526,6 +529,13 @@ const Customers: React.FC<CustomerProps> = ({ company, role, userName }) => {
               )}
             </div>
             <button onClick={() => setIsCompact(!isCompact)} className="bg-white p-4 rounded-2xl shadow-sm border border-slate-200 text-xl active:scale-90 transition-transform">{isCompact ? "🔳" : "☰"}</button>
+            <button
+              onClick={() => setShowDueOnly(!showDueOnly)}
+              className={`p-4 rounded-2xl shadow-sm border transition-all text-[12px] font-black uppercase active:scale-90 ${showDueOnly ? 'bg-rose-600 text-white border-rose-700 shadow-rose-200' : 'bg-white border-slate-200 text-rose-500'}`}
+              title={showDueOnly ? "সকল কাস্টমার দেখুন" : "শুধুমাত্র বকেয়া কাস্টমার দেখুন"}
+            >
+              💰 বকেয়া
+            </button>
             <button
               onClick={() => setMissingPhoneOnly(!missingPhoneOnly)}
               className={`p-4 rounded-2xl shadow-sm border transition-all text-xl active:scale-90 ${missingPhoneOnly ? 'bg-rose-600 text-white border-rose-700 shadow-rose-200' : 'bg-white border-slate-200'}`}
