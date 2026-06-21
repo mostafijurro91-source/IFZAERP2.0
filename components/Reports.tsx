@@ -620,25 +620,37 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName }) => {
 
   if (activeReport === 'MAIN') {
     const reportOptions = [
-      { id: 'BOOKING_LOG', title: 'BOOKING MASTER', icon: '📅', desc: 'বাকি মাল ও আইটেম লিস্ট' },
-      { id: 'COLLECTION_REPORT', title: 'COLLECTION LOG', icon: '💰', desc: 'আজকের নগদ কালেকশন' },
-      { id: 'STOCK_REPORT', title: 'STOCK LIST', icon: '📦', desc: 'ইনভেন্টরি লেজার' },
-      { id: 'DELIVERY_LOG_A4', title: 'DELIVERY SHEET', icon: '🚚', desc: 'প্রতিদিনের ডেলিভারি শিট' },
-      { id: 'PURCHASE_HISTORY', title: 'PURCHASE LOG', icon: '📒', desc: 'কোম্পানি ক্রয় হিসাব' },
-      { id: 'CUSTOMER_DUES', title: 'DUE REPORT', icon: '💸', desc: 'মার্কেট বকেয়া' },
-      { id: 'CUSTOMER_LEDGER', title: 'SHOP LEDGER', icon: '📜', desc: 'দোকানদার লেজার রিপোর্ট' },
-      { id: 'COMPANY_SALES', title: 'COMPANY SALES', icon: '📊', desc: 'সব কোম্পানির সেলস রিপোর্ট' },
-      { id: 'PRODUCT_SALES_REPORT', title: 'ITEM SALES', icon: '📈', desc: 'পণ্য বিক্রয় রিপোর্ট' },
-      { id: 'TOP_CUSTOMERS', title: 'TOP 10 RANKING', icon: '🏆', desc: 'বেস্ট কাস্টমার র‍্যাংকিং' }
+      { id: 'BOOKING_LOG', title: 'BOOKING MASTER', icon: '📅', desc: 'বাকি মাল ও আইটেম লিস্ট', color: 'from-blue-500 to-cyan-400' },
+      { id: 'COLLECTION_REPORT', title: 'COLLECTION LOG', icon: '💰', desc: 'আজকের নগদ কালেকশন', color: 'from-emerald-500 to-teal-400' },
+      { id: 'STOCK_REPORT', title: 'STOCK LIST', icon: '📦', desc: 'ইনভেন্টরি লেজার', color: 'from-indigo-500 to-blue-500' },
+      { id: 'DELIVERY_LOG_A4', title: 'DELIVERY SHEET', icon: '🚚', desc: 'প্রতিদিনের ডেলিভারি শিট', color: 'from-orange-500 to-amber-400' },
+      { id: 'PURCHASE_HISTORY', title: 'PURCHASE LOG', icon: '📒', desc: 'কোম্পানি ক্রয় হিসাব', color: 'from-slate-700 to-slate-900' },
+      { id: 'CUSTOMER_DUES', title: 'DUE REPORT', icon: '💸', desc: 'মার্কেট বকেয়া', color: 'from-rose-500 to-pink-500' },
+      { id: 'CUSTOMER_LEDGER', title: 'SHOP LEDGER', icon: '📜', desc: 'দোকানদার লেজার রিপোর্ট', color: 'from-violet-500 to-purple-500' },
+      { id: 'COMPANY_SALES', title: 'COMPANY SALES', icon: '📊', desc: 'সব কোম্পানির সেলস রিপোর্ট', color: 'from-fuchsia-500 to-rose-400' },
+      { id: 'PRODUCT_SALES_REPORT', title: 'ITEM SALES', icon: '📈', desc: 'পণ্য বিক্রয় রিপোর্ট', color: 'from-sky-500 to-indigo-400' },
+      { id: 'TOP_CUSTOMERS', title: 'TOP 10 RANKING', icon: '🏆', desc: 'বেস্ট কাস্টমার র‍্যাংকিং', color: 'from-yellow-400 to-orange-500' }
     ];
 
     return (
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 pb-32">
-        {reportOptions.map((item: { id: string; title: string; icon: string; desc: string }) => (
-          <div key={item.id} onClick={() => setActiveReport(item.id as ReportType)} className="bg-white p-10 rounded-[3.5rem] shadow-sm hover:shadow-2xl cursor-pointer border-2 border-slate-50 flex flex-col items-center group transition-all animate-reveal">
-            <div className={`w-20 h-20 rounded-[2rem] bg-slate-900 flex items-center justify-center text-4xl mb-8 shadow-xl text-white`}>{item.icon}</div>
-            <h3 className="text-lg font-black uppercase italic text-slate-800 leading-none">{item.title}</h3>
-            <p className="text-[10px] font-bold text-slate-400 mt-4 uppercase tracking-widest">{item.desc}</p>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 pb-32 px-2 md:px-6">
+        {reportOptions.map((item: any) => (
+          <div 
+            key={item.id} 
+            onClick={() => setActiveReport(item.id as ReportType)} 
+            className="group relative bg-white p-8 rounded-[2.5rem] shadow-lg hover:shadow-2xl cursor-pointer border border-slate-100 flex flex-col justify-between overflow-hidden transition-all duration-300 hover:-translate-y-2 animate-reveal"
+          >
+            <div className={`absolute top-0 right-0 w-32 h-32 bg-gradient-to-br ${item.color} rounded-bl-full opacity-10 group-hover:opacity-20 transition-opacity`}></div>
+            <div className={`w-16 h-16 rounded-2xl bg-gradient-to-br ${item.color} flex items-center justify-center text-3xl mb-6 shadow-lg text-white transform group-hover:scale-110 transition-transform duration-300`}>
+              {item.icon}
+            </div>
+            <div className="relative z-10">
+              <h3 className="text-xl font-black uppercase italic text-slate-800 leading-tight mb-2">{item.title}</h3>
+              <p className="text-[11px] font-bold text-slate-500 uppercase tracking-widest">{item.desc}</p>
+            </div>
+            <div className="absolute bottom-6 right-6 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+              <div className={`w-10 h-10 rounded-[1rem] bg-gradient-to-br ${item.color} text-white flex items-center justify-center font-bold shadow-md`}>➔</div>
+            </div>
           </div>
         ))}
       </div>
