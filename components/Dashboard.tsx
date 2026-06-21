@@ -128,16 +128,13 @@ const Dashboard: React.FC<DashboardProps> = ({ company, role }) => {
           if (monthlyMap[txMonth]) monthlyMap[txMonth].collection += amt;
         } else if (tx.payment_type === 'DUE') {
           if (txDateStr === todayStr) t_sales += amt;
-          if (!returnAmount) {
-            reg_due += amt;
-            if (cid) customerStatsMap[cid].due += amt;
-          }
+          reg_due += amt;
+          if (cid) customerStatsMap[cid].due += amt;
           if (monthlyMap[txMonth]) {
             const comm = parseAmount(tx.meta?.total_commission) || 0;
             const gift = parseAmount(tx.meta?.total_gift) || 0;
-            const netMemo = amt - returnAmount;
-            monthlyMap[txMonth].sales += netMemo;
-            monthlyMap[txMonth].tpSales += netMemo + comm;
+            monthlyMap[txMonth].sales += amt;
+            monthlyMap[txMonth].tpSales += amt + comm;
             monthlyMap[txMonth].commission += comm;
             monthlyMap[txMonth].gift += gift;
             if (returnAmount > 0) monthlyMap[txMonth].returns += returnAmount;
