@@ -47,9 +47,11 @@ const Dashboard: React.FC<DashboardProps> = ({ company, role }) => {
       const thirtyDaysAgo = new Date();
       thirtyDaysAgo.setDate(today.getDate() - 30);
 
-      const [prodRes] = await Promise.all([
-        supabase.from('products').select('tp, stock').eq('company', dbCompany)
+      const [prodRes, custRes] = await Promise.all([
+        supabase.from('products').select('tp, stock').eq('company', dbCompany),
+        supabase.from('customers').select('id')
       ]);
+      const validCustomerIds = new Set(custRes.data?.map(c => c.id) || []);
 
       let allTx: any[] = [];
       let page = 0;
@@ -109,6 +111,7 @@ const Dashboard: React.FC<DashboardProps> = ({ company, role }) => {
               phone: cust?.phone || '',
               address: cust?.address || '',
               due: 0,
+              book_adv: 0,
               lastTxDate: new Date(0)
             };
           }
@@ -120,15 +123,13 @@ const Dashboard: React.FC<DashboardProps> = ({ company, role }) => {
         if (tx.payment_type === 'COLLECTION') {
           if (txDateStr === todayStr) t_coll += amt;
           if (isBooking) {
-            book_adv += amt;
+            if (cid) customerStatsMap[cid].book_adv += amt;
           } else {
-            reg_due -= amt;
             if (cid) customerStatsMap[cid].due -= amt;
           }
           if (monthlyMap[txMonth]) monthlyMap[txMonth].collection += amt;
         } else if (tx.payment_type === 'DUE') {
           if (txDateStr === todayStr) t_sales += amt;
-          reg_due += amt;
           if (cid) customerStatsMap[cid].due += amt;
           if (monthlyMap[txMonth]) {
             const comm = parseAmount(tx.meta?.total_commission) || 0;
@@ -144,6 +145,16 @@ const Dashboard: React.FC<DashboardProps> = ({ company, role }) => {
         if (txDateStr === todayStr) {
           const cust = Array.isArray(tx.customers) ? tx.customers[0] : tx.customers;
           recent.push({ name: cust?.name || 'Unknown', amount: amt, date: tx.created_at, type: tx.payment_type === 'COLLECTION' ? 'C' : 'S' });
+        }
+      });
+
+      // Recalculate total due and booking advance strictly for valid/active customers
+      reg_due = 0;
+      book_adv = 0;
+      Object.keys(customerStatsMap).forEach(cid => {
+        if (validCustomerIds.has(cid)) {
+          reg_due += customerStatsMap[cid].due;
+          book_adv += customerStatsMap[cid].book_adv;
         }
       });
 
