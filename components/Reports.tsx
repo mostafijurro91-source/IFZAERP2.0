@@ -1,654 +1,1135 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Company, UserRole, Product, formatCurrency, Booking, BookingItem, User } from '../types';
-import { db, supabase, mapToDbCompany } from '../lib/supabase';
+
+import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { Company, formatCurrency, UserRole, Product, Customer } from '../types';
+import { supabase, mapToDbCompany } from '../lib/supabase';
 import { parseAmount } from '../lib/utils';
 import { jsPDF } from 'jspdf';
 import * as html2canvasModule from 'html2canvas';
 
 const html2canvas = (html2canvasModule as any).default || html2canvasModule;
 
-interface ExtendedBooking extends Booking {
-   customer_address?: string;
-   customer_phone?: string;
+interface ReportsProps {
+  company: Company;
+  userRole?: UserRole;
+  userName?: string;
 }
 
-interface BookingsProps {
-   company: Company;
-   role: UserRole;
-   user: User;
-}
+type ReportType = 'MAIN' | 'CUSTOMER_DUES' | 'STOCK_REPORT' | 'DELIVERY_LOG_A4' | 'PURCHASE_HISTORY' | 'BOOKING_LOG' | 'COLLECTION_REPORT' | 'CUSTOMER_LEDGER' | 'COMPANY_SALES' | 'PRODUCT_SALES_REPORT' | 'TOP_CUSTOMERS';
 
-const Bookings: React.FC<BookingsProps> = ({ company, role, user }) => {
-   const [bookings, setBookings] = useState<ExtendedBooking[]>([]);
-   const [loading, setLoading] = useState(true);
-   const [showAddModal, setShowAddModal] = useState(false);
-   const [showDetailModal, setShowDetailModal] = useState(false);
-   const [isSaving, setIsSaving] = useState(false);
-   const [isDownloading, setIsDownloading] = useState(false);
+const Reports: React.FC<ReportsProps> = ({ company, userRole, userName }) => {
+  const [activeReport, setActiveReport] = useState<ReportType>('MAIN');
+  const [loading, setLoading] = useState(false);
+  const [isDownloading, setIsDownloading] = useState(false);
+  const [reportData, setReportData] = useState<any[]>([]);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+  const [selectedMemo, setSelectedMemo] = useState<any>(null);
+  const [showMemoModal, setShowMemoModal] = useState(false);
 
-   const [selectedBooking, setSelectedBooking] = useState<ExtendedBooking | null>(null);
-   const [customers, setCustomers] = useState<any[]>([]);
-   const [products, setProducts] = useState<Product[]>([]);
-   const [selectedCust, setSelectedCust] = useState<any>(null);
-   const [activeBookingsForCust, setActiveBookingsForCust] = useState<any[]>([]);
-   const [targetBookingId, setTargetBookingId] = useState<string | "NEW">("NEW");
-   const [bookingCart, setBookingCart] = useState<any[]>([]);
+  const [selectedCustomerId, setSelectedCustomerId] = useState<string>("");
+  const [ledgerCustomers, setLedgerCustomers] = useState<any[]>([]);
 
-   const [custSearch, setCustSearch] = useState("");
-   const [prodSearch, setProdSearch] = useState("");
-   const [statusFilter, setStatusFilter] = useState<string>("ACTIVE");
-   const [modalAreaSelection, setModalAreaSelection] = useState("");
-   const [currentStep, setCurrentStep] = useState(1);
-   const [form, setForm] = useState({ advance: 0, bank_deposit: 0 });
+  const reportRef = useRef<HTMLDivElement>(null);
+  const memoRef = useRef<HTMLDivElement>(null);
 
-   const [deliveryUpdates, setDeliveryUpdates] = useState<Record<string, number>>({});
-   const [orderQtyUpdates, setOrderQtyUpdates] = useState<Record<string, number>>({});
-   const [newCashAmt, setNewCashAmt] = useState<string>("");
-   const [newBankAmt, setNewBankAmt] = useState<string>("");
+  const getMemoNo = (id: string, date?: string, meta?: any) => {
+    const d = date ? new Date(date) : new Date();
+    const yr = String(d.getFullYear()).slice(-2);
+    const mo = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    const serial = meta?.daily_serial ? String(meta.daily_serial).padStart(4, '0') : String(id).slice(-4).toUpperCase();
+    return `INV-${yr}${mo}${day}-${serial}`;
+  };
 
-   const invoiceRef = useRef<HTMLDivElement>(null);
-   const slipRef = useRef<HTMLDivElement>(null);
-   const [showSlipModal, setShowSlipModal] = useState(false);
-   const [selectedSlipData, setSelectedSlipData] = useState<any>(null);
-
-   const safeFormat = (val: any) => Math.round(parseAmount(val || 0)).toLocaleString();
-
-   useEffect(() => {
-      fetchData();
-      const channel = supabase
-         .channel('booking-sync-isolated-v2')
-         .on('postgres_changes', { event: '*', schema: 'public', table: 'bookings' }, () => fetchData())
-         .subscribe();
-      return () => { supabase.removeChannel(channel); };
-   }, [company]);
-
-   const fetchData = async () => {
-         try {
-         const dbCompany = mapToDbCompany(company);
-         const { data: bkData, error: bkErr } = await supabase
-            .from('bookings')
-            .select('*, customers(name, address, phone)')
-            .eq('company', dbCompany)
-            .order('created_at', { ascending: false });
-
-         if (bkErr) throw bkErr;
-
-         const formattedBookings = (bkData || []).map(b => ({
-            ...b,
-            customer_name: b.customers?.name,
-            customer_address: b.customers?.address,
-            customer_phone: b.customers?.phone
-         }));
-
-         const [custData, prodData] = await Promise.all([
-            db.getCustomers(),
-            supabase.from('products').select('*').eq('company', dbCompany).order('name')
-         ]);
-
-         setBookings(formattedBookings);
-         setCustomers(custData || []);
-         setProducts(prodData.data || []);
-      } catch (err) { console.error("Fetch Error:", err); } finally { setLoading(false); }
-   };
-
-   const fetchActiveBookingsForCustomer = async (customerId: string) => {
-      try {
-         const dbCo = mapToDbCompany(company);
-         const { data, error } = await supabase
-            .from('bookings')
-            .select('*')
-            .eq('customer_id', customerId)
-            .eq('company', dbCo)
-            .neq('status', 'COMPLETED');
-
-         if (error) throw error;
-         setActiveBookingsForCust(data || []);
-         setTargetBookingId("NEW");
-      } catch (err) { setActiveBookingsForCust([]); }
-   };
-
-   const handleCompanySettlement = async (b: ExtendedBooking) => {
-      if (b.advance_amount <= 0) return alert("এই বুকিংয়ে দোকানদারের কোনো জমা টাকা নেই!");
-      const confirmMsg = `আপনি কি দোকানদার ${b.customer_name}-এর জমা ৳${b.advance_amount.toLocaleString()} টাকা ${company}-কে পাঠাতে চান?`;
-      if (!confirm(confirmMsg)) return;
-      setIsSaving(true);
-      try {
-         const dbCo = mapToDbCompany(company);
-         await supabase.from('company_ledger').insert([{
-            company: dbCo, type: 'BANK_TRANSFER', amount: parseAmount(b.advance_amount),
-            note: `বুকিং পেমেন্ট টু কোম্পানি: ${b.customer_name}`,
-            date: new Date().toISOString().split('T')[0],
-         }]);
-         await supabase.from('bookings').update({ advance_amount: 0 }).eq('id', b.id);
-         alert("সফলভাবে কোম্পানিকে টাকা পাঠানো হয়েছে! ✅");
-         fetchData();
-      } catch (err: any) { alert("ত্রুটি: " + err.message); } finally { setIsSaving(false); }
-   };
-
-   // ✅ ডিলিট ফাংশন (ADMIN Only)
-   const handleDeleteBooking = async (bookingId: string, customerName: string) => {
-      if (role !== 'ADMIN') return alert("শুধুমাত্র অ্যাডমিন বুকিং ডিলিট করতে পারবেন!");
-      if (!confirm(`${customerName}-এর এই বুকিং রেকর্ডটি কি সম্পূর্ণ মুছে ফেলতে চান?`)) return;
-      setIsSaving(true);
-      try {
-         const { error } = await supabase.from('bookings').delete().eq('id', bookingId);
-         if (error) throw error;
-         alert("বুকিং মুছে ফেলা হয়েছে।");
-         fetchData();
-      } catch (err) { alert("Error deleting record"); } finally { setIsSaving(false); }
-   };
-
-   const filteredBookings = useMemo(() => {
-      return bookings.filter(b => {
-         const totalOrdered = b.items?.reduce((s, i) => s + i.qty, 0) || 0;
-         const totalDelivered = b.items?.reduce((s, i) => s + (i.delivered_qty || 0), 0) || 0;
-         const isActuallyDone = totalOrdered > 0 && totalDelivered >= totalOrdered;
-         if (statusFilter === 'ALL') return true;
-         if (statusFilter === 'ACTIVE') return !isActuallyDone;
-         if (statusFilter === 'COMPLETED') return isActuallyDone;
-         return true;
-      });
-   }, [bookings, statusFilter]);
-
-   const uniqueBookingCustomersCount = useMemo(() => {
-      return new Set(filteredBookings.map(b => b.customer_id)).size;
-   }, [filteredBookings]);
-
-   const handleUpdateBookingStats = async () => {
-      if (!selectedBooking || isSaving) return;
-      setIsSaving(true);
-      try {
-         const dbCo = mapToDbCompany(company);
-         const updatedItems = selectedBooking.items.map(it => {
-            const d_qty = deliveryUpdates[it.id] || 0;
-            const o_qty = orderQtyUpdates[it.id] !== undefined ? orderQtyUpdates[it.id] : it.qty;
-            return { ...it, qty: o_qty, delivered_qty: (it.delivered_qty || 0) + d_qty };
-         });
-
-         const totalOrdered = updatedItems.reduce((s, i) => s + i.qty, 0);
-         const totalDelivered = updatedItems.reduce((s, i) => s + (i.delivered_qty || 0), 0);
-         const isAllDelivered = totalOrdered > 0 && totalDelivered >= totalOrdered;
-
-         // ✅ সব মাল ডেলিভারি হলে অটো-ডিলিট কনফার্মেশন
-         if (isAllDelivered) {
-            const confirmDel = confirm("সব মাল ডেলিভারি হয়েছে, বুকিংটি কি ডিলিট করে দেব? (হিসাব ট্রানজেকশনে জমা থাকবে)");
-            if (confirmDel) {
-               const { error: delErr } = await supabase.from('bookings').delete().eq('id', selectedBooking.id);
-               if (delErr) throw delErr;
-               alert("বুকিংটি সফলভাবে ডেলিভারি ও ডিলিট করা হয়েছে! ✅");
-               setShowDetailModal(false);
-            } else {
-               // ডিলিট না করলে শুধু COMPLETED হবে
-               await supabase.from('bookings').update({ items: updatedItems, status: 'COMPLETED', qty: totalOrdered }).eq('id', selectedBooking.id);
-               alert("বুকিং আপডেট সফল হয়েছে! ✅");
-            }
-         } else {
-            const newTotal = updatedItems.reduce((s, i) => s + (parseAmount(i.qty || 0) * parseAmount(i.unitPrice || 0)), 0);
-            const newAdvance = parseAmount(selectedBooking.advance_amount) + (parseAmount(newCashAmt) || 0) + (parseAmount(newBankAmt) || 0);
-            await supabase.from('bookings').update({
-               items: updatedItems, total_amount: newTotal, advance_amount: newAdvance,
-               qty: totalOrdered, status: 'PARTIAL'
-            }).eq('id', selectedBooking.id);
-            alert("বুকিং আপডেট সফল হয়েছে! ✅");
-         }
-
-         // ট্রানজেকশন এন্ট্রি
-         if (parseAmount(newCashAmt) > 0 || parseAmount(newBankAmt) > 0) {
-            await supabase.from('transactions').insert([{
-               customer_id: selectedBooking.customer_id, company: dbCo, amount: (parseAmount(newCashAmt) || 0) + (parseAmount(newBankAmt) || 0),
-               payment_type: 'COLLECTION', items: [{ note: `বুকিং অগ্রিম জমা` }], submitted_by: user.name, meta: { is_booking: true }
-            }]);
-         }
-
-         // স্টক আপডেট
-         for (const it of selectedBooking.items) {
-            const d_qty = deliveryUpdates[it.id] || 0;
-            if (d_qty > 0) await supabase.rpc('increment_stock', { row_id: it.id, amt: -d_qty });
-         }
-
-         setShowDetailModal(false);
-         setDeliveryUpdates({}); setOrderQtyUpdates({}); setNewCashAmt(""); setNewBankAmt("");
-         fetchData();
-      } catch (err: any) { alert("ত্রুটি: " + err.message); } finally { setIsSaving(false); }
-   };
-
-   const handleDownloadPDF = async (ref: React.RefObject<HTMLDivElement | null>, filename: string) => {
-      if (!ref.current || isDownloading) return;
-      setIsDownloading(true);
-      const parent = ref.current.parentElement;
-      const parentOverflow = parent ? parent.style.overflowX : '';
-      if (parent) parent.style.overflowX = 'visible';
-      try {
-         const element = ref.current;
-         const canvas = await html2canvas(element, { scale: 2, useCORS: true, backgroundColor: '#ffffff' });
-         const imgData = canvas.toDataURL('image/jpeg', 0.95);
-         const isSlip = filename === 'Booking_Slip';
-         const pdf = new jsPDF('p', 'mm', isSlip ? 'a5' : 'a4');
-         const pageWidth = pdf.internal.pageSize.getWidth();
-         const pageHeight = pdf.internal.pageSize.getHeight();
-         let finalWidth = pageWidth;
-         let finalHeight = (canvas.height * pageWidth) / canvas.width;
-         if (isSlip && finalHeight > pageHeight) {
-            const scale = pageHeight / finalHeight;
-            finalHeight = pageHeight;
-            finalWidth = finalWidth * scale;
-         }
-         const xPos = (pageWidth - finalWidth) / 2;
-         pdf.addImage(imgData, 'JPEG', xPos, 0, finalWidth, finalHeight);
-         pdf.save(`${filename}_${new Date().getTime()}.pdf`);
-      } catch (err) { alert("PDF ডাউনলোড ব্যর্থ হয়েছে।"); } finally {
-         if (parent) parent.style.overflowX = parentOverflow;
-         setIsDownloading(false);
+  useEffect(() => {
+    if (activeReport !== 'MAIN') {
+      if (activeReport === 'CUSTOMER_LEDGER') {
+        loadLedgerCustomers();
+      } else {
+        fetchReport(activeReport);
       }
-   };
+    }
+  }, [activeReport, company, selectedDate, selectedCustomerId]);
 
-   const handleAddBooking = async () => {
-      if (!selectedCust || bookingCart.length === 0 || isSaving) return;
-      setIsSaving(true);
-      try {
-         const dbCo = mapToDbCompany(company);
-         const newItemsValue = bookingCart.reduce((acc, it) => acc + (parseAmount(it.qty || 0) * parseAmount(it.unitPrice || 0)), 0);
-         const newItemsFormatted = bookingCart.map(it => ({
-            id: it.product_id, product_id: it.product_id, name: it.name, qty: it.qty, unitPrice: it.unitPrice, delivered_qty: 0
-         }));
-         const totalInitialDeposit = parseAmount(form.advance) + parseAmount(form.bank_deposit);
+  useEffect(() => {
+    const channel = supabase
+      .channel('reports-realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'transactions' }, () => {
+        if (activeReport !== 'MAIN' && activeReport !== 'CUSTOMER_LEDGER') fetchReport(activeReport);
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'collection_requests' }, () => {
+        if (activeReport !== 'MAIN' && activeReport !== 'CUSTOMER_LEDGER') fetchReport(activeReport);
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'bookings' }, () => {
+        if (activeReport !== 'MAIN' && activeReport !== 'CUSTOMER_LEDGER') fetchReport(activeReport);
+      })
+      .subscribe();
 
-         if (targetBookingId !== "NEW") {
-            const existing = activeBookingsForCust.find(b => b.id === targetBookingId);
-            const combinedItems = [...(existing.items || []), ...newItemsFormatted];
-            const totalOrd = combinedItems.reduce((s, i) => s + i.qty, 0);
-            await supabase.from('bookings').update({
-               items: combinedItems, total_amount: parseAmount(existing.total_amount) + newItemsValue,
-               advance_amount: parseAmount(existing.advance_amount) + totalInitialDeposit,
-               qty: totalOrd, status: 'PARTIAL'
-            }).eq('id', targetBookingId);
-         } else {
-            await supabase.from('bookings').insert([{
-               customer_id: selectedCust.id, company: dbCo, product_name: newItemsFormatted[0].name,
-               qty: newItemsFormatted.reduce((sum, item) => sum + item.qty, 0), items: newItemsFormatted,
-               advance_amount: totalInitialDeposit, total_amount: newItemsValue, status: 'PENDING'
-            }]);
-         }
-         if (totalInitialDeposit > 0) {
-            await supabase.from('transactions').insert([{
-               customer_id: selectedCust.id, company: dbCo, amount: totalInitialDeposit,
-               payment_type: 'COLLECTION', items: [{ note: `বুকিং অগ্রিম গ্রহণ` }], submitted_by: user.name, meta: { is_booking: true }
-            }]);
-         }
-         alert(`বুকিং সম্পন্ন হয়েছে! ✅`);
-         setShowAddModal(false); setBookingCart([]); setSelectedCust(null); setForm({ advance: 0, bank_deposit: 0 }); setCurrentStep(1); fetchData();
-      } catch (err: any) { alert("ত্রুটি: " + err.message); } finally { setIsSaving(false); }
-   };
+    return () => { supabase.removeChannel(channel); };
+  }, [activeReport, company, selectedDate, selectedCustomerId]);
 
-   const uniqueAreas = useMemo(() => Array.from(new Set(customers.map(c => c.address?.trim()).filter(Boolean))).sort() as string[], [customers]);
+  const loadLedgerCustomers = async () => {
+    const { data } = await supabase.from('customers').select('id, name, address').order('name');
+    setLedgerCustomers(data || []);
+  };
 
-   return (
-      <div className="space-y-6 md:space-y-10 pb-40 animate-reveal text-slate-900 font-sans mt-2">
-         {/* SUMMARY CARDS */}
-         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6 no-print px-1">
-            <div className="bg-indigo-600 p-6 md:p-8 rounded-[2rem] shadow-xl flex flex-col justify-between text-white relative overflow-hidden group">
-               <div className="absolute top-0 right-0 w-24 h-24 bg-white/10 rounded-bl-[3rem] group-hover:scale-110 transition-transform"></div>
-               <p className="text-[9px] font-black text-indigo-100 uppercase tracking-widest mb-1 italic relative z-10">Active Chapter Orders</p>
-               <h3 className="text-3xl md:text-4xl font-black italic tracking-tighter relative z-10">{uniqueBookingCustomersCount} <span className="text-xs font-normal uppercase tracking-normal opacity-50">দোকান</span></h3>
-            </div>
-            <div className="bg-white p-6 md:p-8 rounded-[2rem] border border-slate-100 shadow-sm flex flex-col justify-between">
-               <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1 italic">Total Order Value</p>
-               <h3 className="text-2xl md:text-3xl font-black italic tracking-tighter text-slate-900">৳{safeFormat(filteredBookings.reduce((s, b) => s + parseAmount(b.total_amount), 0))}</h3>
-            </div>
-            <div className="bg-slate-900 p-6 md:p-8 rounded-[2rem] shadow-xl flex flex-col justify-between text-white">
-               <p className="text-[9px] font-black text-indigo-400 uppercase tracking-widest mb-1 italic">Dealer Hand Advance</p>
-               <h3 className="text-2xl md:text-3xl font-black italic tracking-tighter text-emerald-400">৳{safeFormat(filteredBookings.reduce((s, b) => s + parseAmount(b.advance_amount), 0))}</h3>
-            </div>
-            <div className="bg-rose-50 p-6 md:p-8 rounded-[2rem] border border-rose-100 shadow-sm flex flex-col justify-between">
-               <p className="text-[9px] font-black text-rose-400 uppercase tracking-widest mb-1 italic">Expected Collection</p>
-               <h3 className="text-2xl md:text-3xl font-black italic tracking-tighter text-rose-600">৳{safeFormat(filteredBookings.reduce((s, b) => s + (parseAmount(b.total_amount) - parseAmount(b.advance_amount)), 0))}</h3>
-            </div>
-         </div>
+  const fetchReport = async (type: ReportType) => {
+    setLoading(true);
+    const dbCompany = mapToDbCompany(company);
+    try {
+      if (type === 'STOCK_REPORT') {
+        const [prodRes, ledgerRes, txRes, replRes, bookRes] = await Promise.all([
+          supabase.from('products').select('*').eq('company', dbCompany).order('name'),
+          supabase.from('company_ledger').select('items_json').eq('company', dbCompany).eq('type', 'PURCHASE'),
+          supabase.from('transactions').select('items, payment_type').eq('company', dbCompany),
+          supabase.from('replacements').select('product_id, product_name, qty').eq('company', dbCompany),
+          supabase.from('bookings').select('items').eq('company', dbCompany)
+        ]);
 
-         {/* HUB HEADER */}
-         <div className="bg-white p-6 md:p-8 rounded-[2.5rem] border border-slate-100 shadow-lg flex flex-col md:flex-row justify-between items-center gap-6 no-print mx-1">
-            <div className="flex items-center gap-5 w-full md:w-auto">
-               <div className="w-12 h-12 md:w-14 md:h-14 bg-indigo-600 rounded-2xl flex items-center justify-center text-white text-xl md:text-2xl font-black italic shadow-lg">B</div>
-               <div>
-                  <h3 className="text-lg md:text-xl font-black uppercase italic tracking-tighter">বুকিং সেক্টর (Isolated)</h3>
-                  <p className="text-[9px] text-slate-400 font-bold uppercase mt-1 tracking-widest">{company} • ডিলার কন্ট্রোল</p>
-               </div>
-            </div>
-            <div className="flex gap-2 w-full md:w-auto">
-               <select className="flex-1 md:flex-none p-4 md:p-5 bg-slate-50 border border-slate-100 rounded-2xl text-[10px] font-black uppercase outline-none shadow-inner" value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
-                  <option value="ACTIVE">চলমান (Active)</option>
-                  <option value="COMPLETED">সম্পন্ন (Completed)</option>
-                  <option value="ALL">সকল রেকর্ড</option>
-               </select>
-               <button onClick={() => { setShowAddModal(true); setCurrentStep(1); setBookingCart([]); setSelectedCust(null); setTargetBookingId("NEW"); }} className="flex-[1.5] md:flex-none bg-indigo-600 text-white px-8 md:px-10 py-4 rounded-2xl font-black uppercase text-[10px] tracking-widest shadow-xl active:scale-95 transition-all">+ নিউ বুকিং</button>
-            </div>
-         </div>
+        const productsList = prodRes.data || [];
+        const statsMap: Record<string, any> = {};
 
-         {/* BOOKING LIST */}
-         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6 no-print px-1">
-            {loading ? (
-               <div className="col-span-full py-40 text-center animate-pulse text-slate-300 font-black italic tracking-widest">বুকিং ডাটা লোড হচ্ছে...</div>
-            ) : filteredBookings.map((b, idx) => {
-               const totalOrdered = b.items?.reduce((s, i) => s + i.qty, 0) || 0;
-               const totalDelivered = b.items?.reduce((s, i) => s + (i.delivered_qty || 0), 0) || 0;
-               const deliveryPercent = totalOrdered > 0 ? (totalDelivered / totalOrdered) * 100 : 0;
-               const isFull = totalOrdered > 0 && totalDelivered >= totalOrdered;
-               const netBalance = b.total_amount - b.advance_amount;
-               const isExcess = netBalance < 0;
+        productsList.forEach((p: Product) => {
+          statsMap[p.id] = { purchased: 0, sold: 0, replaced: 0, returned: 0 };
+        });
 
-               return (
-                  <div key={b.id} className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-md hover:shadow-2xl transition-all duration-500 group relative flex flex-col justify-between animate-reveal overflow-hidden">
-                     <div className="mb-6">
-                        <div className="flex justify-between items-start mb-4">
-                           <span className={`px-4 py-1.5 rounded-xl text-[8px] font-black uppercase tracking-widest shadow-sm ${isFull ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : 'bg-orange-50 text-orange-600 border border-orange-100'}`}>{isFull ? 'সম্পন্ন (FULL)' : 'চলমান (PARTIAL)'}</span>
-                           <div className="flex items-center gap-2">
-                              <button onClick={() => handleCompanySettlement(b)} title="কোম্পানিকে টাকা পাঠান" className="w-9 h-9 bg-emerald-50 text-emerald-600 rounded-xl flex items-center justify-center text-lg shadow-sm hover:bg-emerald-600 hover:text-white transition-all active:scale-90">🏦</button>
-                              <button onClick={(e) => { e.stopPropagation(); setSelectedSlipData({ ...b, customer_name: b.customer_name, address: b.customer_address, phone: b.customer_phone, booking_id: b.id }); setShowSlipModal(true); }} className="w-9 h-9 bg-slate-100 text-slate-600 rounded-xl flex items-center justify-center text-lg shadow-sm hover:bg-slate-900 hover:text-white transition-all active:scale-90">🖨️</button>
-                              
-                              {/* ডিলিট বাটন - শুধুমাত্র অ্যাডমিন */}
-                              {role === 'ADMIN' && (
-                                 <button 
-                                    onClick={(e) => { 
-                                       e.stopPropagation(); 
-                                       handleDeleteBooking(b.id, b.customer_name || "গ্রাহক"); 
-                                    }} 
-                                    className="w-9 h-9 bg-rose-50 text-rose-600 rounded-xl flex items-center justify-center text-lg shadow-sm hover:bg-rose-600 hover:text-white transition-all active:scale-90 border border-rose-100"
-                                 >
-                                    🗑️
-                                 </button>
-                              )}
-                              
-                              <span className="text-[9px] font-black text-slate-300">#{b.id.slice(-4).toUpperCase()}</span>
-                           </div>
-                        </div>
-                        <h4 onClick={() => { setSelectedBooking(b); setShowDetailModal(true); }} className="font-black text-slate-800 text-lg uppercase italic leading-tight truncate mb-2 group-hover:text-indigo-600 transition-colors cursor-pointer">{b.customer_name}</h4>
-                     </div>
-                     <div className="mb-8 space-y-2 px-1">
-                        <div className="flex justify-between text-[8px] font-black uppercase italic text-slate-400">
-                           <span>ডেলিভারি প্রগতি</span>
-                           <span className={isFull ? 'text-emerald-500' : 'text-indigo-500'}>{totalDelivered} / {totalOrdered} Pcs</span>
-                        </div>
-                        <div className="h-2 w-full bg-slate-100 rounded-full overflow-hidden shadow-inner">
-                           <div className={`h-full transition-all duration-1000 ${isFull ? 'bg-emerald-500' : 'bg-indigo-500'}`} style={{ width: `${deliveryPercent}%` }}></div>
-                        </div>
-                     </div>
-                     <div className="flex justify-between items-end border-t pt-6">
-                        <div>
-                           <p className="text-[8px] font-black text-slate-300 uppercase mb-1 italic">Total Bill</p>
-                           <p className="text-xl font-black italic text-slate-900 leading-none tracking-tighter">৳{safeFormat(b.total_amount)}</p>
-                        </div>
-                        <div className="text-right">
-                           <p className={`text-[8px] font-black uppercase mb-1 italic ${isExcess ? 'text-emerald-500' : 'text-rose-300'}`}>{isExcess ? 'Extra Deposit' : 'Net Pending'}</p>
-                           <p className={`text-xl font-black italic leading-none tracking-tighter ${isExcess ? 'text-emerald-600' : 'text-rose-600'}`}>৳{safeFormat(Math.abs(netBalance))}</p>
-                        </div>
-                     </div>
-                  </div>
-               );
-            })}
-         </div>
+        // Track regular purchases strictly for cross-checking if needed
+        ledgerRes.data?.forEach((l: any) => l.items_json?.forEach((it: any) => {
+          if (statsMap[it.id]) statsMap[it.id].purchased += parseAmount(it.qty || 0);
+        }));
 
-         {/* ADD BOOKING MODAL */}
-         {showAddModal && (
-            <div className="fixed inset-0 bg-slate-950/95 backdrop-blur-xl z-[4000] flex items-center justify-center p-4">
-               <div className="bg-white rounded-[4rem] w-full max-w-4xl h-[85vh] flex flex-col shadow-2xl animate-reveal overflow-hidden">
-                  <div className="p-8 bg-indigo-600 text-white flex justify-between items-center shrink-0">
-                     <div>
-                        <h3 className="text-2xl font-black uppercase italic tracking-tighter">বুকিং এন্ট্রি (Isolated)</h3>
-                        <p className="text-[9px] font-black text-white/50 uppercase tracking-widest mt-1">Step {currentStep} of 2</p>
-                     </div>
-                     <button onClick={() => setShowAddModal(false)} className="text-4xl text-white/50 hover:text-white font-black">✕</button>
-                  </div>
-                  <div className="flex-1 flex flex-col overflow-hidden bg-slate-50">
-                     {currentStep === 1 ? (
-                        <div className="flex-1 flex flex-col p-10 gap-6">
-                           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                              <select className="p-6 bg-white border border-slate-100 rounded-[2.5rem] font-black text-xs uppercase outline-none shadow-sm" value={modalAreaSelection} onChange={e => setModalAreaSelection(e.target.value)}>
-                                 <option value="">সকল এরিয়া</option>
-                                 {uniqueAreas.map(a => <option key={a} value={a}>{a}</option>)}
-                              </select>
-                              <input className="p-6 bg-white border border-slate-100 rounded-[2.5rem] font-black text-xs uppercase outline-none shadow-sm" placeholder="দোকান সার্চ..." value={custSearch} onChange={e => setCustSearch(e.target.value)} />
-                           </div>
-                           <div className="flex-1 overflow-y-auto custom-scroll space-y-3">
-                              {customers.filter(c => (!custSearch || c.name.toLowerCase().includes(custSearch.toLowerCase())) && (!modalAreaSelection || c.address === modalAreaSelection)).map(c => (
-                                 <div key={c.id} onClick={async () => { setSelectedCust(c); await fetchActiveBookingsForCustomer(c.id); setCurrentStep(2); }} className="p-3 bg-white rounded-3xl border border-slate-100 hover:border-indigo-500 shadow-sm cursor-pointer flex justify-between items-center group">
-                                    <div><h4 className="font-black text-slate-800 uppercase italic text-sm">{c.name}</h4><p className="text-[10px] font-bold text-slate-400 mt-2">📍 {c.address}</p></div>
-                                    <div className="text-xl">➔</div>
-                                 </div>
-                              ))}
-                           </div>
-                        </div>
-                     ) : (
-                        <div className="flex-1 flex flex-col overflow-hidden">
-                           <div className="bg-indigo-50 p-6 flex justify-between items-center gap-4 border-b border-indigo-100">
-                              <span className="text-[11px] font-black text-indigo-400 uppercase">সিলেক্টেড: {selectedCust.name}</span>
-                              <select className="p-3 bg-white border border-indigo-200 rounded-xl text-[10px] font-black uppercase outline-none shadow-sm" value={targetBookingId} onChange={e => setTargetBookingId(e.target.value)}>
-                                 <option value="NEW">নতুন চ্যাপ্টার</option>
-                                 {activeBookingsForCust.map(b => (<option key={b.id} value={b.id}>যোগ করুন: #{b.id.slice(-4).toUpperCase()}</option>))}
-                              </select>
-                           </div>
-                           <div className="flex-1 flex flex-col lg:flex-row overflow-hidden">
-                              <div className="w-full lg:w-1/2 p-8 border-r flex flex-col gap-6 bg-slate-50">
-                                 <input className="w-full p-4 bg-white border-2 border-slate-100 rounded-[1.5rem] font-black text-xs uppercase italic outline-none shadow-sm" placeholder="মডেল সার্চ..." value={prodSearch} onChange={e => setProdSearch(e.target.value)} />
-                                 <div className="flex-1 overflow-y-auto custom-scroll space-y-2">
-                                    {products.filter(p => p.name.toLowerCase().includes(prodSearch.toLowerCase())).map(p => (
-                                       <div key={p.id} onClick={() => { if (!bookingCart.find(i => i.product_id === p.id)) setBookingCart([...bookingCart, { product_id: p.id, name: p.name, qty: 1, unitPrice: p.tp, delivered_qty: 0 }]); }} className="p-4 bg-white rounded-[1.5rem] border border-slate-100 hover:border-indigo-400 cursor-pointer flex justify-between items-center group">
-                                          <p className="text-[10px] font-black uppercase text-slate-800 truncate pr-4">{p.name}</p>
-                                          <div className="w-8 h-8 bg-slate-50 rounded-lg flex items-center justify-center text-indigo-600 font-black">+</div>
-                                       </div>
-                                    ))}
-                                 </div>
-                              </div>
-                              <div className="w-full lg:w-1/2 p-8 bg-white flex flex-col">
-                                 <div className="flex-1 overflow-y-auto custom-scroll space-y-3 pr-2 mb-6">
-                                    {bookingCart.map((it, idx) => (
-                                       <div key={it.product_id} className="p-4 bg-slate-50 rounded-[2rem] border border-slate-100 flex items-center justify-between">
-                                          <div className="min-w-0 flex-1 pr-4">
-                                             <p className="text-[10px] font-black uppercase text-slate-800 truncate mb-1">{it.name}</p>
-                                             <input type="number" className="w-20 p-2 bg-white border rounded-lg font-black text-[10px]" value={it.unitPrice} onChange={(e) => { const n = [...bookingCart]; n[idx].unitPrice = parseAmount(e.target.value); setBookingCart(n); }} />
-                                          </div>
-                                          <div className="flex items-center bg-white rounded-xl p-1 border shadow-inner">
-                                             <button onClick={() => { const n = [...bookingCart]; n[idx].qty = Math.max(0, n[idx].qty - 1); setBookingCart(n.filter(i => i.qty > 0)); }} className="w-8 h-8 font-black text-lg text-slate-300">-</button>
-                                             <span className="w-10 text-center font-black text-sm">{it.qty}</span>
-                                             <button onClick={() => { const n = [...bookingCart]; n[idx].qty++; setBookingCart(n); }} className="w-8 h-8 font-black text-lg text-slate-300">+</button>
-                                          </div>
-                                       </div>
-                                    ))}
-                                 </div>
-                                 <div className="space-y-6 pt-6 border-t border-slate-100">
-                                    <div className="grid grid-cols-2 gap-4">
-                                       <input type="number" className="w-full p-4 bg-emerald-50 text-emerald-600 rounded-2xl font-black text-lg text-center outline-none border" placeholder="Cash" value={form.advance} onChange={e => setForm({ ...form, advance: parseAmount(e.target.value) })} />
-                                       <input type="number" className="w-full p-4 bg-blue-50 text-blue-600 rounded-2xl font-black text-lg text-center outline-none border" placeholder="Bank" value={form.bank_deposit} onChange={e => setForm({ ...form, bank_deposit: parseAmount(e.target.value) })} />
-                                    </div>
-                                    <button disabled={isSaving || bookingCart.length === 0} onClick={handleAddBooking} className="w-full bg-indigo-600 text-white py-6 rounded-[2.5rem] font-black uppercase text-xs tracking-[0.3em] shadow-xl">বুকিং সেভ করুন ➔</button>
-                                 </div>
-                              </div>
-                           </div>
-                        </div>
-                     )}
-                  </div>
-               </div>
-            </div>
-         )}
+        // Track sales from Transactions (POS Sales)
+        txRes.data?.forEach((tx: any) => tx.items?.forEach((it: any) => {
+          if (statsMap[it.id]) {
+            if (it.action === 'SALE' || !it.action) statsMap[it.id].sold += parseAmount(it.qty || 0);
+            if (it.action === 'RETURN') statsMap[it.id].returned += parseAmount(it.qty || 0);
+          }
+        }));
 
-         {/* DETAIL MODAL */}
-         {showDetailModal && selectedBooking && (
-            <div className="fixed inset-0 bg-slate-950/95 backdrop-blur-xl z-[5000] flex flex-col items-center p-4 overflow-y-auto no-print">
-               <div className="w-full max-w-4xl flex justify-between items-center mb-6 sticky top-0 z-[5001] bg-slate-900/90 p-6 rounded-[2rem] border border-white/10 shadow-2xl">
-                  <button onClick={() => setShowDetailModal(false)} className="text-white font-black uppercase text-[10px] px-6 transition-colors hover:text-indigo-400">← ফিরে যান</button>
-                  <button disabled={isSaving} onClick={handleUpdateBookingStats} className="bg-emerald-600 text-white px-10 py-4 rounded-xl font-black text-[10px] uppercase shadow-xl transition-all hover:bg-emerald-700">সব আপডেট সেভ করুন ✓</button>
-               </div>
+        // Track sales from Bookings (Wholesale Deliveries)
+        bookRes.data?.forEach((b: any) => b.items?.forEach((it: any) => {
+          if (statsMap[it.id]) {
+            statsMap[it.id].sold += parseAmount(it.delivered_qty || 0);
+          }
+        }));
 
-               <div className="bg-white rounded-[3rem] w-full max-w-4xl shadow-2xl overflow-hidden flex flex-col mb-20 border-[6px] border-slate-100">
-                  <div ref={invoiceRef} className="p-10 md:p-14 bg-white text-black min-h-fit">
-                     <div className="text-center border-b-4 border-black pb-8 mb-10">
-                        <h1 className="text-4xl font-black uppercase italic tracking-tighter leading-none mb-1 text-indigo-600">IFZA ELECTRONICS</h1>
-                        <p className="text-lg font-black uppercase tracking-[0.4em] mb-4 text-black">{company} DIVISION • BOOKING PORTAL</p>
-                        <div className="inline-block px-10 py-2 bg-black text-white text-[11px] font-black uppercase rounded-full italic">Booking Sector - Isolated Tracking</div>
-                     </div>
-                     <div className="flex flex-col md:flex-row justify-between items-start gap-10 mb-12">
-                        <div className="space-y-3 flex-1">
-                           <p className="text-3xl font-black uppercase italic leading-none">{selectedBooking.customer_name}</p>
-                           <p className="text-[14px] font-bold mt-2">📍 {selectedBooking.customer_address} | 📱 {selectedBooking.customer_phone}</p>
-                        </div>
-                        <div className="text-right space-y-2 w-72 shrink-0">
-                           <p className="flex justify-between font-black text-[16px] text-slate-400 border-b pb-2"><span>বুকিং বিল:</span> <span>৳{parseAmount(selectedBooking.total_amount).toLocaleString()}</span></p>
-                           <p className="flex justify-between font-black text-[16px] text-emerald-600"><span>বর্তমানে জমা:</span> <span>৳{parseAmount(selectedBooking.advance_amount).toLocaleString()}</span></p>
-                           <p className="flex justify-between font-black text-[24px] text-rose-600 border-t-4 border-black pt-3 italic tracking-tighter leading-none mt-2">
-                              <span>নিট বকেয়া:</span> <span>৳{(parseAmount(selectedBooking.total_amount) - parseAmount(selectedBooking.advance_amount)).toLocaleString()}</span>
-                           </p>
-                        </div>
-                     </div>
-                     <div className="mt-4 mb-10 border-[3px] border-black p-6 rounded-[2rem] bg-indigo-50 flex flex-col md:flex-row justify-between items-center gap-6 shadow-sm no-print">
-                        <div className="flex flex-col text-center md:text-left">
-                           <h3 className="text-[14px] font-black uppercase italic tracking-wider text-indigo-900 border-b-2 border-indigo-200 w-fit">পুরো স্লিপ (Unified Delivery Slip)</h3>
-                           <p className="text-[9px] font-bold text-indigo-400 uppercase mt-2">সবগুলো আইটেম এবং আর্থিক হিসেব একসাথে প্রিন্ট করতে এখানে ক্লিক করুন</p>
-                        </div>
-                        <button
-                           onClick={() => {
-                              setSelectedSlipData({ ...selectedBooking, today_delivery_map: deliveryUpdates });
-                              setShowSlipModal(true);
-                           }}
-                           className="w-full md:w-auto bg-slate-900 text-white px-12 py-5 rounded-2xl font-black uppercase text-[12px] tracking-widest hover:bg-slate-700 transition-all shadow-2xl border-b-4 border-black"
-                        >
-                           পুরো স্লিপ প্রিন্ট 🖨️
-                        </button>
-                     </div>
-                     <div className="flex-1 overflow-x-auto">
-                        <table className="w-full border-collapse border-2 border-black">
-                           <thead>
-                              <tr className="bg-slate-100 text-[11px] font-black uppercase italic border-b-2 border-black">
-                                 <th className="p-4 text-left border-r border-black">পণ্যের নাম</th>
-                                 <th className="p-4 text-center border-r border-black w-24">মোট অর্ডার</th>
-                                 <th className="p-4 text-center border-r border-black w-20 text-blue-600">গেছে (Delv)</th>
-                                 <th className="p-4 text-center border-r border-black w-20 text-rose-600">বাকি (Bal)</th>
-                                 <th className="p-4 text-right border-r border-black w-28">মোট বিল</th>
-                              </tr>
-                           </thead>
-                           <tbody className="text-[14px] font-bold italic">
-                              {selectedBooking.items.map((it) => {
-                                 const currentQty = orderQtyUpdates[it.id] !== undefined ? orderQtyUpdates[it.id] : it.qty;
-                                 return (
-                                    <tr key={it.id} className="border-b border-black/30">
-                                       <td className="p-4 border-r border-black/30 uppercase">{it.name}</td>
-                                       <td className="p-4 border-r border-black/30 text-center">
-                                          <div className="flex items-center justify-center gap-3 no-print">
-                                             <button onClick={() => setOrderQtyUpdates({ ...orderQtyUpdates, [it.id]: Math.max(it.delivered_qty || 0, currentQty - 1) })} className="w-8 h-8 bg-slate-100 rounded-lg">-</button>
-                                             <span className="font-black">{currentQty}</span>
-                                             <button onClick={() => setOrderQtyUpdates({ ...orderQtyUpdates, [it.id]: currentQty + 1 })} className="w-8 h-8 bg-slate-100 rounded-lg">+</button>
-                                          </div>
-                                          <span className="only-print">{currentQty}</span>
-                                       </td>
-                                       <td className="p-4 text-center border-r border-black/30 text-blue-600 font-black">{it.delivered_qty}</td>
-                                       <td className="p-4 text-center border-r border-black/30 text-rose-600 font-black">{currentQty - (it.delivered_qty || 0)}</td>
-                                       <td className="p-4 text-right border-r border-black/30">৳{(currentQty * it.unitPrice).toLocaleString()}</td>
-                                    </tr>
-                                 );
-                              })}
-                           </tbody>
-                        </table>
-                     </div>
-                  </div>
-                  <div className="bg-slate-900 p-8 border-t-2 border-white/10 no-print">
-                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                        <div className="space-y-4">
-                           <p className="text-[9px] font-black text-indigo-400 uppercase italic">১. মাল ডেলিভারি এন্ট্রি (গেছে)</p>
-                           {selectedBooking.items.map(it => {
-                              const currentQty = orderQtyUpdates[it.id] !== undefined ? orderQtyUpdates[it.id] : it.qty;
-                              const currentDelivery = deliveryUpdates[it.id] || 0;
-                              return (
-                                 <div key={it.id} className="bg-white/5 p-3 rounded-xl flex justify-between items-center border border-white/5">
-                                    <div className="flex flex-col truncate pr-4">
-                                       <span className="text-[9px] font-bold text-white uppercase truncate">{it.name}</span>
-                                       <span className="text-[7px] font-black text-rose-400 uppercase italic">বাকি: {currentQty - (it.delivered_qty || 0)}</span>
-                                    </div>
-                                    <div className="flex items-center gap-3 bg-black/40 p-1 rounded-lg">
-                                       <button onClick={() => setDeliveryUpdates({ ...deliveryUpdates, [it.id]: Math.max(0, currentDelivery - 1) })} className="w-7 h-7 text-white">-</button>
-                                       <span className="text-white text-xs font-black w-5 text-center">{currentDelivery}</span>
-                                       <button onClick={() => { if (currentDelivery + (it.delivered_qty || 0) < currentQty) setDeliveryUpdates({ ...deliveryUpdates, [it.id]: currentDelivery + 1 }); }} className="w-7 h-7 text-white">+</button>
-                                    </div>
-                                 </div>
-                              )
-                           })}
-                        </div>
-                        <div className="space-y-4">
-                           <p className="text-[9px] font-black text-emerald-400 uppercase italic">২. নতুন জমা এন্ট্রি (দোকান থেকে)</p>
-                           <input type="number" className="w-full p-6 bg-emerald-500/5 text-emerald-400 border border-emerald-500/20 rounded-2xl text-center text-3xl font-black outline-none" placeholder="0.00" value={newCashAmt} onChange={e => setNewCashAmt(e.target.value)} />
-                        </div>
-                        <div className="flex flex-col justify-center items-center p-8 bg-white/5 rounded-[2.5rem] border border-white/5 text-center">
-                           <p className="text-[10px] font-black text-blue-400 uppercase tracking-widest mb-4 italic">Dealer Actions</p>
-                           <button onClick={() => handleCompanySettlement(selectedBooking)} className="bg-blue-600 text-white px-8 py-4 rounded-2xl font-black uppercase text-[9px] tracking-widest shadow-xl transition-all">🏦 টাকা কোম্পানিকে দিন</button>
-                        </div>
-                     </div>
-                  </div>
-               </div>
-            </div>
-         )}
+        // Track warranty replacements
+        replRes.data?.forEach((rp: any) => {
+          if (statsMap[rp.product_id]) statsMap[rp.product_id].replaced += parseAmount(rp.qty || 0);
+        });
 
-         {/* SLIP MODAL */}
-         {showSlipModal && selectedSlipData && (
-            <div className="fixed inset-0 bg-slate-950/95 backdrop-blur-xl z-[6000] flex flex-col items-center p-4 overflow-y-auto no-print">
-               <div className="w-full max-w-[148mm] flex justify-between gap-6 mb-8 sticky top-0 z-[6001] bg-slate-900/90 p-6 rounded-3xl border border-white/10 shadow-2xl items-center">
-                  <button onClick={() => setShowSlipModal(false)} className="text-white font-black uppercase text-[10px] px-6">← ফিরে যান</button>
-                  <button disabled={isDownloading} onClick={() => handleDownloadPDF(slipRef, 'Booking_Slip')} className="bg-emerald-600 text-white px-10 py-4 rounded-xl font-black text-[10px] uppercase shadow-xl">স্লিপ ⬇</button>
-               </div>
-               <div ref={slipRef} className="bg-white mx-auto w-[140mm] p-6 flex flex-col font-sans text-black shadow-2xl border-[3px] border-black">
-                  <div className="text-center mb-4 border-b-4 border-black pb-3">
-                     <h1 className="text-[28px] font-black uppercase italic tracking-tighter leading-none mb-1">IFZA ELECTRONICS</h1>
-                     <p className="text-lg font-black uppercase italic">{company} DIVISION</p>
-                     <div className="mt-1 inline-block px-6 py-0.5 bg-black text-white text-[8px] font-black uppercase rounded-full italic">DELIVERY CHALLAN</div>
-                  </div>
-                  <div className="flex justify-between items-start mb-6 text-[10px] font-bold">
-                     <div>
-                        <p className="text-[8px] font-black border-b border-black w-fit mb-1 uppercase opacity-60">Customer:</p>
-                        <p className="text-xl font-black uppercase italic leading-none">{selectedSlipData.customer_name}</p>
-                        <p className="text-[11px] font-bold mt-1">📍 {selectedSlipData.address || selectedBooking?.customer_address}</p>
-                     </div>
-                     <div className="text-right">
-                        <p className="text-[11px] font-black">ID: #{String(selectedSlipData.booking_id || 'N/A').slice(-6).toUpperCase()}</p>
-                        <p className="text-[11px] font-black">Date: {new Date().toLocaleDateString('bn-BD')}</p>
-                     </div>
-                  </div>
-                  <table className="w-full border-collapse border-2 border-black">
-                     <thead>
-                        <tr className="bg-black text-white text-[10px] font-black uppercase italic">
-                           <th className="p-2 text-left border border-black">Description</th>
-                           <th className="p-2 text-center border border-black w-20">Order</th>
-                           <th className="p-2 text-center border border-black w-20">Prev</th>
-                           <th className="p-2 text-center border border-black w-20 bg-blue-600">Today</th>
-                           <th className="p-2 text-center border border-black w-20">Bal</th>
-                        </tr>
-                     </thead>
-                     <tbody>
-                        {(selectedSlipData.items || []).map((item: any, idx: number) => {
-                           const todayDelivery = (selectedSlipData.today_delivery_map && selectedSlipData.today_delivery_map[item.id]) || 0;
-                           return (
-                              <tr key={idx} className="border-b border-black text-[13px] font-black italic">
-                                 <td className="p-2 uppercase border-r border-black">{item.name}</td>
-                                 <td className="p-2 text-right border-r border-black">{item.qty}</td>
-                                 <td className="p-2 text-right border-r border-black">{item.delivered_qty}</td>
-                                 <td className="p-2 text-right border-r border-black bg-blue-50 text-blue-600">{todayDelivery}</td>
-                                 <td className="p-2 text-right text-rose-600">{item.qty - (item.delivered_qty || 0) - todayDelivery}</td>
-                              </tr>
-                           );
-                        })}
-                     </tbody>
-                  </table>
-                  <div className="mt-8 flex justify-end">
-                     <div className="w-1/2 space-y-2 border-2 border-black p-4">
-                        <div className="flex justify-between text-[12px] font-black border-b border-black pb-1"><span>TOTAL BILL:</span><span>৳{parseAmount(selectedSlipData.total_amount).toLocaleString()}</span></div>
-                        <div className="flex justify-between text-[12px] font-black border-b border-black pb-1"><span>TOTAL PAID:</span><span>৳{parseAmount(selectedSlipData.advance_amount).toLocaleString()}</span></div>
-                        <div className="flex justify-between text-[16px] font-black"><span>NET PENDING:</span><span className="text-rose-600">৳{Math.abs(parseAmount(selectedSlipData.total_amount) - parseAmount(selectedSlipData.advance_amount)).toLocaleString()}</span></div>
-                     </div>
-                  </div>
-                  <div className="mt-20 flex justify-between items-end px-4 mb-4">
-                     <div className="text-center w-40 border-t-2 border-black pt-2 font-black italic text-[12px]">Buyer Sign</div>
-                     <div className="text-center w-40 border-t-2 border-black pt-2 text-right font-black uppercase italic text-[14px]">Authority</div>
-                  </div>
-               </div>
-            </div>
-         )}
+        setReportData(productsList.map((p: Product) => {
+          const map = statsMap[p.id];
+          // Determine true historical "purchased" by reverse calculating from the true current DB stock
+          // Equation: stock = purchased - sold - replaced + returned
+          // Therfore: purchased = stock + sold + replaced - returned
+          const dynamicPurchased = parseAmount(p.stock) + map.sold + map.replaced - map.returned;
+
+          return {
+            ...p,
+            ...map,
+            purchased: dynamicPurchased > 0 ? dynamicPurchased : map.purchased,
+            current_stock: p.stock
+          };
+        }));
+      }
+      else if (type === 'DELIVERY_LOG_A4') {
+        const start = `${selectedDate}T00:00:00.000Z`;
+        const end = `${selectedDate}T23:59:59.999Z`;
+        const { data } = await supabase
+          .from('transactions')
+          .select('*, customers(name, address)')
+          .eq('payment_type', 'DUE')
+          .gte('created_at', start)
+          .lte('created_at', end)
+          .order('created_at', { ascending: true });
+        setReportData(data || []);
+      }
+      else if (type === 'COLLECTION_REPORT') {
+        const start = `${selectedDate}T00:00:00.000Z`;
+        const end = `${selectedDate}T23:59:59.999Z`;
+        const { data } = await supabase
+          .from('transactions')
+          .select('*, customers(name)')
+          .eq('payment_type', 'COLLECTION')
+          .eq('company', dbCompany)
+          .gte('created_at', start)
+          .lte('created_at', end)
+          .order('created_at', { ascending: false });
+        setReportData(data || []);
+      }
+      else if (type === 'BOOKING_LOG') {
+        const { data } = await supabase
+          .from('bookings')
+          .select('*, customers(name, address, phone)')
+          .eq('company', dbCompany)
+          .order('created_at', { ascending: false });
+
+        const flattened: any[] = [];
+        data?.forEach((b: any) => {
+          const totalOrd = b.items?.reduce((s: number, i: any) => s + parseAmount(i.qty || 0), 0) || 0;
+          const totalDel = b.items?.reduce((s: number, i: any) => s + parseAmount(i.delivered_qty || 0), 0) || 0;
+
+            if (!b.items || b.items.length === 0) {
+            flattened.push({
+              ...b,
+              is_first_of_booking: true,
+              item_id: 'no-item',
+              item_name: 'No Items Found',
+              item_price: 0,
+              item_ord: 0,
+              item_del: 0,
+              item_rem: 0,
+              item_rem_val: 0,
+              booking_total: parseAmount(b.total_amount || 0),
+              booking_advance: parseAmount(b.advance_amount || 0)
+            });
+          } else {
+            b.items.forEach((it: any, idx: number) => {
+              const rem = Math.max(0, parseAmount(it.qty || 0) - parseAmount(it.delivered_qty || 0));
+              flattened.push({
+                ...b,
+                is_first_of_booking: idx === 0,
+                item_id: it.id,
+                item_name: it.name,
+                item_price: parseAmount(it.unitPrice || 0),
+                item_ord: parseAmount(it.qty || 0),
+                item_del: parseAmount(it.delivered_qty || 0),
+                item_rem: rem,
+                item_rem_val: rem * parseAmount(it.unitPrice || 0),
+                booking_total: parseAmount(b.total_amount || 0),
+                booking_advance: parseAmount(b.advance_amount || 0)
+              });
+            });
+          }
+        });
+        setReportData(flattened);
+      }
+      else if (type === 'PURCHASE_HISTORY') {
+        const { data } = await supabase
+          .from('company_ledger')
+          .select('*')
+          .eq('company', dbCompany)
+          .eq('type', 'PURCHASE')
+          .order('date', { ascending: false });
+        setReportData(data || []);
+      }
+      else if (type === 'CUSTOMER_DUES') {
+        const { data: custs } = await supabase.from('customers').select('*').order('name');
+        
+        let allTx: any[] = [];
+        let page = 0;
+        while (true) {
+          const { data: txData } = await supabase.from('transactions')
+            .select('customer_id, amount, payment_type, company, meta, items')
+            .eq('company', dbCompany)
+            .range(page * 1000, (page + 1) * 1000 - 1);
+          
+          if (txData) allTx = allTx.concat(txData);
+          if (!txData || txData.length < 1000) break;
+          page++;
+        }
+
+        const dues: Record<string, number> = {};
+        allTx.forEach((tx: any) => {
+          const cid = tx.customer_id;
+          if (!dues[cid]) dues[cid] = 0;
+          const amt = parseAmount(tx.amount || 0);
+          const isBooking = tx.meta?.is_booking === true || tx.items?.[0]?.note?.includes('বুকিং');
+          
+          if (tx.payment_type === 'DUE') {
+            dues[cid] += amt;
+          } else if (tx.payment_type === 'COLLECTION' && !isBooking) {
+            dues[cid] -= amt;
+          }
+        });
+        
+        const finalData = custs?.map((c: any) => ({ ...c, balance: dues[c.id] || 0 })).filter((c: any) => Math.abs(c.balance) > 1) || [];
+        
+        // Sort by address then name using localeCompare for proper Bengali support
+        finalData.sort((a: any, b: any) => {
+          const addrA = (a.address || '').trim();
+          const addrB = (b.address || '').trim();
+          const addrCmp = addrA.localeCompare(addrB, 'bn');
+          if (addrCmp !== 0) return addrCmp;
+          
+          const nameA = (a.name || '').trim();
+          const nameB = (b.name || '').trim();
+          return nameA.localeCompare(nameB, 'bn');
+        });
+
+        setReportData(finalData);
+      }
+      else if (type === 'CUSTOMER_LEDGER') {
+        if (!selectedCustomerId) {
+          setReportData([]);
+          return;
+        }
+        const { data } = await supabase
+          .from('transactions')
+          .select('*, customers(name, address)')
+          .eq('customer_id', selectedCustomerId)
+          .eq('company', dbCompany)
+          .order('created_at', { ascending: true });
+        
+        let balance = 0;
+        const processed = data?.map(tx => {
+          const amt = parseAmount(tx.amount);
+          if (tx.payment_type === 'COLLECTION') {
+            balance -= amt;
+          } else {
+            balance += amt;
+          }
+          return { ...tx, runningBalance: balance };
+        });
+        setReportData(processed || []);
+      }
+      else if (type === 'COMPANY_SALES') {
+        const [{ data: cos }, { data: txs }] = await Promise.all([
+          supabase.from('companies').select('*').order('name'),
+          supabase.from('transactions').select('company, amount, payment_type, meta')
+        ]);
+
+        const salesMap: Record<string, number> = {};
+        const commissionMap: Record<string, number> = {};
+        const collectionMap: Record<string, number> = {};
+        const myEarningsMap: Record<string, number> = {};
+        
+        let totalSalesAll = 0;
+        let totalCommAll = 0;
+        let totalCollAll = 0;
+        let totalMyEarnAll = 0;
+
+        const myCommRates: Record<string, number> = {
+          'SQ Light': 0.08,
+          'Transtec': 0.07,
+          'SQ Cables': 0.02
+        };
+
+        txs?.forEach((tx: any) => {
+          const co = tx.company || 'Unknown';
+          const amt = parseAmount(tx.amount || 0);
+          
+          if (tx.payment_type === 'COLLECTION') {
+            collectionMap[co] = (collectionMap[co] || 0) + amt;
+            totalCollAll += amt;
+          } else {
+            salesMap[co] = (salesMap[co] || 0) + amt;
+            totalSalesAll += amt;
+            
+            const comm = parseAmount(tx.meta?.total_commission || 0);
+            commissionMap[co] = (commissionMap[co] || 0) + comm;
+            totalCommAll += comm;
+
+            const rate = myCommRates[co] || 0;
+            const earn = amt * rate;
+            myEarningsMap[co] = (myEarningsMap[co] || 0) + earn;
+            totalMyEarnAll += earn;
+          }
+        });
+
+        const rows = cos?.map((c: any) => {
+          const sales = salesMap[c.name] || 0;
+          return {
+            name: c.name,
+            sales: sales,
+            commission: commissionMap[c.name] || 0,
+            collection: collectionMap[c.name] || 0,
+            myEarnings: myEarningsMap[c.name] || 0,
+            percentage: totalSalesAll > 0 ? (sales / totalSalesAll) * 100 : 0,
+            grandTotalSales: totalSalesAll,
+            grandTotalComm: totalCommAll,
+            grandTotalColl: totalCollAll,
+            grandTotalMyEarn: totalMyEarnAll
+          };
+        }) || [];
+
+        setReportData(rows);
+      }
+      else if (type === 'PRODUCT_SALES_REPORT') {
+        const weekStart = new Date();
+        weekStart.setDate(weekStart.getDate() - 7);
+        const weekStartISO = weekStart.toISOString();
+
+        const [prodRes, txRes, bookRes, replRes] = await Promise.all([
+          supabase.from('products').select('*').eq('company', dbCompany).order('name'),
+          supabase.from('transactions').select('items, payment_type, created_at').eq('company', dbCompany),
+          supabase.from('bookings').select('items, created_at').eq('company', dbCompany),
+          supabase.from('replacements').select('product_id, qty, created_at').eq('company', dbCompany)
+        ]);
+
+        const productsList = prodRes.data || [];
+        const statsMap: Record<string, any> = {};
+
+        productsList.forEach((p: Product) => {
+          statsMap[p.id] = { 
+            pos_total: 0, book_total: 0, repl_total: 0,
+            pos_week: 0, book_week: 0, repl_week: 0,
+            total_sold: 0, total_value: 0 
+          };
+        });
+
+        txRes.data?.forEach((tx: any) => tx.items?.forEach((it: any) => {
+          const pid = it.id || it.product_id;
+          if (statsMap[pid]) {
+            const qty = parseAmount(it.qty || 0);
+            const val = qty * parseAmount(it.tp || it.price || 0); 
+            const isWeekly = tx.created_at >= weekStartISO;
+
+            if (it.action === 'SALE' || !it.action) {
+              statsMap[pid].pos_total += qty;
+              statsMap[pid].total_sold += qty;
+              statsMap[pid].total_value += val;
+              if (isWeekly) statsMap[pid].pos_week += qty;
+            } else if (it.action === 'RETURN') {
+              statsMap[pid].pos_total -= qty;
+              statsMap[pid].total_sold -= qty;
+              statsMap[pid].total_value -= val;
+              if (isWeekly) statsMap[pid].pos_week -= qty;
+            }
+          }
+        }));
+
+        bookRes.data?.forEach((b: any) => b.items?.forEach((it: any) => {
+          const pid = it.product_id || it.id;
+          if (statsMap[pid]) {
+            const qty = parseAmount(it.delivered_qty);
+            const val = qty * parseAmount(it.unitPrice);
+            const isWeekly = b.created_at >= weekStartISO;
+
+            statsMap[pid].book_total += qty;
+            statsMap[pid].total_sold += qty;
+            statsMap[pid].total_value += val;
+            if (isWeekly) statsMap[pid].book_week += qty;
+          }
+        }));
+
+        replRes.data?.forEach((rp: any) => {
+          const pid = rp.product_id;
+          if (statsMap[pid]) {
+            const qty = parseAmount(rp.qty);
+            const isWeekly = rp.created_at >= weekStartISO;
+            statsMap[pid].repl_total += qty;
+            if (isWeekly) statsMap[pid].repl_week += qty;
+          }
+        });
+
+        setReportData(productsList.map((p: Product) => {
+          const s = statsMap[p.id];
+          return {
+            ...p,
+            ...s,
+            total_gross: (s.total_sold || 0) + (s.repl_total || 0)
+          };
+        }).filter(p => p.total_sold !== 0 || p.repl_total !== 0));
+      }
+      else if (type === 'TOP_CUSTOMERS') {
+        const { data: custs } = await supabase.from('customers').select('*');
+        let allTx: any[] = [];
+        let page = 0;
+        while (true) {
+          const { data: txData } = await supabase.from('transactions')
+            .select('customer_id, amount, payment_type, company')
+            .eq('company', dbCompany)
+            .range(page * 1000, (page + 1) * 1000 - 1);
+          
+          if (txData) allTx = allTx.concat(txData);
+          if (!txData || txData.length < 1000) break;
+          page++;
+        }
+
+        const salesMap: Record<string, number> = {};
+        allTx.forEach((tx: any) => {
+          if (tx.payment_type === 'DUE') {
+            const cid = tx.customer_id;
+            salesMap[cid] = (salesMap[cid] || 0) + parseAmount(tx.amount || 0);
+          }
+        });
+
+        const ranked = (custs || []).map(c => ({
+          ...c,
+          total_sales: salesMap[c.id] || 0
+        })).filter(c => c.total_sales > 0).sort((a, b) => b.total_sales - a.total_sales);
+
+        setReportData(ranked.slice(0, 10));
+      }
+    } catch (err) { console.error("Report Fetch Error:", err); } finally { setLoading(false); }
+  };
+
+  const handleDownloadPDF = async (ref: React.RefObject<HTMLDivElement | null>, filename: string) => {
+    if (!ref.current || isDownloading) return;
+    setIsDownloading(true);
+
+    // Prevent cropping on mobile/small screens by making wrapper temporarily visible
+    const parent = ref.current.parentElement;
+    const parentOverflow = parent ? parent.style.overflowX : '';
+    if (parent) parent.style.overflowX = 'visible';
+
+    try {
+      const element = ref.current;
+      const canvas = await html2canvas(element, {
+        scale: 2,
+        useCORS: true,
+        backgroundColor: '#ffffff',
+        logging: false
+      });
+      const imgData = canvas.toDataURL('image/jpeg', 0.95);
+
+      // A4 dimensions in mm
+      const pageWidth = 210;
+      const pageHeight = 297;
+      const margin = 10;
+      const contentWidth = pageWidth - (2 * margin);
+
+      // Calculate number of pages needed
+      const imgWidth = contentWidth;
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+      const pageHeightUsable = pageHeight - (2 * margin);
+      const numPages = Math.ceil(imgHeight / pageHeightUsable);
+
+      // Create PDF with proper A4 size
+      const pdf = new jsPDF('p', 'mm', 'a4');
+
+      for (let i = 0; i < numPages; i++) {
+        const sourceY = (i * pageHeightUsable * canvas.height) / imgHeight;
+        const sourceHeight = Math.min(pageHeightUsable * canvas.height / imgHeight, canvas.height - sourceY);
+
+        const croppedCanvas = document.createElement('canvas');
+        croppedCanvas.width = canvas.width;
+        croppedCanvas.height = sourceHeight;
+        const ctx = croppedCanvas.getContext('2d');
+        if (ctx) {
+          ctx.drawImage(canvas, 0, sourceY, canvas.width, sourceHeight, 0, 0, canvas.width, sourceHeight);
+          const croppedImgData = croppedCanvas.toDataURL('image/jpeg', 0.95);
+
+          pdf.addImage(croppedImgData, 'JPEG', margin, margin, imgWidth, (sourceHeight * imgWidth) / canvas.width);
+
+          if (i < numPages - 1) {
+            pdf.addPage();
+          }
+        }
+      }
+
+      pdf.save(`${filename}_${new Date().getTime()}.pdf`);
+    } catch (err) {
+      console.error("PDF Generation Error:", err);
+      alert("PDF ডাউনলোড ব্যর্থ হয়েছে: " + (err instanceof Error ? err.message : 'Unknown error'));
+    } finally {
+      if (parent) parent.style.overflowX = parentOverflow;
+      setIsDownloading(false);
+    }
+  };
+
+  const downloadMemoPDF = async () => {
+    if (!memoRef.current || isDownloading) return;
+    setIsDownloading(true);
+    try {
+      const canvas = await html2canvas(memoRef.current, { 
+        scale: 3, 
+        useCORS: true, 
+        backgroundColor: '#ffffff' 
+      });
+      const imgData = canvas.toDataURL('image/jpeg', 0.95);
+      const pdf = new jsPDF('p', 'mm', 'a5');
+
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pdfHeight = pdf.internal.pageSize.getHeight();
+      const imgHeight = (canvas.height * pdfWidth) / canvas.width;
+
+      let heightLeft = imgHeight;
+      let position = 0;
+
+      // Add first page
+      pdf.addImage(imgData, 'JPEG', 0, position, pdfWidth, imgHeight);
+      heightLeft -= pdfHeight;
+
+      // Add subsequent pages if needed
+      while (heightLeft > 0) {
+        position = heightLeft - imgHeight;
+        pdf.addPage();
+        pdf.addImage(imgData, 'JPEG', 0, position, pdfWidth, imgHeight);
+        heightLeft -= pdfHeight;
+      }
+
+      pdf.save(`Old_Memo_${selectedMemo?.customers?.name || 'Unknown'}_${new Date().toLocaleDateString('bn-BD')}.pdf`);
+    } catch (e) { 
+      alert("PDF তৈরি করা যায়নি।"); 
+    } finally { 
+      setIsDownloading(false); 
+    }
+  };
+
+  const filteredData = useMemo(() => {
+    const q = searchQuery.toLowerCase().trim();
+    return reportData.filter((item: any) => {
+      if (!item) return false;
+      const name = (item.name || item.customers?.name || item.item_name || item.note || "").toLowerCase();
+      return !q || name.includes(q);
+    });
+  }, [reportData, searchQuery]);
+
+  const summary = useMemo(() => {
+    if (activeReport === 'BOOKING_LOG') {
+      return {
+        totalRemQty: filteredData.reduce((s: number, i: any) => s + parseAmount(i.item_rem || 0), 0),
+        totalRemVal: filteredData.reduce((s: number, i: any) => s + parseAmount(i.item_rem_val || 0), 0)
+      };
+    }
+    if (activeReport === 'STOCK_REPORT') {
+      return {
+        totalRemQty: filteredData.reduce((s: number, i: any) => s + parseAmount(i.current_stock || 0), 0),
+        totalRemVal: filteredData.reduce((s: number, i: any) => s + (parseAmount(i.current_stock || 0) * parseAmount(i.tp || 0)), 0)
+      };
+    }
+    if (activeReport === 'CUSTOMER_DUES') {
+      return { 
+        totalRemQty: 0, 
+        totalRemVal: filteredData.reduce((s: number, i: any) => {
+          const bal = parseAmount(i.balance || 0);
+          return s + (bal > 0 ? bal : 0);
+        }, 0) 
+      };
+    }
+    if (activeReport === 'COMPANY_SALES') {
+      return {
+        totalRemQty: 0,
+        totalRemVal: filteredData.length > 0 ? filteredData[0].grandTotalSales : 0,
+        totalComm: filteredData.length > 0 ? filteredData[0].grandTotalComm : 0,
+        totalColl: filteredData.length > 0 ? filteredData[0].grandTotalColl : 0,
+        totalMyEarn: filteredData.length > 0 ? filteredData[0].grandTotalMyEarn : 0
+      };
+    }
+    if (activeReport === 'PRODUCT_SALES_REPORT') {
+      return {
+        totalPosSold: filteredData.reduce((s: number, i: any) => s + parseAmount(i.pos_total || 0), 0),
+        totalBookingSold: filteredData.reduce((s: number, i: any) => s + parseAmount(i.book_total || 0), 0),
+        totalRepl: filteredData.reduce((s: number, i: any) => s + parseAmount(i.repl_total || 0), 0),
+        totalGross: filteredData.reduce((s: number, i: any) => s + parseAmount(i.total_gross || 0), 0),
+        totalRemQty: filteredData.reduce((s: number, i: any) => s + parseAmount(i.total_sold || 0), 0),
+        totalRemVal: filteredData.reduce((s: number, i: any) => s + parseAmount(i.total_value || 0), 0)
+      };
+    }
+    if (activeReport === 'TOP_CUSTOMERS') {
+      return { totalRemQty: 0, totalRemVal: filteredData.reduce((s: number, i: any) => s + parseAmount(i.total_sales || 0), 0) };
+    }
+    return {
+      totalRemQty: 0,
+      totalRemVal: filteredData.reduce((s: number, i: any) => s + parseAmount(i.amount || 0), 0)
+    };
+  }, [filteredData, activeReport]);
+
+  if (activeReport === 'MAIN') {
+    const reportOptions = [
+      { id: 'BOOKING_LOG', title: 'BOOKING MASTER', icon: '📅', desc: 'বাকি মাল ও আইটেম লিস্ট' },
+      { id: 'COLLECTION_REPORT', title: 'COLLECTION LOG', icon: '💰', desc: 'আজকের নগদ কালেকশন' },
+      { id: 'STOCK_REPORT', title: 'STOCK LIST', icon: '📦', desc: 'ইনভেন্টরি লেজার' },
+      { id: 'DELIVERY_LOG_A4', title: 'DELIVERY SHEET', icon: '🚚', desc: 'প্রতিদিনের ডেলিভারি শিট' },
+      { id: 'PURCHASE_HISTORY', title: 'PURCHASE LOG', icon: '📒', desc: 'কোম্পানি ক্রয় হিসাব' },
+      { id: 'CUSTOMER_DUES', title: 'DUE REPORT', icon: '💸', desc: 'মার্কেট বকেয়া' },
+      { id: 'CUSTOMER_LEDGER', title: 'SHOP LEDGER', icon: '📜', desc: 'দোকানদার লেজার রিপোর্ট' },
+      { id: 'COMPANY_SALES', title: 'COMPANY SALES', icon: '📊', desc: 'সব কোম্পানির সেলস রিপোর্ট' },
+      { id: 'PRODUCT_SALES_REPORT', title: 'ITEM SALES', icon: '📈', desc: 'পণ্য বিক্রয় রিপোর্ট' },
+      { id: 'TOP_CUSTOMERS', title: 'TOP 10 RANKING', icon: '🏆', desc: 'বেস্ট কাস্টমার র‍্যাংকিং' }
+    ];
+
+    return (
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 pb-32">
+        {reportOptions.map((item: { id: string; title: string; icon: string; desc: string }) => (
+          <div key={item.id} onClick={() => setActiveReport(item.id as ReportType)} className="bg-white p-10 rounded-[3.5rem] shadow-sm hover:shadow-2xl cursor-pointer border-2 border-slate-50 flex flex-col items-center group transition-all animate-reveal">
+            <div className={`w-20 h-20 rounded-[2rem] bg-slate-900 flex items-center justify-center text-4xl mb-8 shadow-xl text-white`}>{item.icon}</div>
+            <h3 className="text-lg font-black uppercase italic text-slate-800 leading-none">{item.title}</h3>
+            <p className="text-[10px] font-bold text-slate-400 mt-4 uppercase tracking-widest">{item.desc}</p>
+          </div>
+        ))}
       </div>
-   );
+    );
+  }
+
+  return (
+    <div className="bg-white p-4 md:p-12 rounded-[4rem] shadow-2xl min-h-[85vh] border animate-reveal text-black">
+      <div className="flex justify-between items-center mb-8 no-print flex-wrap gap-4">
+        <button onClick={() => setActiveReport('MAIN')} className="bg-slate-900 text-white px-8 py-5 rounded-[1.5rem] font-black text-[11px] uppercase">← ফিরে যান</button>
+        <div className="flex gap-4 items-center bg-slate-50 p-3 rounded-[2rem] border">
+          {(activeReport === 'DELIVERY_LOG_A4' || activeReport === 'COLLECTION_REPORT') && (
+            <input type="date" className="p-3 border rounded-[1.2rem] text-[10px] font-black" value={selectedDate} onChange={(e: any) => setSelectedDate(e.target.value)} />
+          )}
+          
+          {activeReport === 'CUSTOMER_LEDGER' && (
+            <select 
+              className="p-3 border rounded-[1.2rem] text-[10px] font-black outline-none bg-white min-w-[200px]"
+              value={selectedCustomerId}
+              onChange={(e) => setSelectedCustomerId(e.target.value)}
+            >
+              <option value="">দোকান সিলেক্ট করুন...</option>
+              {ledgerCustomers.map(c => (
+                <option key={c.id} value={c.id}>{c.name} - {c.address}</option>
+              ))}
+            </select>
+          )}
+
+          <input className="p-3 border rounded-[1.2rem] text-[10px] font-black outline-none bg-white" placeholder="সার্চ..." value={searchQuery} onChange={(e: any) => setSearchQuery(e.target.value)} />
+          <button disabled={isDownloading || loading} onClick={() => handleDownloadPDF(reportRef, `IFZA_${activeReport}`)} className="bg-emerald-600 text-white px-5 py-4 rounded-[1.2rem] font-black text-[9px] uppercase shadow-lg">PDF ডাউনলোড</button>
+        </div>
+      </div>
+
+      <div className="w-full overflow-x-auto custom-scroll">
+        <div ref={reportRef} className="printable-content p-10 bg-white text-black min-h-fit flex flex-col border-2 border-black mx-auto" style={{ width: '100%', minWidth: '850px', minHeight: '1202px' }}>
+          <div className="text-center border-b-4 border-black pb-8 mb-10 relative">
+            <h1 className="text-5xl font-black uppercase italic mb-1 tracking-tighter text-black leading-none">IFZA ELECTRONICS</h1>
+            <p className="text-xl font-black uppercase tracking-[0.5em] mb-4 text-black">{activeReport.replace(/_/g, ' ')} SUMMARY</p>
+
+            {activeReport === 'BOOKING_LOG' ? (
+              <div className="mt-4 p-8 bg-white border-[6px] border-rose-600 rounded-[3rem] inline-block shadow-2xl animate-reveal ring-[15px] ring-rose-50">
+                <p className="text-[12px] font-black uppercase text-rose-600 tracking-[0.3em] mb-3 italic">TOTAL PENDING ITEMS (বাকি মালের মোট সংখ্যা)</p>
+                <p className="text-8xl font-black italic tracking-tighter text-rose-700 leading-none">{summary.totalRemQty} <span className="text-3xl font-bold">Pcs</span></p>
+                <div className="mt-4 pt-4 border-t-2 border-rose-100 flex items-center justify-center gap-6">
+                  <p className="text-[12px] font-black text-rose-500 uppercase tracking-widest italic">Inventory Valuation: ৳{(summary.totalRemVal || 0).toLocaleString()}</p>
+                </div>
+              </div>
+            ) : (
+              <div className="flex flex-col items-center">
+                <p className="text-[12px] font-black uppercase italic opacity-60 bg-slate-100 py-2 px-6 inline-block rounded-full">Date: {new Date().toLocaleDateString('bn-BD')} | Node: {company}</p>
+                {activeReport === 'STOCK_REPORT' && (
+                  <p className="mt-4 text-2xl font-black italic text-indigo-600">Total Stock Value: ৳{(summary.totalRemVal || 0).toLocaleString()}</p>
+                )}
+              </div>
+            )}
+          </div>
+
+          <table className="w-full border-collapse border-2 border-black">
+            <thead>
+              <tr className="bg-slate-900 text-white text-[10px] font-black uppercase italic border-b-2 border-black">
+                <th className="p-3 border-r border-white/20 text-center w-10">Sl</th>
+                {activeReport === 'DELIVERY_LOG_A4' ? (
+                  <>
+                    <th className="p-3 border-r border-white/20 text-left">দোকান ও ঠিকানা</th>
+                    <th className="p-3 border-r border-white/20 text-center w-24">কোম্পানি</th>
+                    <th className="p-3 border-r border-white/20 text-right w-28">মেমো বিল</th>
+                    <th className="p-3 border-r border-white/20 text-center w-32">সংগ্রহ (Manual)</th>
+                    <th className="p-3 text-center w-32">স্বাক্ষর</th>
+                  </>
+                ) : activeReport === 'COLLECTION_REPORT' ? (
+                  <>
+                    <th className="p-3 border-r border-white/20 text-left">দোকানের নাম</th>
+                    <th className="p-3 border-r border-white/20 text-center w-24">কোম্পানি</th>
+                    <th className="p-3 border-r border-white/20 text-right w-32">টাকার পরিমাণ</th>
+                    <th className="p-3 text-center">সংগ্রহকারী (By)</th>
+                  </>
+                ) : activeReport === 'BOOKING_LOG' ? (
+                  <>
+                    <th className="p-3 border-r border-white/20 text-left">দোকান ও আইটেম বিবরণ</th>
+                    <th className="p-3 border-r border-white/20 text-center w-24">অর্ডার</th>
+                    <th className="p-3 border-r border-white/20 text-center w-24">ডেলিভারি</th>
+                    <th className="p-3 border-r border-white/20 text-center w-24 bg-rose-700">বাকি (পিস)</th>
+                    <th className="p-3 text-right w-36">বাকি টাকা (Val)</th>
+                  </>
+                ) : activeReport === 'PURCHASE_HISTORY' ? (
+                  <>
+                    <th className="p-3 border-r border-white/20 text-center w-24">তারিখ</th>
+                    <th className="p-3 border-r border-white/20 text-left">পণ্য ও পরিমাণ</th>
+                    <th className="p-3 text-right w-32">মোট ক্রয় মূল্য</th>
+                  </>
+                ) : activeReport === 'STOCK_REPORT' ? (
+                  <>
+                    <th className="p-3 border-r border-white/20 text-left">পণ্যের নাম</th>
+                    <th className="p-3 border-r border-white/20 text-center w-16">ক্রয় (+)</th>
+                    <th className="p-3 border-r border-white/20 text-center w-16">বিক্রয় (-)</th>
+                    <th className="p-3 border-r border-white/20 text-center w-20 bg-slate-800">স্টক</th>
+                    <th className="p-3 text-right w-32">স্টক মূল্য (TP)</th>
+                  </>
+                ) : activeReport === 'CUSTOMER_LEDGER' ? (
+                  <>
+                    <th className="p-3 border-r border-white/20 text-center w-24">তারিখ</th>
+                    <th className="p-3 border-r border-white/20 text-left">মেমো/বিবরণ</th>
+                    <th className="p-3 border-r border-white/20 text-right w-24">বিল/পণ্য</th>
+                    <th className="p-3 border-r border-white/20 text-right w-24">জমা/নগদ</th>
+                    <th className="p-3 border-r border-white/20 text-right w-28 bg-slate-800">জের (Dues)</th>
+                    <th className="p-3 border-r border-white/20 text-center w-20">স্বাক্ষর (মাল)</th>
+                    <th className="p-3 text-center w-20">স্বাক্ষর (নগদ)</th>
+                  </>
+                ) : activeReport === 'COMPANY_SALES' ? (
+                  <>
+                    <th className="p-3 border-r border-white/20 text-left">কোম্পানির নাম</th>
+                    <th className="p-3 border-r border-white/20 text-right w-32">মোট সেল</th>
+                    <th className="p-3 border-r border-white/20 text-right w-32">দোকানি কমিশন</th>
+                    <th className="p-3 border-r border-white/20 text-right w-32 bg-indigo-900">আমার কমিশন</th>
+                    <th className="p-3 border-r border-white/20 text-right w-32">সংগ্রহ (Cash)</th>
+                    <th className="p-3 text-center w-24">পার্সেন্টেজ (%)</th>
+                  </>
+                ) : activeReport === 'TOP_CUSTOMERS' ? (
+                  <>
+                    <th className="p-3 border-r border-white/20 text-center w-16">RANK</th>
+                    <th className="p-3 border-r border-white/20 text-left">CUSTOMER (দোকান)</th>
+                    <th className="p-3 border-r border-white/20 text-left">PHONE & ADDRESS</th>
+                    <th className="p-3 text-right w-36">TOTAL SALES (৳)</th>
+                  </>
+                ) : activeReport === 'PRODUCT_SALES_REPORT' ? (
+                  <>
+                    <th className="p-3 border-r border-white/20 text-left">পণ্যের বিবরণ</th>
+                    <th className="p-3 border-r border-white/20 text-center w-40">সাপ্তাহিক (বডি / বুক / রিপ)</th>
+                    <th className="p-3 border-r border-white/20 text-center w-40">এ যাবত (বডি / বুক / রিপ)</th>
+                    <th className="p-3 border-r border-white/20 text-center w-24 bg-indigo-900">মোট পিস</th>
+                    <th className="p-3 text-right w-36">মোট মূল্য (TP)</th>
+                  </>
+                ) : (
+                  <>
+                    <th className="p-3 border-r border-white/20 text-left">দোকানের বিবরণ</th>
+                    <th className="p-3 text-right w-32">টাকা (Balance)</th>
+                  </>
+                )}
+              </tr>
+            </thead>
+            <tbody className="text-[12px] font-bold italic">
+              {loading ? (
+                <tr><td colSpan={10} className="p-24 text-center animate-pulse text-slate-300 font-black uppercase tracking-[0.4em]">Node Data Synchronizing...</td></tr>
+              ) : filteredData.length === 0 ? (
+                <tr><td colSpan={10} className="p-24 text-center opacity-30 uppercase font-black tracking-widest italic">কোনো তথ্য পাওয়া যায়নি</td></tr>
+              ) : filteredData.map((item: any, idx: number) => (
+                <tr key={idx} className="border-b-2 border-black text-black hover:bg-slate-50 transition-all">
+                  <td className="p-3 border-r border-black text-center font-black">{(idx + 1).toString().padStart(2, '0')}</td>
+                  {activeReport === 'DELIVERY_LOG_A4' ? (
+                    <>
+                      <td className="p-3 border-r border-black">
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <p className="font-black uppercase">{item.customers?.name}</p>
+                            <p className="text-[9px] italic opacity-60">📍 {item.customers?.address}</p>
+                            <p className="text-[8px] font-black text-blue-600 mt-1 uppercase italic bg-blue-50 px-1 inline-block rounded">{getMemoNo(item.id, item.created_at, item.meta)}</p>
+                          </div>
+                          <button onClick={() => { setSelectedMemo(item); setShowMemoModal(true); }} className="no-print opacity-30 hover:opacity-100 transition-opacity" title="মেমো প্রিন্ট">⎙</button>
+                        </div>
+                      </td>
+                      <td className="p-3 border-r border-black text-center uppercase text-[9px] font-black">{item.company}</td>
+                      <td className="p-3 border-r border-black text-right font-black italic">৳{parseAmount(item.amount).toLocaleString()}</td>
+                      <td className="p-3 border-r border-black"></td>
+                      <td className="p-3"></td>
+                    </>
+                  ) : activeReport === 'COLLECTION_REPORT' ? (
+                    <>
+                      <td className="p-3 border-r border-black">
+                        <p className="font-black uppercase">{item.customers?.name}</p>
+                      </td>
+                      <td className="p-3 border-r border-black text-center uppercase text-[9px] font-black">{item.company}</td>
+                      <td className="p-3 border-r border-black text-right font-black italic text-emerald-600">৳{parseAmount(item.amount).toLocaleString()}</td>
+                      <td className="p-3 text-center leading-tight">
+                        <div className="flex flex-col items-center gap-1">
+                          <span className="text-blue-700 bg-blue-50 px-3 py-1 rounded-lg border border-blue-100 shadow-sm font-black uppercase text-[10px]">
+                            {item.submitted_by || 'জানা নেই'}
+                          </span>
+                          {item.meta?.approved_by && (
+                            <span className="text-[8px] font-bold text-slate-400 uppercase italic">
+                              Appr: {item.meta.approved_by}
+                            </span>
+                          )}
+                        </div>
+                      </td>
+                    </>
+                  ) : activeReport === 'BOOKING_LOG' ? (
+                    <>
+                      <td className={`p-3 border-r border-black ${item.is_first_of_booking ? 'bg-slate-50' : ''}`}>
+                        {item.is_first_of_booking && (
+                          <div className="mb-2 pb-2 border-b border-black/10">
+                            <p className="font-black uppercase italic leading-none text-indigo-700">{item.customers?.name}</p>
+                            <div className="flex justify-between mt-1 text-[8px] font-bold text-slate-500 uppercase">
+                              <span>Bill: ৳{parseAmount(item.booking_total).toLocaleString()}</span>
+                              <span>Paid: ৳{parseAmount(item.booking_advance).toLocaleString()}</span>
+                            </div>
+                          </div>
+                        )}
+                        <div className="flex items-center gap-2">
+                          <span className={`w-1.5 h-1.5 rounded-full ${item.item_rem > 0 ? 'bg-rose-500 animate-pulse' : 'bg-emerald-500'}`}></span>
+                          <p className={`text-[12px] font-black uppercase italic tracking-tighter leading-none ${item.item_rem > 0 ? 'text-blue-900' : 'text-slate-400'}`}>{item.item_name}</p>
+                        </div>
+                        {item.item_rem > 0 && <p className="text-[8px] font-black text-slate-400 mt-1 uppercase">Unit: ৳{(item.item_price || 0).toLocaleString()}</p>}
+                      </td>
+                      <td className="p-3 border-r border-black text-center font-bold text-slate-400">{(item.item_ord || 0)}</td>
+                      <td className="p-3 border-r border-black text-center font-bold text-emerald-600">{(item.item_del || 0)}</td>
+                      <td className={`p-3 border-r border-black text-center font-black text-lg italic ${item.item_rem > 0 ? 'text-rose-700 bg-rose-50' : 'text-emerald-600 bg-emerald-50'}`}>
+                        {(item.item_rem || 0)}
+                      </td>
+                      <td className={`p-3 text-right italic font-black text-sm ${item.item_rem > 0 ? 'text-rose-600' : 'text-emerald-600 opacity-40'}`}>
+                        ৳{(item.item_rem_val || 0).toLocaleString()}
+                      </td>
+                    </>
+                  ) : activeReport === 'PURCHASE_HISTORY' ? (
+                    <>
+                      <td className="p-3 border-r border-black text-center">{item.date ? new Date(item.date).toLocaleDateString('bn-BD') : ''}</td>
+                      <td className="p-3 border-r border-black uppercase text-[10px] leading-tight">{item.note}</td>
+                      <td className="p-3 text-right font-black text-emerald-600">৳{(item.amount || 0).toLocaleString()}</td>
+                    </>
+                  ) : activeReport === 'STOCK_REPORT' ? (
+                    <>
+                      <td className="p-3 border-r border-black uppercase">
+                        <p className="font-black">{item.name}</p>
+                        <p className="text-[8px] opacity-50 uppercase">Rate: ৳{(item.tp || 0)}</p>
+                      </td>
+                      <td className="p-3 border-r border-black text-center text-emerald-600">+{(item.purchased || 0)}</td>
+                      <td className="p-3 border-r border-black text-center text-rose-600">-{(item.sold || 0)}</td>
+                      <td className="p-3 border-r border-black text-center font-black bg-slate-50 text-base italic">{(item.current_stock || 0)}</td>
+                      <td className="p-3 text-right font-black italic">৳{(parseAmount(item.current_stock || 0) * parseAmount(item.tp || 0)).toLocaleString()}</td>
+                    </>
+                  ) : activeReport === 'CUSTOMER_LEDGER' ? (
+                    <>
+                      <td className="p-3 border-r border-black text-center text-[10px]">{new Date(item.created_at).toLocaleDateString('bn-BD')}</td>
+                      <td className="p-3 border-r border-black font-black uppercase text-[10px]">
+                        {item.payment_type === 'DUE' ? getMemoNo(item.id, item.created_at, item.meta) : 'টাকা জমা'}
+                      </td>
+                      <td className="p-3 border-r border-black text-right font-black text-indigo-700">
+                        {item.payment_type === 'DUE' ? `৳${parseAmount(item.amount).toLocaleString()}` : '-'}
+                      </td>
+                      <td className="p-3 border-r border-black text-right font-black text-emerald-600">
+                        {item.payment_type === 'COLLECTION' ? `৳${parseAmount(item.amount).toLocaleString()}` : '-'}
+                      </td>
+                      <td className="p-3 border-r border-black text-right font-black bg-slate-50 text-base italic text-rose-600">
+                        ৳{parseAmount(item.runningBalance).toLocaleString()}
+                      </td>
+                      <td className="p-3 border-r border-black text-center"></td>
+                      <td className="p-3 text-center"></td>
+                    </>
+                  ) : activeReport === 'COMPANY_SALES' ? (
+                    <>
+                      <td className="p-3 border-r border-black uppercase">
+                        <p className="font-black text-[11px]">{item.name}</p>
+                      </td>
+                      <td className="p-3 border-r border-black text-right font-black italic text-[13px] text-slate-700">
+                        ৳{parseAmount(item.sales).toLocaleString()}
+                      </td>
+                      <td className="p-3 border-r border-black text-right font-black italic text-[13px] text-rose-600">
+                        ৳{parseAmount(item.commission).toLocaleString()}
+                      </td>
+                      <td className="p-3 border-r border-black text-right font-black italic text-sm text-indigo-700 bg-indigo-50">
+                        ৳{parseAmount(item.myEarnings).toLocaleString()}
+                      </td>
+                      <td className="p-3 border-r border-black text-right font-black italic text-[13px] text-emerald-600">
+                        ৳{parseAmount(item.collection).toLocaleString()}
+                      </td>
+                      <td className="p-3 text-center">
+                        <div className="flex flex-col items-center">
+                          <div className="w-full bg-slate-100 h-1 rounded-full overflow-hidden mb-1 border border-slate-200">
+                            <div className="bg-indigo-600 h-full" style={{ width: `${item.percentage}%` }}></div>
+                          </div>
+                          <span className="font-black text-indigo-600 text-[8px]">{item.percentage.toFixed(1)}%</span>
+                        </div>
+                      </td>
+                    </>
+                  ) : activeReport === 'TOP_CUSTOMERS' ? (
+                    <>
+                      <td className="p-3 border-r border-black text-center font-black text-2xl italic text-slate-400 opacity-60">#{idx + 1}</td>
+                      <td className="p-3 border-r border-black font-black text-slate-800 uppercase leading-tight">
+                        {item.name}
+                      </td>
+                      <td className="p-3 border-r border-black font-bold text-xs text-slate-500">
+                        {item.phone}<br/>{item.address}
+                      </td>
+                      <td className="p-3 border-r border-black text-right font-black italic text-lg text-emerald-600 bg-emerald-50/50">
+                        ৳{parseAmount(item.total_sales).toLocaleString()}
+                      </td>
+                    </>
+                  ) : activeReport === 'PRODUCT_SALES_REPORT' ? (
+                    <>
+                      <td className="p-3 border-r border-black uppercase text-[11px]">
+                        <p className="font-black leading-tight">{item.name}</p>
+                        <p className="text-[8px] opacity-50 uppercase mt-1">Code: {item.id.slice(0,8)}</p>
+                      </td>
+                      <td className="p-3 border-r border-black text-center text-[10px] bg-slate-50">
+                        <div className="flex justify-center gap-1 font-black">
+                          <span className="text-blue-600">{item.pos_week || 0}</span>
+                          <span className="text-slate-300">/</span>
+                          <span className="text-indigo-600">{item.book_week || 0}</span>
+                          <span className="text-slate-300">/</span>
+                          <span className="text-rose-600">{item.repl_week || 0}</span>
+                        </div>
+                        <div className="text-[7px] opacity-40 uppercase font-bold mt-1">L7 Days</div>
+                      </td>
+                      <td className="p-3 border-r border-black text-center text-[10px]">
+                        <div className="flex justify-center gap-1 font-bold">
+                          <span className="text-blue-700">{item.pos_total || 0}</span>
+                          <span className="text-slate-200">/</span>
+                          <span className="text-indigo-700">{item.book_total || 0}</span>
+                          <span className="text-slate-200">/</span>
+                          <span className="text-rose-700">{item.repl_total || 0}</span>
+                        </div>
+                        <div className="text-[7px] opacity-30 uppercase font-bold mt-1">All History</div>
+                      </td>
+                      <td className={`p-3 border-r border-black text-center font-black text-lg italic bg-indigo-50 text-indigo-700`}>
+                        {item.total_gross || 0}
+                      </td>
+                      <td className="p-3 text-right font-black italic text-sm">
+                        ৳{parseAmount(item.total_value).toLocaleString()}
+                      </td>
+                    </>
+                  ) : (
+                    <>
+                      <td className="p-3 border-r border-black">
+                        <p className="uppercase font-black">{item.name}</p>
+                        <p className="text-[9px] italic opacity-60">📍 {item.address}</p>
+                      </td>
+                      <td className={`p-3 text-right font-black italic text-base ${(item.balance || 0) > 0 ? 'text-rose-600' : 'text-emerald-600'}`}>
+                        ৳{Math.abs(item.balance || 0).toLocaleString()}
+                      </td>
+                    </>
+                  )}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+
+          <div className="mt-16 border-t-4 border-black pt-8 flex justify-between items-end">
+            <div className="text-[10px] font-black uppercase italic space-y-2">
+              <p className="text-blue-600 font-black">* IFZA ELECTRONICS GROUP (OFFICIAL REPORT)</p>
+              <p>* GENERATED BY: {userName}</p>
+              <p>* BRANCH/NODE: {company}</p>
+              <p>* TIMESTAMP: {new Date().toLocaleString('bn-BD')}</p>
+            </div>
+            <div className="w-96 space-y-3 text-right">
+              <div className="flex justify-between text-[11px] font-black border-b-2 border-black/10 pb-2 uppercase italic text-slate-400">
+                <span>Item Records:</span>
+                <span>{filteredData.length}</span>
+              </div>
+              {activeReport === 'BOOKING_LOG' && (
+                <div className="flex justify-between text-sm font-black text-rose-600 italic border-b-2 border-rose-100 pb-2">
+                  <span>বাকি মালের সংখ্যা (Requirement):</span>
+                  <span>{(summary.totalRemQty || 0)} Pcs</span>
+                </div>
+              )}
+              {activeReport === 'PRODUCT_SALES_REPORT' ? (
+                <div className="space-y-1.5">
+                  <div className="flex justify-between text-[11px] font-black text-blue-600 italic border-b border-black/5 pb-1">
+                    <span>মোট নগদ (POS Total):</span>
+                    <span>{(summary.totalPosSold || 0).toLocaleString()} Pcs</span>
+                  </div>
+                  <div className="flex justify-between text-[11px] font-black text-indigo-600 italic border-b border-black/5 pb-1">
+                    <span>মোট বুকিং (Booking Total):</span>
+                    <span>{(summary.totalBookingSold || 0).toLocaleString()} Pcs</span>
+                  </div>
+                  <div className="flex justify-between text-[11px] font-black text-rose-600 italic border-b border-black/5 pb-1">
+                    <span>মোট রিপ্লেস (Replace Total):</span>
+                    <span>{(summary.totalRepl || 0).toLocaleString()} Pcs</span>
+                  </div>
+                  <div className="flex justify-between text-[11px] font-black text-slate-800 italic border-b border-black/5 pb-1 mt-2">
+                    <span>সর্বমোট (সেল + রিপ্লেস):</span>
+                    <span>{(summary.totalGross || 0).toLocaleString()} Pcs</span>
+                  </div>
+                  <div className="flex justify-between text-[22px] font-black text-black tracking-tighter leading-none pt-2">
+                    <span className="uppercase italic">TOTAL NET SALES:</span>
+                    <span>৳{(summary.totalRemVal || 0).toLocaleString()}</span>
+                  </div>
+                </div>
+              ) : activeReport === 'COMPANY_SALES' ? (
+                <div className="space-y-1.5">
+                  <div className="flex justify-between text-[11px] font-black text-slate-500 italic border-b border-black/5 pb-1">
+                    <span>সার্বিক সেল (Across All):</span>
+                    <span>৳{(summary.totalRemVal || 0).toLocaleString()}</span>
+                  </div>
+                  <div className="flex justify-between text-[11px] font-black text-rose-600 italic border-b border-rose-50 pb-1">
+                    <span>মোট দোকানি কমিশন (Expense):</span>
+                    <span>৳{(summary.totalComm || 0).toLocaleString()}</span>
+                  </div>
+                  <div className="flex justify-between text-[11px] font-black text-indigo-600 italic border-b border-indigo-50 pb-1">
+                    <span>মোট আপনার কমিশন (My Earnings):</span>
+                    <span>৳{(summary.totalMyEarn || 0).toLocaleString()}</span>
+                  </div>
+                  <div className="flex justify-between text-[11px] font-black text-emerald-600 italic border-b border-emerald-50 pb-1">
+                    <span>মোট কালেকশন (Received):</span>
+                    <span>৳{(summary.totalColl || 0).toLocaleString()}</span>
+                  </div>
+                  <div className="flex justify-between text-[18px] font-black text-black tracking-tighter leading-none pt-2 mt-2 border-t-2 border-black">
+                    <span className="uppercase italic">NET OUTSTANDING (মার্কেট বকেয়া):</span>
+                    <span>৳{((summary.totalRemVal || 0) - (summary.totalColl || 0)).toLocaleString()}</span>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex justify-between text-3xl font-black text-black tracking-tighter leading-none pt-2">
+                  <span className="uppercase">{activeReport === 'BOOKING_LOG' ? 'NET REQUIREMENT:' : activeReport === 'PRODUCT_SALES_REPORT' ? 'TOTAL NET SALES:' : activeReport === 'TOP_CUSTOMERS' ? 'TOP 10 TOTAL:' : 'NET TOTAL SUM:'}</span>
+                  <span>৳{(summary.totalRemVal || 0).toLocaleString()}</span>
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="mt-auto pt-20 text-center">
+            <p className="text-[8px] font-black uppercase tracking-[0.5em] opacity-20">SYSTEM CORE v4.8.2 • POWERED BY IFZAERP.COM</p>
+          </div>
+        </div>
+      </div>
+
+      {/* 🧾 OLD MEMO REPRINT MODAL */}
+      {showMemoModal && selectedMemo && (
+        <div className="fixed inset-0 bg-black/98 backdrop-blur-3xl z-[5000] flex flex-col items-center p-4 overflow-y-auto no-print">
+          <div className="w-full max-w-[148mm] flex justify-between items-center mb-8 sticky top-0 z-[5001] bg-slate-900/90 p-6 rounded-[2.5rem] border border-white/10">
+            <button onClick={() => setShowMemoModal(false)} className="text-white font-black uppercase text-[10px] px-6 transition-colors hover:text-blue-400">← ফিরে যান</button>
+            <button disabled={isDownloading} onClick={downloadMemoPDF} className="bg-white text-slate-900 px-8 py-4 rounded-xl font-black text-[10px] uppercase shadow-xl active:scale-95">PDF ডাউনলোড ⎙</button>
+          </div>
+
+          <div ref={memoRef} className={`bg-white w-[148mm] min-h-fit ${(selectedMemo.items?.length || 0) > 30 ? 'p-6' : 'p-10'} flex flex-col font-sans text-black relative overflow-hidden`}>
+            <p className="text-center font-bold text-[11px] mb-1 italic leading-tight text-black">বিসমিল্লাহির রাহমানির রাহিম</p>
+
+            <div className={`text-center border-b border-black ${(selectedMemo.items?.length || 0) > 30 ? 'pb-2 mb-2' : 'pb-4 mb-4'}`}>
+              <h1 className={`${(selectedMemo.items?.length || 0) > 30 ? 'text-[22px]' : 'text-[26px]'} font-black uppercase italic tracking-tighter leading-none mb-1 text-blue-600`}>IFZA ELECTRONICS</h1>
+              <p className="text-[10px] font-black uppercase tracking-[0.2em] mb-1 text-black">{selectedMemo.company} DIVISION</p>
+            </div>
+
+            <div className={`flex justify-between items-start ${(selectedMemo.items?.length || 0) > 30 ? 'mb-2' : 'mb-6'}`}>
+              <div className="space-y-1 flex-1">
+                <p className={`${(selectedMemo.items?.length || 0) > 30 ? 'text-[15px]' : 'text-[18px]'} font-black uppercase italic leading-tight text-blue-600`}>{selectedMemo.customers?.name}</p>
+                <p className="text-[10px] font-bold text-black">📍 ঠিকানা: {selectedMemo.customers?.address}</p>
+                <p className="text-[11px] text-blue-600 font-black mt-2 uppercase italic leading-none">
+                  মেমো নাম্বার: {getMemoNo(selectedMemo.id, selectedMemo.created_at, selectedMemo.meta)}
+                </p>
+              </div>
+
+              <div className="text-right space-y-0.5 w-44">
+                <p className="text-[9px] font-black uppercase text-black mb-1">তারিখ: {new Date(selectedMemo.created_at).toLocaleDateString('bn-BD')}</p>
+                <p className="flex justify-between font-black text-[11px] text-slate-500"><span>পূর্বের বাকি:</span> <span>৳{parseAmount(selectedMemo.meta?.previous_due).toLocaleString()}</span></p>
+                <p className="flex justify-between font-black text-[13px] border-t border-black pt-0.5 text-black"><span>মেমো বিল:</span> <span className="text-blue-700">৳{parseAmount(selectedMemo.amount).toLocaleString()}</span></p>
+                <p className="flex justify-between font-black text-[15px] border-t-2 border-black pt-1 text-black bg-slate-50 px-1 mt-1"><span>মোট বাকি:</span> <span className="text-red-600">৳{(parseAmount(selectedMemo.meta?.final_balance) || (parseAmount(selectedMemo.amount) + parseAmount(selectedMemo.meta?.previous_due))).toLocaleString()}</span></p>
+              </div>
+            </div>
+
+            <div className="flex-1 mt-2">
+              <table className="w-full border-collapse">
+                <thead>
+                  <tr className="text-[9px] font-black uppercase italic border-b-2 border-black text-left text-black">
+                    <th className="py-1 w-8">Sl</th>
+                    <th className="py-1">বিবরণ (Description)</th>
+                    <th className="py-1 text-center w-16">দর</th>
+                    <th className="py-1 text-center w-12">Qty</th>
+                    <th className="py-1 text-right w-20">মোট</th>
+                  </tr>
+                </thead>
+                <tbody className={`${(selectedMemo.items?.length || 0) > 40 ? "text-[7.5px]" : (selectedMemo.items?.length || 0) > 25 ? "text-[8.5px]" : "text-[10px]"} text-black`}>
+                  {selectedMemo.items?.map((it: any, idx: number) => (
+                    <tr key={idx} className={`font-bold italic border-b border-black/10 ${it.action === 'RETURN' ? 'text-red-600' : it.action === 'REPLACE' ? 'text-blue-600' : 'text-black'}`}>
+                      <td className={`${(selectedMemo.items?.length || 0) > 30 ? 'py-0.5' : 'py-1.5'}`}>{idx + 1}</td>
+                      <td className={`${(selectedMemo.items?.length || 0) > 30 ? 'py-0.5' : 'py-1.5'} uppercase`}>
+                        <span>{it.name}</span>
+                        {it.mrp && <span className="ml-2 text-[7px] font-black opacity-40">MRP: ৳{it.mrp}</span>}
+                        {it.action && it.action !== 'SALE' && <span className="ml-2 text-[7px] border border-black px-1 rounded uppercase">[{it.action}]</span>}
+                      </td>
+                      <td className={`${(selectedMemo.items?.length || 0) > 30 ? 'py-0.5' : 'py-1.5'} text-center`}>৳{it.price || 0}</td>
+                      <td className={`${(selectedMemo.items?.length || 0) > 30 ? 'py-0.5' : 'py-1.5'} text-center`}>{it.qty}</td>
+                      <td className={`${(selectedMemo.items?.length || 0) > 30 ? 'py-0.5' : 'py-1.5'} text-right`}>৳{parseAmount(it.total).toLocaleString()}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <div className={`${(selectedMemo.items?.length || 0) > 30 ? 'mt-4' : 'mt-8'} border-t-2 border-black pt-2 flex justify-between items-end`}>
+              <div className="text-[8px] font-black uppercase italic space-y-0.5">
+                <p className="text-blue-600 font-extrabold">* IFZA ELECTRONICS GR.</p>
+                <p>মেমো তৈরী: {selectedMemo.submitted_by}</p>
+                <p>প্রিন্ট সময়: {new Date().toLocaleString('bn-BD')}</p>
+              </div>
+              <div className="text-right">
+                <p className={`${(selectedMemo.items?.length || 0) > 30 ? 'text-[12px]' : 'text-[15px]'} font-black italic tracking-tighter text-black`}>TOTAL: ৳{parseAmount(selectedMemo.amount).toLocaleString()}</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
 };
 
-export default Bookings;
+export default Reports;
