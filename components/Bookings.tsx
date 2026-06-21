@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Company, UserRole, Product, formatCurrency, Booking, BookingItem, User } from '../types';
 import { db, supabase, mapToDbCompany } from '../lib/supabase';
+import { parseAmount } from '../lib/utils';
 import { jsPDF } from 'jspdf';
 import * as html2canvasModule from 'html2canvas';
 
@@ -50,7 +51,7 @@ const Bookings: React.FC<BookingsProps> = ({ company, role, user }) => {
    const [showSlipModal, setShowSlipModal] = useState(false);
    const [selectedSlipData, setSelectedSlipData] = useState<any>(null);
 
-   const safeFormat = (val: any) => Math.round(Number(val || 0)).toLocaleString();
+   const safeFormat = (val: any) => Math.round(parseAmount(val || 0)).toLocaleString();
 
    useEffect(() => {
       fetchData();
@@ -62,7 +63,7 @@ const Bookings: React.FC<BookingsProps> = ({ company, role, user }) => {
    }, [company]);
 
    const fetchData = async () => {
-      try {
+         try {
          const dbCompany = mapToDbCompany(company);
          const { data: bkData, error: bkErr } = await supabase
             .from('bookings')
@@ -114,7 +115,7 @@ const Bookings: React.FC<BookingsProps> = ({ company, role, user }) => {
       try {
          const dbCo = mapToDbCompany(company);
          await supabase.from('company_ledger').insert([{
-            company: dbCo, type: 'BANK_TRANSFER', amount: Number(b.advance_amount),
+            company: dbCo, type: 'BANK_TRANSFER', amount: parseAmount(b.advance_amount),
             note: `বুকিং পেমেন্ট টু কোম্পানি: ${b.customer_name}`,
             date: new Date().toISOString().split('T')[0],
          }]);
@@ -182,8 +183,8 @@ const Bookings: React.FC<BookingsProps> = ({ company, role, user }) => {
                alert("বুকিং আপডেট সফল হয়েছে! ✅");
             }
          } else {
-            const newTotal = updatedItems.reduce((s, i) => s + (i.qty * i.unitPrice), 0);
-            const newAdvance = Number(selectedBooking.advance_amount) + (Number(newCashAmt) || 0) + (Number(newBankAmt) || 0);
+            const newTotal = updatedItems.reduce((s, i) => s + (parseAmount(i.qty || 0) * parseAmount(i.unitPrice || 0)), 0);
+            const newAdvance = parseAmount(selectedBooking.advance_amount) + (parseAmount(newCashAmt) || 0) + (parseAmount(newBankAmt) || 0);
             await supabase.from('bookings').update({
                items: updatedItems, total_amount: newTotal, advance_amount: newAdvance,
                qty: totalOrdered, status: 'PARTIAL'
@@ -192,9 +193,9 @@ const Bookings: React.FC<BookingsProps> = ({ company, role, user }) => {
          }
 
          // ট্রানজেকশন এন্ট্রি
-         if (Number(newCashAmt) > 0 || Number(newBankAmt) > 0) {
+         if (parseAmount(newCashAmt) > 0 || parseAmount(newBankAmt) > 0) {
             await supabase.from('transactions').insert([{
-               customer_id: selectedBooking.customer_id, company: dbCo, amount: (Number(newCashAmt) || 0) + (Number(newBankAmt) || 0),
+               customer_id: selectedBooking.customer_id, company: dbCo, amount: (parseAmount(newCashAmt) || 0) + (parseAmount(newBankAmt) || 0),
                payment_type: 'COLLECTION', items: [{ note: `বুকিং অগ্রিম জমা` }], submitted_by: user.name, meta: { is_booking: true }
             }]);
          }
@@ -246,19 +247,19 @@ const Bookings: React.FC<BookingsProps> = ({ company, role, user }) => {
       setIsSaving(true);
       try {
          const dbCo = mapToDbCompany(company);
-         const newItemsValue = bookingCart.reduce((acc, it) => acc + (it.qty * it.unitPrice), 0);
+         const newItemsValue = bookingCart.reduce((acc, it) => acc + (parseAmount(it.qty || 0) * parseAmount(it.unitPrice || 0)), 0);
          const newItemsFormatted = bookingCart.map(it => ({
             id: it.product_id, product_id: it.product_id, name: it.name, qty: it.qty, unitPrice: it.unitPrice, delivered_qty: 0
          }));
-         const totalInitialDeposit = Number(form.advance) + Number(form.bank_deposit);
+         const totalInitialDeposit = parseAmount(form.advance) + parseAmount(form.bank_deposit);
 
          if (targetBookingId !== "NEW") {
             const existing = activeBookingsForCust.find(b => b.id === targetBookingId);
             const combinedItems = [...(existing.items || []), ...newItemsFormatted];
             const totalOrd = combinedItems.reduce((s, i) => s + i.qty, 0);
             await supabase.from('bookings').update({
-               items: combinedItems, total_amount: Number(existing.total_amount) + newItemsValue,
-               advance_amount: Number(existing.advance_amount) + totalInitialDeposit,
+               items: combinedItems, total_amount: parseAmount(existing.total_amount) + newItemsValue,
+               advance_amount: parseAmount(existing.advance_amount) + totalInitialDeposit,
                qty: totalOrd, status: 'PARTIAL'
             }).eq('id', targetBookingId);
          } else {
@@ -292,15 +293,15 @@ const Bookings: React.FC<BookingsProps> = ({ company, role, user }) => {
             </div>
             <div className="bg-white p-6 md:p-8 rounded-[2rem] border border-slate-100 shadow-sm flex flex-col justify-between">
                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1 italic">Total Order Value</p>
-               <h3 className="text-2xl md:text-3xl font-black italic tracking-tighter text-slate-900">৳{safeFormat(filteredBookings.reduce((s, b) => s + Number(b.total_amount), 0))}</h3>
+               <h3 className="text-2xl md:text-3xl font-black italic tracking-tighter text-slate-900">৳{safeFormat(filteredBookings.reduce((s, b) => s + parseAmount(b.total_amount), 0))}</h3>
             </div>
             <div className="bg-slate-900 p-6 md:p-8 rounded-[2rem] shadow-xl flex flex-col justify-between text-white">
                <p className="text-[9px] font-black text-indigo-400 uppercase tracking-widest mb-1 italic">Dealer Hand Advance</p>
-               <h3 className="text-2xl md:text-3xl font-black italic tracking-tighter text-emerald-400">৳{safeFormat(filteredBookings.reduce((s, b) => s + Number(b.advance_amount), 0))}</h3>
+               <h3 className="text-2xl md:text-3xl font-black italic tracking-tighter text-emerald-400">৳{safeFormat(filteredBookings.reduce((s, b) => s + parseAmount(b.advance_amount), 0))}</h3>
             </div>
             <div className="bg-rose-50 p-6 md:p-8 rounded-[2rem] border border-rose-100 shadow-sm flex flex-col justify-between">
                <p className="text-[9px] font-black text-rose-400 uppercase tracking-widest mb-1 italic">Expected Collection</p>
-               <h3 className="text-2xl md:text-3xl font-black italic tracking-tighter text-rose-600">৳{safeFormat(filteredBookings.reduce((s, b) => s + (Number(b.total_amount) - Number(b.advance_amount)), 0))}</h3>
+               <h3 className="text-2xl md:text-3xl font-black italic tracking-tighter text-rose-600">৳{safeFormat(filteredBookings.reduce((s, b) => s + (parseAmount(b.total_amount) - parseAmount(b.advance_amount)), 0))}</h3>
             </div>
          </div>
 
@@ -443,7 +444,7 @@ const Bookings: React.FC<BookingsProps> = ({ company, role, user }) => {
                                        <div key={it.product_id} className="p-4 bg-slate-50 rounded-[2rem] border border-slate-100 flex items-center justify-between">
                                           <div className="min-w-0 flex-1 pr-4">
                                              <p className="text-[10px] font-black uppercase text-slate-800 truncate mb-1">{it.name}</p>
-                                             <input type="number" className="w-20 p-2 bg-white border rounded-lg font-black text-[10px]" value={it.unitPrice} onChange={(e) => { const n = [...bookingCart]; n[idx].unitPrice = Number(e.target.value); setBookingCart(n); }} />
+                                             <input type="number" className="w-20 p-2 bg-white border rounded-lg font-black text-[10px]" value={it.unitPrice} onChange={(e) => { const n = [...bookingCart]; n[idx].unitPrice = parseAmount(e.target.value); setBookingCart(n); }} />
                                           </div>
                                           <div className="flex items-center bg-white rounded-xl p-1 border shadow-inner">
                                              <button onClick={() => { const n = [...bookingCart]; n[idx].qty = Math.max(0, n[idx].qty - 1); setBookingCart(n.filter(i => i.qty > 0)); }} className="w-8 h-8 font-black text-lg text-slate-300">-</button>
@@ -455,8 +456,8 @@ const Bookings: React.FC<BookingsProps> = ({ company, role, user }) => {
                                  </div>
                                  <div className="space-y-6 pt-6 border-t border-slate-100">
                                     <div className="grid grid-cols-2 gap-4">
-                                       <input type="number" className="w-full p-4 bg-emerald-50 text-emerald-600 rounded-2xl font-black text-lg text-center outline-none border" placeholder="Cash" value={form.advance} onChange={e => setForm({ ...form, advance: Number(e.target.value) })} />
-                                       <input type="number" className="w-full p-4 bg-blue-50 text-blue-600 rounded-2xl font-black text-lg text-center outline-none border" placeholder="Bank" value={form.bank_deposit} onChange={e => setForm({ ...form, bank_deposit: Number(e.target.value) })} />
+                                       <input type="number" className="w-full p-4 bg-emerald-50 text-emerald-600 rounded-2xl font-black text-lg text-center outline-none border" placeholder="Cash" value={form.advance} onChange={e => setForm({ ...form, advance: parseAmount(e.target.value) })} />
+                                       <input type="number" className="w-full p-4 bg-blue-50 text-blue-600 rounded-2xl font-black text-lg text-center outline-none border" placeholder="Bank" value={form.bank_deposit} onChange={e => setForm({ ...form, bank_deposit: parseAmount(e.target.value) })} />
                                     </div>
                                     <button disabled={isSaving || bookingCart.length === 0} onClick={handleAddBooking} className="w-full bg-indigo-600 text-white py-6 rounded-[2.5rem] font-black uppercase text-xs tracking-[0.3em] shadow-xl">বুকিং সেভ করুন ➔</button>
                                  </div>
@@ -490,10 +491,10 @@ const Bookings: React.FC<BookingsProps> = ({ company, role, user }) => {
                            <p className="text-[14px] font-bold mt-2">📍 {selectedBooking.customer_address} | 📱 {selectedBooking.customer_phone}</p>
                         </div>
                         <div className="text-right space-y-2 w-72 shrink-0">
-                           <p className="flex justify-between font-black text-[16px] text-slate-400 border-b pb-2"><span>বুকিং বিল:</span> <span>৳{Number(selectedBooking.total_amount).toLocaleString()}</span></p>
-                           <p className="flex justify-between font-black text-[16px] text-emerald-600"><span>বর্তমানে জমা:</span> <span>৳{Number(selectedBooking.advance_amount).toLocaleString()}</span></p>
+                           <p className="flex justify-between font-black text-[16px] text-slate-400 border-b pb-2"><span>বুকিং বিল:</span> <span>৳{parseAmount(selectedBooking.total_amount).toLocaleString()}</span></p>
+                           <p className="flex justify-between font-black text-[16px] text-emerald-600"><span>বর্তমানে জমা:</span> <span>৳{parseAmount(selectedBooking.advance_amount).toLocaleString()}</span></p>
                            <p className="flex justify-between font-black text-[24px] text-rose-600 border-t-4 border-black pt-3 italic tracking-tighter leading-none mt-2">
-                              <span>নিট বকেয়া:</span> <span>৳{(Number(selectedBooking.total_amount) - Number(selectedBooking.advance_amount)).toLocaleString()}</span>
+                              <span>নিট বকেয়া:</span> <span>৳{(parseAmount(selectedBooking.total_amount) - parseAmount(selectedBooking.advance_amount)).toLocaleString()}</span>
                            </p>
                         </div>
                      </div>
@@ -634,9 +635,9 @@ const Bookings: React.FC<BookingsProps> = ({ company, role, user }) => {
                   </table>
                   <div className="mt-8 flex justify-end">
                      <div className="w-1/2 space-y-2 border-2 border-black p-4">
-                        <div className="flex justify-between text-[12px] font-black border-b border-black pb-1"><span>TOTAL BILL:</span><span>৳{Math.round(selectedSlipData.total_amount || 0).toLocaleString()}</span></div>
-                        <div className="flex justify-between text-[12px] font-black border-b border-black pb-1"><span>TOTAL PAID:</span><span>৳{Math.round(selectedSlipData.advance_amount || 0).toLocaleString()}</span></div>
-                        <div className="flex justify-between text-[16px] font-black"><span>NET PENDING:</span><span className="text-rose-600">৳{Math.abs(Math.round((selectedSlipData.total_amount || 0) - (selectedSlipData.advance_amount || 0))).toLocaleString()}</span></div>
+                        <div className="flex justify-between text-[12px] font-black border-b border-black pb-1"><span>TOTAL BILL:</span><span>৳{parseAmount(selectedSlipData.total_amount).toLocaleString()}</span></div>
+                        <div className="flex justify-between text-[12px] font-black border-b border-black pb-1"><span>TOTAL PAID:</span><span>৳{parseAmount(selectedSlipData.advance_amount).toLocaleString()}</span></div>
+                        <div className="flex justify-between text-[16px] font-black"><span>NET PENDING:</span><span className="text-rose-600">৳{Math.abs(parseAmount(selectedSlipData.total_amount) - parseAmount(selectedSlipData.advance_amount)).toLocaleString()}</span></div>
                      </div>
                   </div>
                   <div className="mt-20 flex justify-between items-end px-4 mb-4">

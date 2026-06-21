@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { User, Company, CompanyRecord } from '../types';
 import { supabase, mapToDbCompany } from '../lib/supabase';
+import { parseAmount } from '../lib/utils';
 
 interface SidebarProps {
   activeTab: string;
@@ -97,7 +98,7 @@ const Sidebar: React.FC<SidebarProps> = ({
       
       let balance = 0;
       data?.forEach(tx => {
-        const amt = Number(tx.amount) || 0;
+        const amt = parseAmount(tx.amount);
         balance += (tx.payment_type === 'COLLECTION' ? -amt : amt);
       });
       setHasCustomerDue(balance > 1);

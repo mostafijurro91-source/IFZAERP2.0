@@ -87,6 +87,20 @@ const Customers: React.FC<CustomerProps> = ({ company, role, userName }) => {
 
   useEffect(() => { fetchCustomers(); }, [company]);
 
+  useEffect(() => {
+    const channel = supabase
+      .channel('customers-realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'transactions' }, () => {
+        fetchCustomers();
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'collection_requests' }, () => {
+        fetchCustomers();
+      })
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, [company]);
+
   const fetchCustomers = async () => {
     try {
       setLoading(true);
@@ -773,7 +787,7 @@ const Customers: React.FC<CustomerProps> = ({ company, role, userName }) => {
                                       <span className={`text-[8px] font-black uppercase px-2 py-0.5 rounded-full ${tx.meta.commission_status === 'REVOKED' ? 'bg-rose-100 text-rose-600' :
                                           tx.meta.commission_status === 'COMPLETED' ? 'bg-emerald-100 text-emerald-600' : 'bg-blue-100 text-blue-600'
                                         }`}>
-                                        Com: ৳{Math.round(tx.meta.total_commission).toLocaleString()}
+                                        Com: ৳{parseAmount(tx.meta.total_commission).toLocaleString()}
                                       </span>
                                       {isAdmin && (
                                         <button
@@ -898,7 +912,7 @@ const Customers: React.FC<CustomerProps> = ({ company, role, userName }) => {
                       <td className="py-2 text-center">৳{it.action === 'REPLACE' ? '0' : it.price}</td>
                       <td className="py-2 text-center">{it.qty}</td>
                       <td className="py-2 text-right">
-                        {it.action === 'REPLACE' ? '৳0' : (it.action === 'RETURN' ? '-' : '') + '৳' + Math.round(parseAmount(it.total)).toLocaleString()}
+                        {it.action === 'REPLACE' ? '৳0' : (it.action === 'RETURN' ? '-' : '') + '৳' + parseAmount(it.total).toLocaleString()}
                       </td>
                     </tr>
                   ))}
@@ -910,7 +924,7 @@ const Customers: React.FC<CustomerProps> = ({ company, role, userName }) => {
               <div className="w-56 space-y-1 font-black italic text-[10px] text-black">
                 <div className="flex justify-between border-t-2 border-black pt-2 text-[15px] text-blue-600">
                   <span className="uppercase">নিট বিল:</span>
-                  <span>৳{Math.round(parseAmount(selectedMemo.amount)).toLocaleString()}</span>
+                  <span>৳{parseAmount(selectedMemo.amount).toLocaleString()}</span>
                 </div>
               </div>
             </div>

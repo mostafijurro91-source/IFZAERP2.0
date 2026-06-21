@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Company, UserRole, User, Product, formatCurrency } from '../types';
 import { supabase, db, mapToDbCompany } from '../lib/supabase';
+import { parseAmount } from '../lib/utils';
 import { jsPDF } from 'jspdf';
 import { sendSMS } from '../lib/sms';
 import * as html2canvasModule from 'html2canvas';
@@ -66,6 +67,20 @@ const Sales: React.FC<SalesProps> = ({ company, role, user }) => {
 
   useEffect(() => { loadData(); }, [company]);
   useEffect(() => { fetchRecentMemos(); }, [company, historyDate]);
+
+  useEffect(() => {
+    const channel = supabase
+      .channel('sales-realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'products' }, () => {
+        loadData();
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'transactions' }, () => {
+        fetchRecentMemos();
+      })
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, [company, historyDate]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -184,7 +199,7 @@ const Sales: React.FC<SalesProps> = ({ company, role, user }) => {
       let foundLastColl = false;
 
       data?.forEach(tx => {
-        const amt = Number(tx.amount);
+        const amt = parseAmount(tx.amount);
         const isBooking = tx.meta?.is_booking === true || tx.items?.[0]?.note?.includes('বুকিং');
 
         if (tx.payment_type === 'COLLECTION') {
@@ -636,7 +651,7 @@ const Sales: React.FC<SalesProps> = ({ company, role, user }) => {
                         title="কমিশন %"
                         className={`w-full p-1.5 rounded-lg text-center text-[9px] font-black text-emerald-500 outline-none ${item.action === 'REPLACE' ? 'bg-white/5 opacity-20' : 'bg-black/40 border border-emerald-500/20'}`}
                         placeholder="0%"
-                        value={Math.round(item.discountPercent || 0)}
+                        value={parseAmount(item.discountPercent || 0)}
                         onChange={e => updateCartItem(idx, { discountPercent: Number(e.target.value) })}
                       />
                     </div>
@@ -852,9 +867,9 @@ const Sales: React.FC<SalesProps> = ({ company, role, user }) => {
                     <p className="text-[11px] font-black text-blue-600 uppercase italic mb-2 leading-none">
                       মেমো নাম্বার: {previewMemoNo()}
                     </p>
-                    <p className="flex justify-between font-bold text-[11px] text-black"><span>পূর্বের বাকি:</span> <span className="text-red-700">{archivePrevDue !== null ? `৳${Math.round(archivePrevDue).toLocaleString()}` : 'N/A'}</span></p>
-                    <p className="flex justify-between font-black text-[13px] border-t border-black pt-1 text-black"><span>আজকের বিল:</span> <span className="text-blue-700">৳{Math.round(archiveNetTotal).toLocaleString()}</span></p>
-                    <p className="flex justify-between font-black text-[15px] border-t-2 border-black pt-1 text-black bg-slate-50 px-1"><span>মোট বাকি:</span> <span className="text-red-600">{archiveFinalTotal !== null ? `৳${Math.round(archiveFinalTotal).toLocaleString()}` : 'N/A'}</span></p>
+                    <p className="flex justify-between font-bold text-[11px] text-black"><span>পূর্বের বাকি:</span> <span className="text-red-700">{archivePrevDue !== null ? `৳${parseAmount(archivePrevDue).toLocaleString()}` : 'N/A'}</span></p>
+                    <p className="flex justify-between font-black text-[13px] border-t border-black pt-1 text-black"><span>আজকের বিল:</span> <span className="text-blue-700">৳{parseAmount(archiveNetTotal).toLocaleString()}</span></p>
+                    <p className="flex justify-between font-black text-[15px] border-t-2 border-black pt-1 text-black bg-slate-50 px-1"><span>মোট বাকি:</span> <span className="text-red-600">{archiveFinalTotal !== null ? `৳${parseAmount(archiveFinalTotal).toLocaleString()}` : 'N/A'}</span></p>
                     {archiveDeadline && (
                       <div className="mt-2 p-2 bg-rose-50 border border-rose-100 rounded-lg">
                         <p className="text-[7px] font-black text-rose-600 uppercase leading-tight">পেমেন্ট ডেডলাইন (কমিশন শর্ত):</p>
@@ -891,7 +906,7 @@ const Sales: React.FC<SalesProps> = ({ company, role, user }) => {
                           <td className="py-2 text-center">৳{it.action === 'REPLACE' ? '0' : it.price || it.sellingPrice}</td>
                           <td className="py-2 text-center">{it.qty}</td>
                           <td className="py-2 text-right">
-                            ৳{Math.abs(Math.round((it.price || it.sellingPrice) * it.qty)).toLocaleString()}
+                            ৳{Math.abs(parseAmount((it.price || it.sellingPrice) * it.qty)).toLocaleString()}
                           </td>
                         </tr>
                       ))}

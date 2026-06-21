@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Company, User, Customer, CompanyRecord, formatCurrency } from '../types';
 import { supabase, mapToDbCompany, db } from '../lib/supabase';
+import { parseAmount, toLocale } from '../lib/utils';
 import { sendSMS } from '../lib/sms';
 
 interface CollectionsProps {
@@ -117,7 +118,7 @@ const Collections: React.FC<CollectionsProps> = ({ company, user, companies }) =
          companies.forEach(co => { coTotals[co.name] = { collected: 0, sales: 0 }; });
 
          txRes.data?.forEach((tx: any) => {
-            const amt: number = Number(tx.amount) || 0;
+            const amt: number = parseAmount(tx.amount);
             const co: string = mapToDbCompany(tx.company);
             if (!coTotals[co]) coTotals[co] = { collected: 0, sales: 0 };
 
@@ -133,13 +134,14 @@ const Collections: React.FC<CollectionsProps> = ({ company, user, companies }) =
             todayTotal: totalCollection,
             coTotals,
             salesTotal: Object.values(coTotals).reduce((sum, c) => sum + c.sales, 0),
-            pendingTotal: filteredRequests.reduce((sum: number, r: any) => sum + Number(r.amount), 0)
+            pendingTotal: filteredRequests.reduce((sum: number, r: any) => sum + parseAmount(r.amount), 0)
          });
       } finally { setLoading(false); }
    };
 
    const fetchCustomerBalances = async (customerId: string) => {
       try {
+         // using shared parseAmount from lib/utils
          const dbUserCompany: string = mapToDbCompany(user.company);
          let query = supabase.from('transactions').select('amount, company, payment_type, meta, items').eq('customer_id', customerId);
          if (isStaff) query = query.eq('company', dbUserCompany);
@@ -147,7 +149,7 @@ const Collections: React.FC<CollectionsProps> = ({ company, user, companies }) =
          const newBalances: Record<string, MultiBalance> = {};
          companies.forEach(co => { newBalances[co.name] = { reg: 0, book: 0 }; });
          txs?.forEach((tx: any) => {
-            const amt: number = Number(tx.amount);
+            const amt: number = parseAmount(tx.amount);
             const dbCo: string = mapToDbCompany(tx.company);
             const isBooking: boolean = tx.meta?.is_booking === true || tx.items?.[0]?.note?.includes('বুকিং');
             if (newBalances[dbCo]) {
@@ -195,7 +197,7 @@ const Collections: React.FC<CollectionsProps> = ({ company, user, companies }) =
          const { data: txData, error: txErr } = await supabase.from('transactions').insert([{
             customer_id: req.customer_id, 
             company: req.company, 
-            amount: Number(req.amount),
+            amount: parseAmount(req.amount),
             payment_type: 'COLLECTION', 
             submitted_by: cleanSubmittedBy,
             items: [{ note: isBooking ? `📅 বুকিং অগ্রিম জমা (${cleanSubmittedBy})` : `💰 নগদ আদায় অনুমোদন (${cleanSubmittedBy})` }]
@@ -209,15 +211,15 @@ const Collections: React.FC<CollectionsProps> = ({ company, user, companies }) =
                order_id: memoId,
                customer_id: req.customer_id,
                status: 'COMPLETED',
-               collected_amount: Number(req.amount),
+               collected_amount: parseAmount(req.amount),
                company: req.company
             }], { onConflict: 'order_id' });
          }
 
          const txIdShort: string = String(txData.id).slice(-6).toUpperCase();
-         await supabase.from('notifications').insert([{
+                  await supabase.from('notifications').insert([{
             customer_id: req.customer_id, title: isBooking ? `বুকিং জমা #${txIdShort}` : `কালেকশন জমা #${txIdShort}`,
-            message: `৳${Number(req.amount).toLocaleString()} ${isBooking ? 'বুকিং জমা' : 'হিসেবে গ্রহণ'} হয়েছে। (${req.company})`,
+                  message: `৳${toLocale(req.amount)} ${isBooking ? 'বুকিং জমা' : 'হিসেবে গ্রহণ'} হয়েছে। (${req.company})`,
             type: 'PAYMENT'
          }]);
          await supabase.from('collection_requests').delete().eq('id', req.id);
@@ -234,13 +236,13 @@ const Collections: React.FC<CollectionsProps> = ({ company, user, companies }) =
                
                let totalDue = 0;
                allTxs?.forEach(tx => {
-                  const a = Number(tx.amount) || 0;
+                  const a = parseAmount(tx.amount);
                   const isBk = tx.meta?.is_booking === true || tx.items?.[0]?.note?.includes('বুকিং');
                   if (tx.payment_type === 'DUE') totalDue += a;
                   else if (tx.payment_type === 'COLLECTION' && !isBk) totalDue -= a;
                });
 
-               const msg = `প্রিয় কাস্টমার, আপনার ${req.company} কোম্পানির ${isBooking ? 'বুকিং বাবদ' : 'বকেয়া বাবদ'} ৳${Number(req.amount).toLocaleString()} জমা গ্রহণ করা হয়েছে। আপনার বর্তমান মোট বকেয়া ৳${totalDue.toLocaleString()}। ধন্যবাদ - ইফজা ইআরপি`;
+               const msg = `প্রিয় কাস্টমার, আপনার ${req.company} কোম্পানির ${isBooking ? 'বুকিং বাবদ' : 'বকেয়া বাবদ'} ৳${toLocale(req.amount)} জমা গ্রহণ করা হয়েছে। আপনার বর্তমান মোট বকেয়া ৳${totalDue.toLocaleString()}। ধন্যবাদ - ইফজা ইআরপি`;
                
                // Set notification and show modal manually (No automatic API call as requested)
                setPendingNotification({ phone: req.customers.phone, msg: msg });
@@ -277,7 +279,7 @@ const Collections: React.FC<CollectionsProps> = ({ company, user, companies }) =
       } catch (err: any) { alert("ত্রুটি: " + err.message); } finally { setIsSaving(false); }
    };
 
-   const safeFormat = (val: any): string => Number(val || 0).toLocaleString();
+   const safeFormat = (val: any): string => parseAmount(val || 0).toLocaleString();
 
    // কে কত টাকা জমা দিল তার হিসাব (Staff-wise totals)
    const staffSummary = useMemo(() => {
@@ -287,7 +289,7 @@ const Collections: React.FC<CollectionsProps> = ({ company, user, companies }) =
          const rawName: string = item.submitted_by || '';
          const cleanName: string = rawName.replace(/\[DH-MEMO-[^\]]+\]/g, '').replace('[BOOKING]', '').trim();
          if (!cleanName) return;
-         summary[cleanName] = (summary[cleanName] || 0) + Number(item.amount);
+         summary[cleanName] = (summary[cleanName] || 0) + parseAmount(item.amount);
       });
       return Object.entries(summary).sort((a: [string, number], b: [string, number]) => b[1] - a[1]);
    }, [pendingRequests, confirmedToday]);
@@ -466,7 +468,7 @@ const Collections: React.FC<CollectionsProps> = ({ company, user, companies }) =
                                  <button 
                                     onClick={() => {
                                        if (tx.customers?.phone) {
-                                          const msg = `প্রিয় কাস্টমার, আপনার ${tx.company} কোম্পানির বকেয়া বাবদ ৳${Number(tx.amount).toLocaleString()} জমা গ্রহণ করা হয়েছে। ধন্যবাদ - ইফজা ইআরপি`;
+                                          const msg = `প্রিয় কাস্টমার, আপনার ${tx.company} কোম্পানির বকেয়া বাবদ ৳${toLocale(tx.amount)} জমা গ্রহণ করা হয়েছে। ধন্যবাদ - ইফজা ইআরপি`;
                                           const cleanPhone = tx.customers.phone.replace(/\D/g, '');
                                           const waPhone = cleanPhone.length === 11 && cleanPhone.startsWith('01') ? '88' + cleanPhone : cleanPhone;
                                           window.open(`https://wa.me/${waPhone}?text=${encodeURIComponent(msg)}`, '_blank');

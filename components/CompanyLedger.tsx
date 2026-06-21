@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Company, UserRole, Product, formatCurrency } from '../types';
 import { supabase, mapToDbCompany } from '../lib/supabase';
+import { parseAmount } from '../lib/utils';
 
 interface LedgerProps {
   company: Company;
@@ -58,7 +59,7 @@ const CompanyLedger: React.FC<LedgerProps> = ({ company, role }: LedgerProps) =>
   const stats = useMemo(() => {
     let pur = 0, pay = 0, exp = 0, bank = 0;
     ledgerData.forEach((d: any) => {
-      const amt = Number(d.amount) || 0;
+         const amt = parseAmount(d.amount || 0);
       if (d.type === 'PURCHASE') pur += amt;
       else if (d.type === 'PAYMENT') pay += amt;
       else if (d.type === 'EXPENSE') exp += amt;
@@ -87,7 +88,7 @@ const CompanyLedger: React.FC<LedgerProps> = ({ company, role }: LedgerProps) =>
       const { error } = await supabase.from('company_ledger').insert([{
         company: mapToDbCompany(company),
         type: 'BANK_TRANSFER',
-        amount: Number(bankForm.amount),
+            amount: parseAmount(bankForm.amount),
         note: note,
         date: bankForm.date,
         meta: { bank: bankForm.bank_name, ref: bankForm.ref_no }
@@ -105,7 +106,7 @@ const CompanyLedger: React.FC<LedgerProps> = ({ company, role }: LedgerProps) =>
     setIsSaving(true);
     try {
       const dbCo = mapToDbCompany(company);
-      const total = bulkCart.reduce((sum, i) => sum + (i.qty * i.tp), 0);
+      const total = bulkCart.reduce((sum, i) => sum + (parseAmount(i.qty || 0) * parseAmount(i.tp || 0)), 0);
       const note = "পারচেজ: " + bulkCart.map((i: any) => `${i.qty}X ${i.name}`).join(", ");
       const { error: ledgerErr } = await supabase.from('company_ledger').insert([{
         company: dbCo, type: 'PURCHASE', amount: total, note: note, date: purchaseDate, items_json: bulkCart
@@ -122,7 +123,7 @@ const CompanyLedger: React.FC<LedgerProps> = ({ company, role }: LedgerProps) =>
     try {
       await supabase.from('company_ledger').insert([{
         company: mapToDbCompany(company), type: paymentForm.type,
-        amount: Number(paymentForm.amount), note: paymentForm.note || `${paymentForm.type} Entry`,
+            amount: parseAmount(paymentForm.amount), note: paymentForm.note || `${paymentForm.type} Entry`,
         date: paymentForm.date
       }]);
       setShowPaymentModal(false);

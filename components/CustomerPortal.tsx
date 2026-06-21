@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { User, Advertisement, Company, Product, Booking, Transaction, MarketOrder, MarketOrderItem, OrderAction, CompanyStats, OrderItem, TransactionItem } from '../types';
 import { supabase, mapToDbCompany } from '../lib/supabase';
+import { parseAmount, toLocale } from '../lib/utils';
 
 interface PortalProps {
    type: 'DASHBOARD' | 'CATALOG' | 'LEDGER' | 'ORDER' | 'BOOKING' | 'ORDER_HISTORY';
@@ -143,7 +144,7 @@ const CustomerPortal: React.FC<PortalProps> = ({ type, user }: PortalProps) => {
          (allTxs as unknown as Transaction[] || []).forEach(tx => {
             const dbCo = mapToDbCompany(tx.company);
             if (stats[dbCo]) {
-               const amt = Number(tx.amount) || 0;
+               const amt = parseAmount(tx.amount);
                const isBooking = tx.meta?.is_booking === true || (tx.items && tx.items[0]?.note?.includes('বুকিং'));
 
                if (tx.payment_type === 'COLLECTION') {
@@ -166,12 +167,28 @@ const CustomerPortal: React.FC<PortalProps> = ({ type, user }: PortalProps) => {
       } catch (err) { }
    }, [user.customer_id]);
 
+   const fetchCustomerData = useCallback(() => {
+      fetchAllStats();
+      fetchAds();
+   }, [fetchAllStats]);
+
    useEffect(() => {
-      if (user.customer_id) {
-         fetchAllStats();
-         fetchAds();
-      }
-   }, [user.customer_id, fetchAllStats]);
+      fetchCustomerData();
+   }, [user.customer_id]);
+
+   useEffect(() => {
+     const channel = supabase
+       .channel(`portal-realtime-${user.customer_id}`)
+       .on('postgres_changes', { event: '*', schema: 'public', table: 'transactions', filter: `customer_id=eq.${user.customer_id}` }, () => {
+         fetchCustomerData();
+       })
+       .on('postgres_changes', { event: '*', schema: 'public', table: 'collection_requests', filter: `customer_id=eq.${user.customer_id}` }, () => {
+         fetchCustomerData();
+       })
+       .subscribe();
+ 
+     return () => { supabase.removeChannel(channel); };
+   }, [user.customer_id, fetchCustomerData]);
 
    useEffect(() => {
       if (!user.customer_id) return;
@@ -231,7 +248,7 @@ const CustomerPortal: React.FC<PortalProps> = ({ type, user }: PortalProps) => {
          const { error } = await supabase.from('market_orders').insert([{
             customer_id: user.customer_id,
             company: dbCo,
-            total_amount: Math.round(calculateTotal()),
+            total_amount: parseAmount(calculateTotal()),
             status: 'PENDING',
             items: orderCart,
             created_by: user.name,
@@ -259,7 +276,7 @@ const CustomerPortal: React.FC<PortalProps> = ({ type, user }: PortalProps) => {
       }, 100);
    };
 
-   const safeFormat = (val: any) => Math.round(Number(val || 0)).toLocaleString();
+   const safeFormat = (val: any) => parseAmount(val).toLocaleString();
 
    const brandColors: Record<string, string> = {
       'Transtec': 'bg-amber-500',
@@ -593,7 +610,7 @@ const CustomerPortal: React.FC<PortalProps> = ({ type, user }: PortalProps) => {
                                        </p>
                                        {returnItems.length > 0 && (
                                           <p className="text-[8px] font-bold text-orange-600 uppercase mt-1">
-                                             ফেরত পণ্য বাবদ ৳{Math.abs(Math.round(returnAmount)).toLocaleString()} সমন্বিত
+                                             ফেরত পণ্য বাবদ ৳{Math.abs(parseAmount(returnAmount)).toLocaleString()} সমন্বিত
                                           </p>
                                        )}
                                     </td>
@@ -655,7 +672,7 @@ const CustomerPortal: React.FC<PortalProps> = ({ type, user }: PortalProps) => {
                                     </td>
                                     <td className="py-4 text-center font-black text-xs">{item.qty}</td>
                                     <td className={`py-4 text-right font-black italic text-xs ${item.action === 'RETURN' ? 'text-rose-600' : ''}`}>
-                                       {item.action === 'RETURN' ? '-' : ''}৳{Math.abs(Math.round(item.total || 0)).toLocaleString()}
+                                       {item.action === 'RETURN' ? '-' : ''}৳{Math.abs(parseAmount(item.total || 0)).toLocaleString()}
                                     </td>
                                  </tr>
                               ))}

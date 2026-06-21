@@ -281,13 +281,13 @@ const Dashboard: React.FC<DashboardProps> = ({ company, role }) => {
                           {d.month}
                         </span>
                       </td>
-                      <td className="px-6 py-4 text-center text-blue-700 bg-blue-50/30 font-black">{Math.round(d.tpSales).toLocaleString()} ৳</td>
-                      <td className="px-6 py-4 text-center text-slate-800">{Math.round(d.sales).toLocaleString()} ৳</td>
-                      <td className="px-6 py-4 text-center text-emerald-600 bg-emerald-50/30">{Math.round(d.commission).toLocaleString()} ৳</td>
-                      <td className="px-6 py-4 text-center text-pink-600 bg-pink-50/30">{Math.round(d.gift).toLocaleString()} ৳</td>
-                      <td className="px-6 py-4 text-center text-rose-500">{d.returns > 0 ? `-${Math.round(d.returns).toLocaleString()} ৳` : '-'}</td>
+                      <td className="px-6 py-4 text-center text-blue-700 bg-blue-50/30 font-black">{parseAmount(d.tpSales).toLocaleString()} ৳</td>
+                      <td className="px-6 py-4 text-center text-slate-800">{parseAmount(d.sales).toLocaleString()} ৳</td>
+                      <td className="px-6 py-4 text-center text-emerald-600 bg-emerald-50/30">{parseAmount(d.commission).toLocaleString()} ৳</td>
+                      <td className="px-6 py-4 text-center text-pink-600 bg-pink-50/30">{parseAmount(d.gift).toLocaleString()} ৳</td>
+                      <td className="px-6 py-4 text-center text-rose-500">{d.returns > 0 ? `-${parseAmount(d.returns).toLocaleString()} ৳` : '-'}</td>
                       <td className="px-6 py-4 text-right text-emerald-600 font-black text-[14px]">
-                        {d.collection > 0 ? `+${Math.round(d.collection).toLocaleString()} ৳` : '-'}
+                        {d.collection > 0 ? `+${parseAmount(d.collection).toLocaleString()} ৳` : '-'}
                       </td>
                     </tr>
                   );
@@ -368,7 +368,7 @@ const Dashboard: React.FC<DashboardProps> = ({ company, role }) => {
                           </span>
                         </td>
                         <td className="px-6 py-4 text-right">
-                          <span className="font-black text-rose-600 text-lg">{Math.round(c.due).toLocaleString()}৳</span>
+                          <span className="font-black text-rose-600 text-lg">{parseAmount(c.due).toLocaleString()}৳</span>
                         </td>
                       </tr>
                     );

@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Product, Company, UserRole, formatCurrency } from '../types';
 import { supabase, mapToDbCompany } from '../lib/supabase';
+import { parseAmount } from '../lib/utils';
 
 interface InventoryProps {
   company: Company;
@@ -45,9 +46,9 @@ const Inventory: React.FC<InventoryProps> = ({ company, role }) => {
       ledgerData?.forEach(ledger => {
         ledger.items_json?.forEach((it: any) => {
           const key = getStatKey(it.id, it.name);
-          if (key) {
+            if (key) {
             if (!statsMap[key]) statsMap[key] = { purchased: 0, sold: 0, replaced: 0, returned: 0 };
-            statsMap[key].purchased += Number(it.qty || 0);
+            statsMap[key].purchased += parseAmount(it.qty || 0);
           }
         });
       });
@@ -55,10 +56,10 @@ const Inventory: React.FC<InventoryProps> = ({ company, role }) => {
       txData?.forEach(tx => {
         tx.items?.forEach((it: any) => {
           const key = getStatKey(it.id, it.name);
-          if (key) {
+            if (key) {
             if (!statsMap[key]) statsMap[key] = { purchased: 0, sold: 0, replaced: 0, returned: 0 };
-            if (it.action === 'SALE' || !it.action) statsMap[key].sold += Number(it.qty || 0);
-            if (it.action === 'RETURN') statsMap[key].returned += Number(it.qty || 0);
+            if (it.action === 'SALE' || !it.action) statsMap[key].sold += parseAmount(it.qty || 0);
+            if (it.action === 'RETURN') statsMap[key].returned += parseAmount(it.qty || 0);
           }
         });
       });
@@ -67,7 +68,7 @@ const Inventory: React.FC<InventoryProps> = ({ company, role }) => {
         const key = getStatKey(rp.product_id, rp.product_name);
         if (key) {
           if (!statsMap[key]) statsMap[key] = { purchased: 0, sold: 0, replaced: 0, returned: 0 };
-          statsMap[key].replaced += Number(rp.qty || 0);
+          statsMap[key].replaced += parseAmount(rp.qty || 0);
         }
       });
 
@@ -93,11 +94,11 @@ const Inventory: React.FC<InventoryProps> = ({ company, role }) => {
     if (isSaving || !newProd.name) return;
     setIsSaving(true);
     try {
-      const { error } = await supabase.from('products').insert([{
+        const { error } = await supabase.from('products').insert([{
         name: newProd.name.trim(),
-        tp: Number(newProd.tp) || 0,
-        mrp: Number(newProd.mrp) || 0,
-        stock: Number(newProd.stock) || 0,
+        tp: parseAmount(newProd.tp) || 0,
+        mrp: parseAmount(newProd.mrp) || 0,
+        stock: parseAmount(newProd.stock) || 0,
         company: dbCo
       }]);
       if (error) throw error;
@@ -121,11 +122,11 @@ const Inventory: React.FC<InventoryProps> = ({ company, role }) => {
     if (!editingProduct || isSaving) return;
     setIsSaving(true);
     try {
-      const { error } = await supabase.from('products').update({
+        const { error } = await supabase.from('products').update({
         name: editingProduct.name,
-        tp: Number(editingProduct.tp),
-        mrp: Number(editingProduct.mrp),
-        stock: Number(editingProduct.stock)
+        tp: parseAmount(editingProduct.tp),
+        mrp: parseAmount(editingProduct.mrp),
+        stock: parseAmount(editingProduct.stock)
       }).eq('id', editingProduct.id);
       if (error) throw error;
       setShowEditModal(false);

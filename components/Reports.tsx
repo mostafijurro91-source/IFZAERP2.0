@@ -51,6 +51,23 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName }) => {
     }
   }, [activeReport, company, selectedDate, selectedCustomerId]);
 
+  useEffect(() => {
+    const channel = supabase
+      .channel('reports-realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'transactions' }, () => {
+        if (activeReport !== 'MAIN' && activeReport !== 'CUSTOMER_LEDGER') fetchReport(activeReport);
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'collection_requests' }, () => {
+        if (activeReport !== 'MAIN' && activeReport !== 'CUSTOMER_LEDGER') fetchReport(activeReport);
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'bookings' }, () => {
+        if (activeReport !== 'MAIN' && activeReport !== 'CUSTOMER_LEDGER') fetchReport(activeReport);
+      })
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, [activeReport, company, selectedDate, selectedCustomerId]);
+
   const loadLedgerCustomers = async () => {
     const { data } = await supabase.from('customers').select('id, name, address').order('name');
     setLedgerCustomers(data || []);
