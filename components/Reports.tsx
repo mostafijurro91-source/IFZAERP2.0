@@ -106,7 +106,7 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName }) => {
           // Determine true historical "purchased" by reverse calculating from the true current DB stock
           // Equation: stock = purchased - sold - replaced + returned
           // Therfore: purchased = stock + sold + replaced - returned
-          const dynamicPurchased = Number(p.stock) + map.sold + map.replaced - map.returned;
+          const dynamicPurchased = parseAmount(p.stock) + map.sold + map.replaced - map.returned;
 
           return {
             ...p,
@@ -376,8 +376,8 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName }) => {
         bookRes.data?.forEach((b: any) => b.items?.forEach((it: any) => {
           const pid = it.product_id || it.id;
           if (statsMap[pid]) {
-            const qty = Number(it.delivered_qty || 0);
-            const val = qty * Number(it.unitPrice || 0);
+            const qty = parseAmount(it.delivered_qty);
+            const val = qty * parseAmount(it.unitPrice);
             const isWeekly = b.created_at >= weekStartISO;
 
             statsMap[pid].book_total += qty;
@@ -390,7 +390,7 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName }) => {
         replRes.data?.forEach((rp: any) => {
           const pid = rp.product_id;
           if (statsMap[pid]) {
-            const qty = Number(rp.qty || 0);
+            const qty = parseAmount(rp.qty);
             const isWeekly = rp.created_at >= weekStartISO;
             statsMap[pid].repl_total += qty;
             if (isWeekly) statsMap[pid].repl_week += qty;
@@ -1009,9 +1009,9 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName }) => {
 
               <div className="text-right space-y-0.5 w-44">
                 <p className="text-[9px] font-black uppercase text-black mb-1">তারিখ: {new Date(selectedMemo.created_at).toLocaleDateString('bn-BD')}</p>
-                <p className="flex justify-between font-black text-[11px] text-slate-500"><span>পূর্বের বাকি:</span> <span>৳{(Number(selectedMemo.meta?.previous_due) || 0).toLocaleString()}</span></p>
-                <p className="flex justify-between font-black text-[13px] border-t border-black pt-0.5 text-black"><span>মেমো বিল:</span> <span className="text-blue-700">৳{(Number(selectedMemo.amount) || 0).toLocaleString()}</span></p>
-                <p className="flex justify-between font-black text-[15px] border-t-2 border-black pt-1 text-black bg-slate-50 px-1 mt-1"><span>মোট বাকি:</span> <span className="text-red-600">৳{(Number(selectedMemo.meta?.final_balance) || (Number(selectedMemo.amount) + (Number(selectedMemo.meta?.previous_due) || 0))).toLocaleString()}</span></p>
+                <p className="flex justify-between font-black text-[11px] text-slate-500"><span>পূর্বের বাকি:</span> <span>৳{parseAmount(selectedMemo.meta?.previous_due).toLocaleString()}</span></p>
+                <p className="flex justify-between font-black text-[13px] border-t border-black pt-0.5 text-black"><span>মেমো বিল:</span> <span className="text-blue-700">৳{parseAmount(selectedMemo.amount).toLocaleString()}</span></p>
+                <p className="flex justify-between font-black text-[15px] border-t-2 border-black pt-1 text-black bg-slate-50 px-1 mt-1"><span>মোট বাকি:</span> <span className="text-red-600">৳{(parseAmount(selectedMemo.meta?.final_balance) || (parseAmount(selectedMemo.amount) + parseAmount(selectedMemo.meta?.previous_due))).toLocaleString()}</span></p>
               </div>
             </div>
 
@@ -1037,7 +1037,7 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName }) => {
                       </td>
                       <td className={`${(selectedMemo.items?.length || 0) > 30 ? 'py-0.5' : 'py-1.5'} text-center`}>৳{it.price || 0}</td>
                       <td className={`${(selectedMemo.items?.length || 0) > 30 ? 'py-0.5' : 'py-1.5'} text-center`}>{it.qty}</td>
-                      <td className={`${(selectedMemo.items?.length || 0) > 30 ? 'py-0.5' : 'py-1.5'} text-right`}>৳{(Number(it.total) || 0).toLocaleString()}</td>
+                      <td className={`${(selectedMemo.items?.length || 0) > 30 ? 'py-0.5' : 'py-1.5'} text-right`}>৳{parseAmount(it.total).toLocaleString()}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -1051,7 +1051,7 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName }) => {
                 <p>প্রিন্ট সময়: {new Date().toLocaleString('bn-BD')}</p>
               </div>
               <div className="text-right">
-                <p className={`${(selectedMemo.items?.length || 0) > 30 ? 'text-[12px]' : 'text-[15px]'} font-black italic tracking-tighter text-black`}>TOTAL: ৳{(Number(selectedMemo.amount) || 0).toLocaleString()}</p>
+                <p className={`${(selectedMemo.items?.length || 0) > 30 ? 'text-[12px]' : 'text-[15px]'} font-black italic tracking-tighter text-black`}>TOTAL: ৳{parseAmount(selectedMemo.amount).toLocaleString()}</p>
               </div>
             </div>
           </div>
