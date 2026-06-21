@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Company, formatCurrency, UserRole, Product, Customer } from '../types';
 import { supabase, mapToDbCompany } from '../lib/supabase';
+import { parseAmount } from '../lib/utils';
 import { jsPDF } from 'jspdf';
 import * as html2canvasModule from 'html2canvas';
 
@@ -77,27 +78,27 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName }) => {
 
         // Track regular purchases strictly for cross-checking if needed
         ledgerRes.data?.forEach((l: any) => l.items_json?.forEach((it: any) => {
-          if (statsMap[it.id]) statsMap[it.id].purchased += Number(it.qty || 0);
+          if (statsMap[it.id]) statsMap[it.id].purchased += parseAmount(it.qty || 0);
         }));
 
         // Track sales from Transactions (POS Sales)
         txRes.data?.forEach((tx: any) => tx.items?.forEach((it: any) => {
           if (statsMap[it.id]) {
-            if (it.action === 'SALE' || !it.action) statsMap[it.id].sold += Number(it.qty || 0);
-            if (it.action === 'RETURN') statsMap[it.id].returned += Number(it.qty || 0);
+            if (it.action === 'SALE' || !it.action) statsMap[it.id].sold += parseAmount(it.qty || 0);
+            if (it.action === 'RETURN') statsMap[it.id].returned += parseAmount(it.qty || 0);
           }
         }));
 
         // Track sales from Bookings (Wholesale Deliveries)
         bookRes.data?.forEach((b: any) => b.items?.forEach((it: any) => {
           if (statsMap[it.id]) {
-            statsMap[it.id].sold += Number(it.delivered_qty || 0);
+            statsMap[it.id].sold += parseAmount(it.delivered_qty || 0);
           }
         }));
 
         // Track warranty replacements
         replRes.data?.forEach((rp: any) => {
-          if (statsMap[rp.product_id]) statsMap[rp.product_id].replaced += Number(rp.qty || 0);
+          if (statsMap[rp.product_id]) statsMap[rp.product_id].replaced += parseAmount(rp.qty || 0);
         });
 
         setReportData(productsList.map((p: Product) => {
@@ -149,10 +150,10 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName }) => {
 
         const flattened: any[] = [];
         data?.forEach((b: any) => {
-          const totalOrd = b.items?.reduce((s: number, i: any) => s + (Number(i.qty) || 0), 0) || 0;
-          const totalDel = b.items?.reduce((s: number, i: any) => s + (Number(i.delivered_qty) || 0), 0) || 0;
+          const totalOrd = b.items?.reduce((s: number, i: any) => s + parseAmount(i.qty || 0), 0) || 0;
+          const totalDel = b.items?.reduce((s: number, i: any) => s + parseAmount(i.delivered_qty || 0), 0) || 0;
 
-          if (!b.items || b.items.length === 0) {
+            if (!b.items || b.items.length === 0) {
             flattened.push({
               ...b,
               is_first_of_booking: true,
@@ -163,24 +164,24 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName }) => {
               item_del: 0,
               item_rem: 0,
               item_rem_val: 0,
-              booking_total: Number(b.total_amount || 0),
-              booking_advance: Number(b.advance_amount || 0)
+              booking_total: parseAmount(b.total_amount || 0),
+              booking_advance: parseAmount(b.advance_amount || 0)
             });
           } else {
             b.items.forEach((it: any, idx: number) => {
-              const rem = Math.max(0, Number(it.qty || 0) - Number(it.delivered_qty || 0));
+              const rem = Math.max(0, parseAmount(it.qty || 0) - parseAmount(it.delivered_qty || 0));
               flattened.push({
                 ...b,
                 is_first_of_booking: idx === 0,
                 item_id: it.id,
                 item_name: it.name,
-                item_price: Number(it.unitPrice || 0),
-                item_ord: Number(it.qty || 0),
-                item_del: Number(it.delivered_qty || 0),
+                item_price: parseAmount(it.unitPrice || 0),
+                item_ord: parseAmount(it.qty || 0),
+                item_del: parseAmount(it.delivered_qty || 0),
                 item_rem: rem,
-                item_rem_val: rem * Number(it.unitPrice || 0),
-                booking_total: Number(b.total_amount || 0),
-                booking_advance: Number(b.advance_amount || 0)
+                item_rem_val: rem * parseAmount(it.unitPrice || 0),
+                booking_total: parseAmount(b.total_amount || 0),
+                booking_advance: parseAmount(b.advance_amount || 0)
               });
             });
           }
@@ -197,15 +198,33 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName }) => {
         setReportData(data || []);
       }
       else if (type === 'CUSTOMER_DUES') {
-        const [{ data: custs }, { data: txs }] = await Promise.all([
-          supabase.from('customers').select('*').order('name'),
-          supabase.from('transactions').select('customer_id, amount, payment_type, company').eq('company', dbCompany)
-        ]);
+        const { data: custs } = await supabase.from('customers').select('*').order('name');
+        
+        let allTx: any[] = [];
+        let page = 0;
+        while (true) {
+          const { data: txData } = await supabase.from('transactions')
+            .select('customer_id, amount, payment_type, company, meta, items')
+            .eq('company', dbCompany)
+            .range(page * 1000, (page + 1) * 1000 - 1);
+          
+          if (txData) allTx = allTx.concat(txData);
+          if (!txData || txData.length < 1000) break;
+          page++;
+        }
+
         const dues: Record<string, number> = {};
-        txs?.forEach((tx: any) => {
+        allTx.forEach((tx: any) => {
           const cid = tx.customer_id;
           if (!dues[cid]) dues[cid] = 0;
-          dues[cid] += (tx.payment_type === 'COLLECTION' ? -Number(tx.amount || 0) : Number(tx.amount || 0));
+          const amt = parseAmount(tx.amount || 0);
+          const isBooking = tx.meta?.is_booking === true || tx.items?.[0]?.note?.includes('বুকিং');
+          
+          if (tx.payment_type === 'DUE') {
+            dues[cid] += amt;
+          } else if (tx.payment_type === 'COLLECTION' && !isBooking) {
+            dues[cid] -= amt;
+          }
         });
         
         const finalData = custs?.map((c: any) => ({ ...c, balance: dues[c.id] || 0 })).filter((c: any) => Math.abs(c.balance) > 1) || [];
@@ -238,7 +257,7 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName }) => {
         
         let balance = 0;
         const processed = data?.map(tx => {
-          const amt = Number(tx.amount);
+          const amt = parseAmount(tx.amount);
           if (tx.payment_type === 'COLLECTION') {
             balance -= amt;
           } else {
@@ -272,7 +291,7 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName }) => {
 
         txs?.forEach((tx: any) => {
           const co = tx.company || 'Unknown';
-          const amt = Number(tx.amount || 0);
+          const amt = parseAmount(tx.amount || 0);
           
           if (tx.payment_type === 'COLLECTION') {
             collectionMap[co] = (collectionMap[co] || 0) + amt;
@@ -281,7 +300,7 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName }) => {
             salesMap[co] = (salesMap[co] || 0) + amt;
             totalSalesAll += amt;
             
-            const comm = Number(tx.meta?.total_commission || 0);
+            const comm = parseAmount(tx.meta?.total_commission || 0);
             commissionMap[co] = (commissionMap[co] || 0) + comm;
             totalCommAll += comm;
 
@@ -336,8 +355,8 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName }) => {
         txRes.data?.forEach((tx: any) => tx.items?.forEach((it: any) => {
           const pid = it.id || it.product_id;
           if (statsMap[pid]) {
-            const qty = Number(it.qty || 0);
-            const val = qty * Number(it.tp || it.price || 0);
+            const qty = parseAmount(it.qty || 0);
+            const val = qty * parseAmount(it.tp || it.price || 0); 
             const isWeekly = tx.created_at >= weekStartISO;
 
             if (it.action === 'SALE' || !it.action) {
@@ -505,18 +524,24 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName }) => {
   const summary = useMemo(() => {
     if (activeReport === 'BOOKING_LOG') {
       return {
-        totalRemQty: filteredData.reduce((s: number, i: any) => s + Number(i.item_rem || 0), 0),
-        totalRemVal: filteredData.reduce((s: number, i: any) => s + Number(i.item_rem_val || 0), 0)
+        totalRemQty: filteredData.reduce((s: number, i: any) => s + parseAmount(i.item_rem || 0), 0),
+        totalRemVal: filteredData.reduce((s: number, i: any) => s + parseAmount(i.item_rem_val || 0), 0)
       };
     }
     if (activeReport === 'STOCK_REPORT') {
       return {
-        totalRemQty: filteredData.reduce((s: number, i: any) => s + Number(i.current_stock || 0), 0),
-        totalRemVal: filteredData.reduce((s: number, i: any) => s + (Number(i.current_stock || 0) * Number(i.tp || 0)), 0)
+        totalRemQty: filteredData.reduce((s: number, i: any) => s + parseAmount(i.current_stock || 0), 0),
+        totalRemVal: filteredData.reduce((s: number, i: any) => s + (parseAmount(i.current_stock || 0) * parseAmount(i.tp || 0)), 0)
       };
     }
     if (activeReport === 'CUSTOMER_DUES') {
-      return { totalRemQty: 0, totalRemVal: filteredData.reduce((s: number, i: any) => s + Number(i.balance || 0), 0) };
+      return { 
+        totalRemQty: 0, 
+        totalRemVal: filteredData.reduce((s: number, i: any) => {
+          const bal = parseAmount(i.balance || 0);
+          return s + (bal > 0 ? bal : 0);
+        }, 0) 
+      };
     }
     if (activeReport === 'COMPANY_SALES') {
       return {
@@ -529,17 +554,17 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName }) => {
     }
     if (activeReport === 'PRODUCT_SALES_REPORT') {
       return {
-        totalPosSold: filteredData.reduce((s: number, i: any) => s + Number(i.pos_total || 0), 0),
-        totalBookingSold: filteredData.reduce((s: number, i: any) => s + Number(i.book_total || 0), 0),
-        totalRepl: filteredData.reduce((s: number, i: any) => s + Number(i.repl_total || 0), 0),
-        totalGross: filteredData.reduce((s: number, i: any) => s + Number(i.total_gross || 0), 0),
-        totalRemQty: filteredData.reduce((s: number, i: any) => s + Number(i.total_sold || 0), 0),
-        totalRemVal: filteredData.reduce((s: number, i: any) => s + Number(i.total_value || 0), 0)
+        totalPosSold: filteredData.reduce((s: number, i: any) => s + parseAmount(i.pos_total || 0), 0),
+        totalBookingSold: filteredData.reduce((s: number, i: any) => s + parseAmount(i.book_total || 0), 0),
+        totalRepl: filteredData.reduce((s: number, i: any) => s + parseAmount(i.repl_total || 0), 0),
+        totalGross: filteredData.reduce((s: number, i: any) => s + parseAmount(i.total_gross || 0), 0),
+        totalRemQty: filteredData.reduce((s: number, i: any) => s + parseAmount(i.total_sold || 0), 0),
+        totalRemVal: filteredData.reduce((s: number, i: any) => s + parseAmount(i.total_value || 0), 0)
       };
     }
-    return {
+      return {
       totalRemQty: 0,
-      totalRemVal: filteredData.reduce((s: number, i: any) => s + Number(i.amount || 0), 0)
+      totalRemVal: filteredData.reduce((s: number, i: any) => s + parseAmount(i.amount || 0), 0)
     };
   }, [filteredData, activeReport]);
 
@@ -717,7 +742,7 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName }) => {
                         </div>
                       </td>
                       <td className="p-3 border-r border-black text-center uppercase text-[9px] font-black">{item.company}</td>
-                      <td className="p-3 border-r border-black text-right font-black italic">৳{(Number(item.amount) || 0).toLocaleString()}</td>
+                      <td className="p-3 border-r border-black text-right font-black italic">৳{parseAmount(item.amount).toLocaleString()}</td>
                       <td className="p-3 border-r border-black"></td>
                       <td className="p-3"></td>
                     </>
@@ -727,7 +752,7 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName }) => {
                         <p className="font-black uppercase">{item.customers?.name}</p>
                       </td>
                       <td className="p-3 border-r border-black text-center uppercase text-[9px] font-black">{item.company}</td>
-                      <td className="p-3 border-r border-black text-right font-black italic text-emerald-600">৳{(Number(item.amount) || 0).toLocaleString()}</td>
+                      <td className="p-3 border-r border-black text-right font-black italic text-emerald-600">৳{parseAmount(item.amount).toLocaleString()}</td>
                       <td className="p-3 text-center leading-tight">
                         <div className="flex flex-col items-center gap-1">
                           <span className="text-blue-700 bg-blue-50 px-3 py-1 rounded-lg border border-blue-100 shadow-sm font-black uppercase text-[10px]">
@@ -783,7 +808,7 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName }) => {
                       <td className="p-3 border-r border-black text-center text-emerald-600">+{(item.purchased || 0)}</td>
                       <td className="p-3 border-r border-black text-center text-rose-600">-{(item.sold || 0)}</td>
                       <td className="p-3 border-r border-black text-center font-black bg-slate-50 text-base italic">{(item.current_stock || 0)}</td>
-                      <td className="p-3 text-right font-black italic">৳{(Number(item.current_stock || 0) * Number(item.tp || 0)).toLocaleString()}</td>
+                      <td className="p-3 text-right font-black italic">৳{(parseAmount(item.current_stock || 0) * parseAmount(item.tp || 0)).toLocaleString()}</td>
                     </>
                   ) : activeReport === 'CUSTOMER_LEDGER' ? (
                     <>
