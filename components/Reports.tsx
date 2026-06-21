@@ -773,8 +773,8 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName }) => {
                           <div className="mb-2 pb-2 border-b border-black/10">
                             <p className="font-black uppercase italic leading-none text-indigo-700">{item.customers?.name}</p>
                             <div className="flex justify-between mt-1 text-[8px] font-bold text-slate-500 uppercase">
-                              <span>Bill: ৳{Math.round(item.booking_total).toLocaleString()}</span>
-                              <span>Paid: ৳{Math.round(item.booking_advance).toLocaleString()}</span>
+                              <span>Bill: ৳{parseAmount(item.booking_total).toLocaleString()}</span>
+                              <span>Paid: ৳{parseAmount(item.booking_advance).toLocaleString()}</span>
                             </div>
                           </div>
                         )}
@@ -817,13 +817,13 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName }) => {
                         {item.payment_type === 'DUE' ? getMemoNo(item.id, item.created_at, item.meta) : 'টাকা জমা'}
                       </td>
                       <td className="p-3 border-r border-black text-right font-black text-indigo-700">
-                        {item.payment_type === 'DUE' ? `৳${Math.round(item.amount).toLocaleString()}` : '-'}
+                        {item.payment_type === 'DUE' ? `৳${parseAmount(item.amount).toLocaleString()}` : '-'}
                       </td>
                       <td className="p-3 border-r border-black text-right font-black text-emerald-600">
-                        {item.payment_type === 'COLLECTION' ? `৳${Math.round(item.amount).toLocaleString()}` : '-'}
+                        {item.payment_type === 'COLLECTION' ? `৳${parseAmount(item.amount).toLocaleString()}` : '-'}
                       </td>
                       <td className="p-3 border-r border-black text-right font-black bg-slate-50 text-base italic text-rose-600">
-                        ৳{Math.round(item.runningBalance).toLocaleString()}
+                        ৳{parseAmount(item.runningBalance).toLocaleString()}
                       </td>
                       <td className="p-3 border-r border-black text-center"></td>
                       <td className="p-3 text-center"></td>
@@ -834,16 +834,16 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName }) => {
                         <p className="font-black text-[11px]">{item.name}</p>
                       </td>
                       <td className="p-3 border-r border-black text-right font-black italic text-[13px] text-slate-700">
-                        ৳{Math.round(item.sales).toLocaleString()}
+                        ৳{parseAmount(item.sales).toLocaleString()}
                       </td>
                       <td className="p-3 border-r border-black text-right font-black italic text-[13px] text-rose-600">
-                        ৳{Math.round(item.commission).toLocaleString()}
+                        ৳{parseAmount(item.commission).toLocaleString()}
                       </td>
                       <td className="p-3 border-r border-black text-right font-black italic text-sm text-indigo-700 bg-indigo-50">
-                        ৳{Math.round(item.myEarnings).toLocaleString()}
+                        ৳{parseAmount(item.myEarnings).toLocaleString()}
                       </td>
                       <td className="p-3 border-r border-black text-right font-black italic text-[13px] text-emerald-600">
-                        ৳{Math.round(item.collection).toLocaleString()}
+                        ৳{parseAmount(item.collection).toLocaleString()}
                       </td>
                       <td className="p-3 text-center">
                         <div className="flex flex-col items-center">
@@ -884,7 +884,7 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName }) => {
                         {item.total_gross || 0}
                       </td>
                       <td className="p-3 text-right font-black italic text-sm">
-                        ৳{Math.round(item.total_value || 0).toLocaleString()}
+                        ৳{parseAmount(item.total_value).toLocaleString()}
                       </td>
                     </>
                   ) : (
