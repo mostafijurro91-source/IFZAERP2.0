@@ -239,7 +239,7 @@ const Sales: React.FC<SalesProps> = ({ company, role, user }) => {
 
   const addToCart = (p: Product) => {
     const existing = cart.find(i => i.id === p.id && i.action === 'SALE');
-    const defaultComm = p.commission_percent || 0;
+    const defaultComm = (p as any).commission_percent || 0;
     
     if (existing) {
       setCart(cart.map(i => (i.id === p.id && i.action === 'SALE') ? { ...i, qty: i.qty + 1 } : i));
@@ -511,7 +511,7 @@ const Sales: React.FC<SalesProps> = ({ company, role, user }) => {
               <div className="relative" ref={areaRef}>
                 <button
                   onClick={() => setShowAreaDropdown(!showAreaDropdown)}
-                  className="w-full p-4 bg-slate-50 border rounded-2xl outline-none font-bold text-xs flex justify-between items-center transition-all focus:border-blue-500"
+                  className="w-full p-4 bg-slate-50 border rounded-2xl outline-none font-bold text-xs flex justify-between items-center transition-all focus:border-cyan-500"
                 >
                   <span className="uppercase">{areaFilter || "সকল এরিয়া"}</span>
                   <span className="text-[8px] opacity-40">▼</span>
@@ -537,7 +537,7 @@ const Sales: React.FC<SalesProps> = ({ company, role, user }) => {
                       {Array.from(new Set(customers.map(c => String(c.address || "").trim()).filter(Boolean))).sort().filter(a => a.toLowerCase().includes((areaSearch || "").toLowerCase())).map(area => (
                         <div
                           key={area}
-                          className="p-4 hover:bg-blue-50 cursor-pointer text-[10px] font-black uppercase text-slate-700 border-t border-slate-50"
+                          className="p-4 hover:bg-cyan-50 cursor-pointer text-[10px] font-black uppercase text-slate-700 border-t border-slate-50"
                           onClick={() => { setAreaFilter(area); setShowAreaDropdown(false); setShowCustDropdown(true); setAreaSearch(""); }}
                         >
                           {area}
@@ -547,15 +547,15 @@ const Sales: React.FC<SalesProps> = ({ company, role, user }) => {
                   </div>
                 )}
               </div>
-              <button onClick={() => setShowCustDropdown(!showCustDropdown)} className={`w-full p-4 rounded-2xl border flex items-center justify-between text-left ${selectedCust ? 'bg-blue-50 border-blue-200' : 'bg-slate-50'}`}>
-                {selectedCust ? <span className="font-black text-blue-700 text-xs uppercase">{selectedCust.name}</span> : <span className="text-xs font-bold text-slate-400 uppercase">দোকান বাছাই করুন...</span>}
+              <button onClick={() => setShowCustDropdown(!showCustDropdown)} className={`w-full p-4 rounded-2xl border flex items-center justify-between text-left ${selectedCust ? 'bg-cyan-50 border-cyan-200' : 'bg-slate-50'}`}>
+                {selectedCust ? <span className="font-black text-cyan-700 text-xs uppercase">{selectedCust.name}</span> : <span className="text-xs font-bold text-slate-400 uppercase">দোকান বাছাই করুন...</span>}
                 <span>▼</span>
               </button>
               {showCustDropdown && (
                 <div className="absolute top-[280px] left-8 right-8 md:w-[400px] z-[500] bg-white border rounded-2xl shadow-2xl overflow-hidden animate-reveal">
                   <input className="w-full p-4 border-b font-bold text-xs" placeholder="খুঁজুন..." value={custSearch} onChange={e => setCustSearch(e.target.value)} />
                   <div className="max-h-60 overflow-y-auto">
-                    {filteredCustomers.map(c => <div key={c.id} onClick={() => { setSelectedCust(c); setShowCustDropdown(false); }} className="p-4 hover:bg-blue-50 border-b cursor-pointer font-bold text-xs uppercase">{c.name} - {c.address}</div>)}
+                    {filteredCustomers.map(c => <div key={c.id} onClick={() => { setSelectedCust(c); setShowCustDropdown(false); }} className="p-4 hover:bg-cyan-50 border-b cursor-pointer font-bold text-xs uppercase">{c.name} - {c.address}</div>)}
                   </div>
                 </div>
               )}
@@ -582,10 +582,10 @@ const Sales: React.FC<SalesProps> = ({ company, role, user }) => {
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-2 max-h-[500px] overflow-y-auto custom-scroll pr-2">
               {filteredProducts.map(p => (
-                <div key={p.id} onClick={() => addToCart(p)} className="p-4 border rounded-2xl flex justify-between items-center hover:bg-blue-50 cursor-pointer active:scale-95 transition-all">
+                <div key={p.id} onClick={() => addToCart(p)} className="p-4 border rounded-2xl flex justify-between items-center hover:bg-cyan-50 cursor-pointer active:scale-95 transition-all">
                   <div className="min-w-0 pr-4">
                     <p className="text-[11px] font-black uppercase italic truncate">{p.name}</p>
-                    <p className="text-[9px] font-bold text-blue-600 uppercase">Stock: {p.stock} | MRP: ৳{p.mrp}</p>
+                    <p className="text-[9px] font-bold text-cyan-600 uppercase">Stock: {p.stock} | MRP: ৳{p.mrp}</p>
                   </div>
                   <p className="text-xs font-black italic">৳{p.tp}</p>
                 </div>
@@ -639,7 +639,7 @@ const Sales: React.FC<SalesProps> = ({ company, role, user }) => {
                         type="number"
                         disabled={item.action === 'REPLACE'}
                         title="বিক্রয় রেট"
-                        className={`w-full p-1.5 rounded-lg text-center text-[9px] font-bold text-white outline-none ${item.action === 'REPLACE' ? 'bg-white/5 text-slate-500' : 'bg-black/40 border border-blue-500/30'}`}
+                        className={`w-full p-1.5 rounded-lg text-center text-[9px] font-bold text-white outline-none ${item.action === 'REPLACE' ? 'bg-white/5 text-slate-500' : 'bg-black/40 border border-cyan-500/30'}`}
                         value={item.sellingPrice}
                         onChange={e => updateCartItem(idx, { sellingPrice: Number(e.target.value) })}
                       />
@@ -656,7 +656,7 @@ const Sales: React.FC<SalesProps> = ({ company, role, user }) => {
                       />
                     </div>
                     <div className="flex flex-col gap-1">
-                      <button onClick={() => updateCartItem(idx, { action: 'SALE', sellingPrice: item.tp })} title="Sell" className={`py-1 rounded text-[8px] font-black border transition-all ${item.action === 'SALE' ? 'bg-blue-600 border-blue-600 text-white shadow-lg' : 'bg-white/5 border-white/5 text-slate-500'}`}>S</button>
+                      <button onClick={() => updateCartItem(idx, { action: 'SALE', sellingPrice: item.tp })} title="Sell" className={`py-1 rounded text-[8px] font-black border transition-all ${item.action === 'SALE' ? 'bg-cyan-600 border-cyan-600 text-white shadow-lg' : 'bg-white/5 border-white/5 text-slate-500'}`}>S</button>
                       <button onClick={() => updateCartItem(idx, { action: 'RETURN', sellingPrice: item.tp })} title="Return" className={`py-1 rounded text-[8px] font-black border transition-all ${item.action === 'RETURN' ? 'bg-red-600 border-red-600 text-white shadow-lg' : 'bg-white/5 border-white/5 text-slate-500'}`}>R</button>
                       <button onClick={() => updateCartItem(idx, { action: 'REPLACE', sellingPrice: 0, discountPercent: 0 })} title="Replace" className={`py-1 rounded text-[8px] font-black border transition-all ${item.action === 'REPLACE' ? 'bg-cyan-600 border-cyan-600 text-white shadow-lg' : 'bg-white/5 border-white/5 text-slate-500'}`}>Rp</button>
                     </div>
@@ -672,10 +672,10 @@ const Sales: React.FC<SalesProps> = ({ company, role, user }) => {
                   <input type="number" placeholder="0" className="w-full bg-white/5 p-2 rounded-xl text-center font-black text-white text-base" value={globalCommission || ""} onChange={e => setGlobalCommission(Number(e.target.value))} />
                 </div>
                 <div className="space-y-0.5 relative">
-                  <label className="text-[7px] font-black text-blue-500 uppercase ml-2 italic">পেমেন্ট ডেডলাইন (শর্ত)</label>
+                  <label className="text-[7px] font-black text-cyan-500 uppercase ml-2 italic">পেমেন্ট ডেডলাইন (শর্ত)</label>
                   <input 
                     type="date"
-                    className="w-full bg-white/5 p-2 rounded-xl text-center font-black text-white text-[10px] outline-none border border-white/5 focus:border-blue-500" 
+                    className="w-full bg-white/5 p-2 rounded-xl text-center font-black text-white text-[10px] outline-none border border-white/5 focus:border-cyan-500" 
                     value={deadlineDate} 
                     onChange={e => setDeadlineDate(e.target.value)}
                   />
@@ -698,7 +698,7 @@ const Sales: React.FC<SalesProps> = ({ company, role, user }) => {
                   <p className="text-[8px] font-black text-slate-500 uppercase italic leading-none mb-1">Grand Total</p>
                   <p className="text-2xl font-black italic tracking-tighter text-white">{formatCurrency(totals.netTotal)}</p>
                 </div>
-                <button disabled={cart.length === 0 || !selectedCust} onClick={openPreview} className="bg-blue-600 text-white px-6 py-4 rounded-2xl font-black uppercase text-[10px] shadow-2xl active:scale-95 transition-all">মেমো প্রিভিউ ➔</button>
+                <button disabled={cart.length === 0 || !selectedCust} onClick={openPreview} className="bg-cyan-600 text-white px-6 py-4 rounded-2xl font-black uppercase text-[10px] shadow-2xl active:scale-95 transition-all">মেমো প্রিভিউ ➔</button>
               </div>
             </div>
           </div>
@@ -719,7 +719,7 @@ const Sales: React.FC<SalesProps> = ({ company, role, user }) => {
             <label className="text-[10px] font-black text-slate-400 uppercase italic">তারিখ নির্বাচন:</label>
             <input
               type="date"
-              className="p-4 bg-slate-50 border rounded-2xl font-black text-[11px] outline-none focus:border-blue-600 transition-all"
+              className="p-4 bg-slate-50 border rounded-2xl font-black text-[11px] outline-none focus:border-cyan-600 transition-all"
               value={historyDate}
               onChange={e => setHistoryDate(e.target.value)}
             />
@@ -743,12 +743,12 @@ const Sales: React.FC<SalesProps> = ({ company, role, user }) => {
               {recentMemos.length === 0 ? (
                 <tr><td colSpan={6} className="p-20 text-center opacity-20 font-black uppercase italic italic text-sm">এই তারিখে কোনো মেমো পাওয়া যায়নি</td></tr>
               ) : recentMemos.map((memo, idx) => (
-                <tr key={memo.id} className="hover:bg-blue-50/50 transition-colors animate-reveal" style={{ animationDelay: `${idx * 0.05}s` }}>
+                <tr key={memo.id} className="hover:bg-cyan-50/50 transition-colors animate-reveal" style={{ animationDelay: `${idx * 0.05}s` }}>
                   <td className="px-8 py-6 text-slate-400 font-black italic">
                     {new Date(memo.created_at).toLocaleTimeString('bn-BD', { hour: '2-digit', minute: '2-digit' })}
                   </td>
                   <td className="px-8 py-6">
-                    <span className="px-2 py-1 bg-blue-50 text-blue-600 rounded-lg text-[9px] font-black uppercase border border-blue-100 italic">
+                    <span className="px-2 py-1 bg-cyan-50 text-cyan-600 rounded-lg text-[9px] font-black uppercase border border-cyan-100 italic">
                       {getMemoNo(memo.id, memo.created_at, memo.meta)}
                     </span>
                   </td>
@@ -771,7 +771,7 @@ const Sales: React.FC<SalesProps> = ({ company, role, user }) => {
                     <div className="flex justify-center items-center gap-2">
                       <button
                         onClick={() => handleViewArchiveMemo(memo)}
-                        className="w-10 h-10 bg-blue-50 text-blue-600 rounded-xl hover:bg-blue-600 hover:text-white transition-all shadow-sm flex items-center justify-center text-sm active:scale-90"
+                        className="w-10 h-10 bg-cyan-50 text-cyan-600 rounded-xl hover:bg-cyan-600 hover:text-white transition-all shadow-sm flex items-center justify-center text-sm active:scale-90"
                         title="View & Re-print Memo"
                       >
                         👁️
@@ -796,7 +796,7 @@ const Sales: React.FC<SalesProps> = ({ company, role, user }) => {
       {showInvoicePreview && (viewingArchiveMemo || (selectedCust && cart.length > 0)) && (
         <div className="fixed inset-0 bg-black/98 backdrop-blur-3xl z-[5000] flex flex-col items-center p-4 overflow-y-auto no-print">
           <div className="w-full max-w-[148mm] flex justify-between items-center mb-8 sticky top-0 z-[5001] bg-slate-900/90 p-6 rounded-[2.5rem] border border-white/10">
-            <button onClick={() => { setShowInvoicePreview(false); setViewingArchiveMemo(null); }} className="text-white font-black uppercase text-[10px] px-6 transition-colors hover:text-blue-400">← ফিরে যান</button>
+            <button onClick={() => { setShowInvoicePreview(false); setViewingArchiveMemo(null); }} className="text-white font-black uppercase text-[10px] px-6 transition-colors hover:text-cyan-400">← ফিরে যান</button>
             <div className="flex gap-3">
               <button disabled={isDownloading} onClick={downloadPDF} className="bg-white text-slate-900 px-8 py-4 rounded-xl font-black text-[10px] uppercase shadow-xl active:scale-95">PDF ডাউনলোড ⎙</button>
               {!viewingArchiveMemo && (
@@ -838,14 +838,14 @@ const Sales: React.FC<SalesProps> = ({ company, role, user }) => {
                 </p>
 
                 <div className="text-center border-b border-black pb-4 mb-4">
-                  <h1 className="text-[26px] font-black uppercase italic tracking-tighter leading-none mb-1 text-blue-600">IFZA ELECTRONICS</h1>
+                  <h1 className="text-[26px] font-black uppercase italic tracking-tighter leading-none mb-1 text-cyan-600">IFZA ELECTRONICS</h1>
                   <p className="text-[10px] font-black uppercase tracking-[0.2em] mb-1 text-black">{company} DIVISION</p>
                   <p className="text-[8px] font-bold text-black italic">যোগাযোগ: {getStaffContacts(company)}</p>
                 </div>
 
                 <div className="flex justify-between items-start mb-6">
                   <div className="space-y-1 flex-1">
-                    <p className="text-[18px] font-black uppercase italic leading-tight text-blue-600">{targetCust?.name}</p>
+                    <p className="text-[18px] font-black uppercase italic leading-tight text-cyan-600">{targetCust?.name}</p>
                     <p className="text-[10px] font-bold text-black">📍 ঠিকানা: {targetCust?.address} | 📱 {targetCust?.phone}</p>
 
                     <div className="mt-4 flex gap-4">
@@ -864,11 +864,11 @@ const Sales: React.FC<SalesProps> = ({ company, role, user }) => {
 
                   <div className="text-right space-y-1 w-44">
                     <p className="text-[9px] font-black uppercase text-black mb-2">তারিখ: {isArchive ? new Date(viewingArchiveMemo.created_at).toLocaleDateString('bn-BD') : new Date().toLocaleDateString('bn-BD')}</p>
-                    <p className="text-[11px] font-black text-blue-600 uppercase italic mb-2 leading-none">
+                    <p className="text-[11px] font-black text-cyan-600 uppercase italic mb-2 leading-none">
                       মেমো নাম্বার: {previewMemoNo()}
                     </p>
                     <p className="flex justify-between font-bold text-[11px] text-black"><span>পূর্বের বাকি:</span> <span className="text-red-700">{archivePrevDue !== null ? `৳${parseAmount(archivePrevDue).toLocaleString()}` : 'N/A'}</span></p>
-                    <p className="flex justify-between font-black text-[13px] border-t border-black pt-1 text-black"><span>আজকের বিল:</span> <span className="text-blue-700">৳{parseAmount(archiveNetTotal).toLocaleString()}</span></p>
+                    <p className="flex justify-between font-black text-[13px] border-t border-black pt-1 text-black"><span>আজকের বিল:</span> <span className="text-cyan-700">৳{parseAmount(archiveNetTotal).toLocaleString()}</span></p>
                     <p className="flex justify-between font-black text-[15px] border-t-2 border-black pt-1 text-black bg-slate-50 px-1"><span>মোট বাকি:</span> <span className="text-red-600">{archiveFinalTotal !== null ? `৳${parseAmount(archiveFinalTotal).toLocaleString()}` : 'N/A'}</span></p>
                     {archiveDeadline && (
                       <div className="mt-2 p-2 bg-rose-50 border border-rose-100 rounded-lg">
@@ -894,7 +894,7 @@ const Sales: React.FC<SalesProps> = ({ company, role, user }) => {
                     </thead>
                     <tbody className={`${targetItems.length > 35 ? "text-[8px]" : "text-[10px]"} text-black`}>
                       {targetItems.map((it: any, idx: number) => (
-                        <tr key={idx} className={`font-bold italic border-b border-black ${it.action === 'RETURN' ? 'text-red-600' : it.action === 'REPLACE' ? 'text-blue-600' : 'text-black'}`}>
+                        <tr key={idx} className={`font-bold italic border-b border-black ${it.action === 'RETURN' ? 'text-red-600' : it.action === 'REPLACE' ? 'text-cyan-600' : 'text-black'}`}>
                           <td className="py-2">{idx + 1}</td>
                           <td className="py-2 uppercase">
                             <span>{it.name}</span>
@@ -918,12 +918,12 @@ const Sales: React.FC<SalesProps> = ({ company, role, user }) => {
                   <div className="w-56 space-y-1 font-black italic text-[10px] text-black">
                     <div className="flex justify-between"><span>SUB-TOTAL (TP):</span><span>৳{Math.round(archiveSubtotal).toLocaleString()}</span></div>
                     {archiveCommission > 0 && (
-                      <div className="flex justify-between text-blue-600">
+                      <div className="flex justify-between text-cyan-600">
                         <span>TOTAL COMMISSION {targetMeta?.commission_percent_global ? `(${targetMeta.commission_percent_global}%)` : (globalCommission > 0 && !isArchive ? `(${globalCommission}%)` : '')}:</span>
                         <span>-৳{Math.round(archiveCommission).toLocaleString()}</span>
                       </div>
                     )}
-                    <div className="flex justify-between border-t-2 border-black pt-2 text-[15px] text-blue-600">
+                    <div className="flex justify-between border-t-2 border-black pt-2 text-[15px] text-cyan-600">
                       <span className="uppercase">নিট বিল (Payable):</span>
                       <span>৳{Math.round(archiveNetTotal).toLocaleString()}</span>
                     </div>
@@ -957,16 +957,16 @@ const Sales: React.FC<SalesProps> = ({ company, role, user }) => {
         </div>
       )}
 
-      {loading && <div className="fixed inset-0 bg-white/50 backdrop-blur-sm z-[9999] flex items-center justify-center font-black uppercase italic text-blue-600 animate-pulse tracking-[0.3em]">Syncing POS Terminal...</div>}
+      {loading && <div className="fixed inset-0 bg-white/50 backdrop-blur-sm z-[9999] flex items-center justify-center font-black uppercase italic text-cyan-600 animate-pulse tracking-[0.3em]">Syncing POS Terminal...</div>}
 
       {/* MANUAL NOTIFICATION TRIGGER MODAL */}
       {showNotificationModal && pendingNotification && (
         <div className="fixed inset-0 bg-slate-950/90 backdrop-blur-md z-[6000] flex items-center justify-center p-6 text-black">
-          <div className="bg-white rounded-[3.5rem] w-full max-w-lg p-10 space-y-8 animate-reveal border-4 border-blue-600 shadow-[0_30px_90px_rgba(37,99,235,0.4)]">
+          <div className="bg-white rounded-[3.5rem] w-full max-w-lg p-10 space-y-8 animate-reveal border-4 border-cyan-600 shadow-[0_30px_90px_rgba(37,99,235,0.4)]">
             <div className="flex justify-between items-start">
               <div>
                 <h3 className="text-2xl font-black uppercase italic tracking-tighter text-slate-900">মেসেজ কনফার্মেশন</h3>
-                <p className="text-[10px] text-blue-600 font-bold uppercase mt-2 tracking-widest italic">Manual Sales Dispatch</p>
+                <p className="text-[10px] text-cyan-600 font-bold uppercase mt-2 tracking-widest italic">Manual Sales Dispatch</p>
               </div>
               <button onClick={() => setShowNotificationModal(false)} className="text-3xl text-slate-300 hover:text-rose-500 font-black">✕</button>
             </div>
@@ -974,7 +974,7 @@ const Sales: React.FC<SalesProps> = ({ company, role, user }) => {
             <div className="space-y-6">
               <div className="space-y-2">
                 <label className="text-[10px] font-black uppercase text-slate-400 ml-4 italic tracking-widest">Recipient</label>
-                <div className="p-5 bg-slate-50 border-2 border-slate-100 rounded-2xl font-black text-blue-700 text-sm italic">
+                <div className="p-5 bg-slate-50 border-2 border-slate-100 rounded-2xl font-black text-cyan-700 text-sm italic">
                   {pendingNotification.phone}
                 </div>
               </div>

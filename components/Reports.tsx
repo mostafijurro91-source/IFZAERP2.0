@@ -1052,7 +1052,7 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName }) => {
                 </div>
               ) : (
                 <div className="flex justify-between text-3xl font-black text-black tracking-tighter leading-none pt-2">
-                  <span className="uppercase">{activeReport === 'BOOKING_LOG' ? 'NET REQUIREMENT:' : activeReport === 'PRODUCT_SALES_REPORT' ? 'TOTAL NET SALES:' : activeReport === 'TOP_CUSTOMERS' ? 'TOP 10 TOTAL:' : 'NET TOTAL SUM:'}</span>
+                  <span className="uppercase">{activeReport === 'BOOKING_LOG' ? 'NET REQUIREMENT:' : activeReport === 'TOP_CUSTOMERS' ? 'TOP 10 TOTAL:' : 'NET TOTAL SUM:'}</span>
                   <span>৳{(summary.totalRemVal || 0).toLocaleString()}</span>
                 </div>
               )}

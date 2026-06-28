@@ -92,7 +92,7 @@ const Dashboard: React.FC<DashboardProps> = ({ company, role }) => {
 
       let t_sales = 0, t_coll = 0, reg_due = 0, book_adv = 0;
       const recent: any[] = [];
-      const customerStatsMap: Record<string, { name: string, phone: string, address: string, due: number, lastTxDate: Date }> = {};
+      const customerStatsMap: Record<string, { name: string, phone: string, address: string, due: number, book_adv: number, lastTxDate: Date }> = {};
 
       allTx.forEach(tx => {
         const amt = parseAmount(tx.amount);
@@ -195,7 +195,7 @@ const Dashboard: React.FC<DashboardProps> = ({ company, role }) => {
   const brandTheme = useMemo(() => {
     switch (company) {
       case 'Transtec': return { gradient: 'from-amber-400 to-orange-600', icon: '⚡' };
-      case 'SQ Light': return { gradient: 'from-cyan-400 to-blue-600', icon: '💡' };
+      case 'SQ Light': return { gradient: 'from-cyan-400 to-cyan-600', icon: '💡' };
       case 'SQ Cables': return { gradient: 'from-rose-500 to-red-700', icon: '🔌' };
       default: return { gradient: 'from-slate-800 to-slate-900', icon: '📊' };
     }
@@ -226,7 +226,7 @@ const Dashboard: React.FC<DashboardProps> = ({ company, role }) => {
       {/* 📊 Primary Stats (Hero Cards) */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         {[
-          { label: 'আজকের বিক্রি', val: stats.todaySales, icon: '🛒', color: 'text-blue-600', bg: 'bg-blue-50', iconBg: 'bg-blue-100' },
+          { label: 'আজকের বিক্রি', val: stats.todaySales, icon: '🛒', color: 'text-cyan-600', bg: 'bg-cyan-50', iconBg: 'bg-cyan-100' },
           { label: 'আজকের আদায়', val: stats.todayCollection, icon: '💸', color: 'text-emerald-600', bg: 'bg-emerald-50', iconBg: 'bg-emerald-100' },
           { label: 'মোট বকেয়া', val: stats.regularDue, icon: '⏳', color: 'text-rose-600', bg: 'bg-rose-50', iconBg: 'bg-rose-100' },
           { label: 'বুকিং / অ্যাডভান্স', val: stats.bookingAdvance, icon: '📅', color: 'text-indigo-600', bg: 'bg-indigo-50', iconBg: 'bg-indigo-100' }
@@ -281,7 +281,7 @@ const Dashboard: React.FC<DashboardProps> = ({ company, role }) => {
                           {d.month}
                         </span>
                       </td>
-                      <td className="px-6 py-4 text-center text-blue-700 bg-blue-50/30 font-black">{parseAmount(d.tpSales).toLocaleString()} ৳</td>
+                      <td className="px-6 py-4 text-center text-cyan-700 bg-cyan-50/30 font-black">{parseAmount(d.tpSales).toLocaleString()} ৳</td>
                       <td className="px-6 py-4 text-center text-slate-800">{parseAmount(d.sales).toLocaleString()} ৳</td>
                       <td className="px-6 py-4 text-center text-emerald-600 bg-emerald-50/30">{parseAmount(d.commission).toLocaleString()} ৳</td>
                       <td className="px-6 py-4 text-center text-pink-600 bg-pink-50/30">{parseAmount(d.gift).toLocaleString()} ৳</td>
@@ -302,7 +302,7 @@ const Dashboard: React.FC<DashboardProps> = ({ company, role }) => {
           {[
             { label: 'চলতি মাসের সেল', val: stats.currentMonthSales, icon: '📈', color: 'text-fuchsia-600', bg: 'bg-fuchsia-50' },
             { label: 'চলতি মাসের ম্যামো', val: stats.currentMonthMemo, icon: '📝', color: 'text-amber-600', bg: 'bg-amber-50' },
-            { label: 'চলতি মাসের টিপি', val: stats.currentMonthTP, icon: '📉', color: 'text-blue-700', bg: 'bg-blue-50' },
+            { label: 'চলতি মাসের টিপি', val: stats.currentMonthTP, icon: '📉', color: 'text-cyan-700', bg: 'bg-cyan-50' },
             { label: 'কমিশন / অফার', val: stats.currentMonthOffer, icon: '🏷️', color: 'text-emerald-500', bg: 'bg-emerald-50' },
             { label: 'মাসিক মোট গিফট', val: stats.currentMonthGift, icon: '🎁', color: 'text-pink-500', bg: 'bg-pink-50' },
             { label: 'বর্তমান স্টক ভ্যালু', val: stats.stockValue, icon: '📦', color: 'text-slate-700', bg: 'bg-slate-100' }

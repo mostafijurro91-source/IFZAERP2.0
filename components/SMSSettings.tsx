@@ -125,14 +125,14 @@ const SMSSettings: React.FC = () => {
     <div className="space-y-10 pb-40 font-sans text-slate-900 animate-reveal">
       {/* Header Section */}
       <div className="bg-[#0f172a] p-12 md:p-16 rounded-[4rem] text-white shadow-2xl relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-blue-600/10 blur-[150px] rounded-full"></div>
+        <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-cyan-600/10 blur-[150px] rounded-full"></div>
         <div className="absolute -bottom-20 -left-20 w-80 h-80 bg-indigo-600/10 blur-[100px] rounded-full"></div>
         
         <div className="relative z-10 flex flex-col md:flex-row justify-between items-center gap-8">
           <div className="text-center md:text-left">
             <h3 className="text-4xl md:text-5xl font-black uppercase italic tracking-tighter leading-none mb-4">SMS ইন্টিগ্রেশন হাব</h3>
-            <p className="text-[11px] text-blue-400 font-black uppercase tracking-[0.4em] italic leading-none flex items-center gap-2 justify-center md:justify-start">
-              <span className="w-2 h-2 bg-blue-400 rounded-full animate-ping"></span>
+            <p className="text-[11px] text-cyan-400 font-black uppercase tracking-[0.4em] italic leading-none flex items-center gap-2 justify-center md:justify-start">
+              <span className="w-2 h-2 bg-cyan-400 rounded-full animate-ping"></span>
               Ummah Host BD / White Label API
             </p>
           </div>
@@ -142,7 +142,7 @@ const SMSSettings: React.FC = () => {
             {isLoadingBalance ? (
               <div className="animate-pulse h-8 w-24 bg-white/10 rounded-lg"></div>
             ) : (
-              <span className="text-3xl font-black italic text-blue-400 tracking-tighter">৳ {balance || '0.00'}</span>
+              <span className="text-3xl font-black italic text-cyan-400 tracking-tighter">৳ {balance || '0.00'}</span>
             )}
             <button onClick={() => fetchBalance(apiToken, baseUrl)} className="mt-3 text-[8px] font-black uppercase text-white/60 hover:text-white transition-all">রিফ্রেশ 🔄</button>
           </div>
@@ -165,7 +165,7 @@ const SMSSettings: React.FC = () => {
 
                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                   <div className="p-6 bg-slate-50 rounded-[2rem] border border-slate-100 flex flex-col items-center text-center hover:bg-white hover:shadow-lg transition-all cursor-default group">
-                    <div className="w-10 h-10 bg-blue-100 rounded-xl mb-3 flex items-center justify-center text-blue-600 text-xs group-hover:scale-110 transition-transform">01</div>
+                    <div className="w-10 h-10 bg-cyan-100 rounded-xl mb-3 flex items-center justify-center text-cyan-600 text-xs group-hover:scale-110 transition-transform">01</div>
                     <p className="text-[9px] font-black uppercase text-slate-400 tracking-widest mb-1">Method: Fetch</p>
                     <p className="text-[10px] font-bold text-emerald-600 flex items-center gap-2">
                       <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse"></span>
@@ -190,9 +190,9 @@ const SMSSettings: React.FC = () => {
                   </div>
                </div>
 
-               <div className="p-6 bg-blue-50/50 rounded-3xl border border-blue-100/50">
-                  <p className="text-[10px] font-bold text-blue-800 leading-relaxed italic">
-                    সিস্টেম বর্তমানে <span className="text-blue-600 font-black underline decoration-blue-200 underline-offset-4">Triple-Layer Strategy</span> ব্যবহার করছে। সরাসরি কানেকশন কাজ না করলে প্রক্সি এবং আইফ্রেম পদ্ধতি স্বয়ংক্রিয়ভাবে মেসেজ ডেলিভারি নিশ্চিত করবে।
+               <div className="p-6 bg-cyan-50/50 rounded-3xl border border-cyan-100/50">
+                  <p className="text-[10px] font-bold text-cyan-800 leading-relaxed italic">
+                    সিস্টেম বর্তমানে <span className="text-cyan-600 font-black underline decoration-cyan-200 underline-offset-4">Triple-Layer Strategy</span> ব্যবহার করছে। সরাসরি কানেকশন কাজ না করলে প্রক্সি এবং আইফ্রেম পদ্ধতি স্বয়ংক্রিয়ভাবে মেসেজ ডেলিভারি নিশ্চিত করবে।
                   </p>
                </div>
             </div>
@@ -201,13 +201,13 @@ const SMSSettings: React.FC = () => {
           {/* Main Settings Form */}
           <div className="bg-white p-10 md:p-14 rounded-[4rem] shadow-xl border border-slate-50 relative overflow-hidden">
             <div className="absolute top-0 right-0 p-8">
-               <div className="w-12 h-12 bg-blue-50 rounded-2xl flex items-center justify-center text-blue-600 font-black italic">API</div>
+               <div className="w-12 h-12 bg-cyan-50 rounded-2xl flex items-center justify-center text-cyan-600 font-black italic">API</div>
             </div>
             
             <form onSubmit={handleSave} className="space-y-10">
               <div className="space-y-6">
                 <h4 className="text-sm font-black uppercase italic text-slate-400 tracking-widest flex items-center gap-3">
-                  <span className="w-8 h-[2px] bg-blue-100"></span>
+                  <span className="w-8 h-[2px] bg-cyan-100"></span>
                   অটোমেটিক গেটওয়ে কনফিগারেশন
                 </h4>
                 
@@ -220,7 +220,7 @@ const SMSSettings: React.FC = () => {
                       value={apiToken}
                       onChange={(e) => setApiToken(e.target.value)}
                       placeholder="আপনার API Key এখানে দিন"
-                      className="w-full p-6 bg-slate-50 border-2 border-slate-100 rounded-[2rem] outline-none font-bold text-sm focus:border-blue-600 focus:bg-white transition-all shadow-inner"
+                      className="w-full p-6 bg-slate-50 border-2 border-slate-100 rounded-[2rem] outline-none font-bold text-sm focus:border-cyan-600 focus:bg-white transition-all shadow-inner"
                     />
                   </div>
                   <div className="space-y-3">
@@ -230,7 +230,7 @@ const SMSSettings: React.FC = () => {
                       value={senderId}
                       onChange={(e) => setSenderId(e.target.value)}
                       placeholder="যেমন: 8809617632427"
-                      className="w-full p-6 bg-slate-50 border-2 border-slate-100 rounded-[2rem] outline-none font-bold text-sm focus:border-blue-600 focus:bg-white transition-all shadow-inner"
+                      className="w-full p-6 bg-slate-50 border-2 border-slate-100 rounded-[2rem] outline-none font-bold text-sm focus:border-cyan-600 focus:bg-white transition-all shadow-inner"
                     />
                   </div>
                 </div>
@@ -242,7 +242,7 @@ const SMSSettings: React.FC = () => {
                     type="text" 
                     value={baseUrl}
                     onChange={(e) => setBaseUrl(e.target.value)}
-                    className="w-full p-6 bg-slate-50 border-2 border-slate-100 rounded-[2rem] outline-none font-bold text-sm focus:border-blue-600 focus:bg-white transition-all shadow-inner"
+                    className="w-full p-6 bg-slate-50 border-2 border-slate-100 rounded-[2rem] outline-none font-bold text-sm focus:border-cyan-600 focus:bg-white transition-all shadow-inner"
                   />
                 </div>
               </div>
@@ -280,7 +280,7 @@ const SMSSettings: React.FC = () => {
               <div className="pt-6">
                 <button 
                   disabled={isSaving}
-                  className="w-full bg-blue-600 text-white py-8 rounded-[2.5rem] font-black uppercase text-xs tracking-[0.4em] shadow-2xl shadow-blue-200 active:scale-95 transition-all hover:bg-blue-700 disabled:opacity-50 flex items-center justify-center gap-4"
+                  className="w-full bg-cyan-600 text-white py-8 rounded-[2.5rem] font-black uppercase text-xs tracking-[0.4em] shadow-2xl shadow-cyan-200 active:scale-95 transition-all hover:bg-cyan-700 disabled:opacity-50 flex items-center justify-center gap-4"
                 >
                   {isSaving ? 'সেভ হচ্ছে...' : 'সেটিংস আপডেট করুন ➔'}
                 </button>
@@ -318,9 +318,9 @@ const SMSSettings: React.FC = () => {
 
         <div className="xl:col-span-1 space-y-10">
           {/* Manual Notification Terminal - New Section */}
-          <div className="bg-white p-10 md:p-14 rounded-[4rem] shadow-xl border-4 border-blue-50 relative overflow-hidden animate-reveal">
+          <div className="bg-white p-10 md:p-14 rounded-[4rem] shadow-xl border-4 border-cyan-50 relative overflow-hidden animate-reveal">
             <div className="absolute top-0 right-0 p-8">
-               <div className="w-12 h-12 bg-blue-600 rounded-2xl flex items-center justify-center text-white font-black italic shadow-lg">M</div>
+               <div className="w-12 h-12 bg-cyan-600 rounded-2xl flex items-center justify-center text-white font-black italic shadow-lg">M</div>
             </div>
 
             <div className="space-y-8">
@@ -336,7 +336,7 @@ const SMSSettings: React.FC = () => {
                    <label className="text-[10px] font-black uppercase text-slate-500 ml-4 italic tracking-widest">রিসিভ প্রিন্ট (Recipient Phone)</label>
                    <input 
                      type="text" 
-                     className="w-full p-6 bg-slate-50 border-2 border-slate-100 rounded-[2rem] outline-none font-bold text-sm focus:border-blue-600 focus:bg-white transition-all shadow-inner"
+                     className="w-full p-6 bg-slate-50 border-2 border-slate-100 rounded-[2rem] outline-none font-bold text-sm focus:border-cyan-600 focus:bg-white transition-all shadow-inner"
                      placeholder="01XXXXXXXXX"
                      value={manualPhone}
                      onChange={(e) => {
@@ -357,7 +357,7 @@ const SMSSettings: React.FC = () => {
                  <label className="text-[10px] font-black uppercase text-slate-500 ml-4 italic tracking-widest">মেসেজ (Message Content)</label>
                  <textarea 
                    rows={4}
-                   className="w-full p-6 bg-slate-50 border-2 border-slate-100 rounded-[2.5rem] outline-none font-bold text-sm focus:border-blue-600 focus:bg-white transition-all shadow-inner resize-none"
+                   className="w-full p-6 bg-slate-50 border-2 border-slate-100 rounded-[2.5rem] outline-none font-bold text-sm focus:border-cyan-600 focus:bg-white transition-all shadow-inner resize-none"
                    placeholder="আপনার মেসেজ এখানে লিখুন..."
                    value={manualMsg}
                    onChange={(e) => {
@@ -398,7 +398,7 @@ const SMSSettings: React.FC = () => {
                <p className="text-[8px] font-black uppercase text-slate-400 mb-2 italic">Target Portal</p>
                <p className="text-[11px] font-bold text-slate-600 truncate mb-4">{panelUrl}</p>
                <button 
-                 onClick={openPanel}
+                 onClick={() => window.open(panelUrl, '_blank')}
                  className="w-full py-5 rounded-2xl bg-slate-900 text-white font-black uppercase text-[10px] tracking-widest hover:bg-black transition-all shadow-lg active:scale-95"
                >
                  প্যানেল ওপেন করুন 🚀
