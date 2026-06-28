@@ -187,17 +187,17 @@ const App: React.FC = () => {
               <h2 className="text-7xl font-black italic tracking-tighter text-white drop-shadow-2xl flex items-end justify-center gap-3 mb-4 animate-logo-float">
                  <span className="logo-premium pb-1">ইফজা</span>
                  <div className="pb-3">
-                    <span className="w-5 h-5 bg-blue-500 rounded-full animate-dot-bounce block shadow-[0_8px_20px_rgba(37,99,235,0.5)]"></span>
+                    <span className="w-5 h-5 bg-cyan-500 rounded-full animate-dot-bounce block shadow-[0_8px_20px_rgba(37,99,235,0.5)]"></span>
                  </div>
               </h2>
-              <div className="h-[1px] w-40 bg-gradient-to-r from-transparent via-blue-400/20 to-transparent mb-12 mt-4"></div>
+              <div className="h-[1px] w-40 bg-gradient-to-r from-transparent via-cyan-400/20 to-transparent mb-12 mt-4"></div>
            </div>
            <div className="flex justify-center items-center space-x-4 mb-10">
-              <span className="w-3 h-3 bg-blue-600 rounded-full animate-bounce [animation-delay:-0.3s] shadow-[0_0_15px_rgba(37,99,235,0.3)]"></span>
-              <span className="w-3 h-3 bg-blue-500 rounded-full animate-bounce [animation-delay:-0.15s] shadow-[0_0_15px_rgba(37,99,235,0.3)]"></span>
-              <span className="w-3 h-3 bg-blue-400 rounded-full animate-bounce shadow-[0_0_15px_rgba(37,99,235,0.3)]"></span>
+              <span className="w-3 h-3 bg-cyan-600 rounded-full animate-bounce [animation-delay:-0.3s] shadow-[0_0_15px_rgba(37,99,235,0.3)]"></span>
+              <span className="w-3 h-3 bg-cyan-500 rounded-full animate-bounce [animation-delay:-0.15s] shadow-[0_0_15px_rgba(37,99,235,0.3)]"></span>
+              <span className="w-3 h-3 bg-cyan-400 rounded-full animate-bounce shadow-[0_0_15px_rgba(37,99,235,0.3)]"></span>
            </div>
-           <p className="font-black uppercase text-[10px] tracking-[1.2em] text-blue-400/30 italic animate-pulse">Syncing Enterprise v4</p>
+           <p className="font-black uppercase text-[10px] tracking-[1.2em] text-cyan-400/30 italic animate-pulse">Syncing Enterprise v4</p>
         </div>
       </div>
     );
@@ -207,7 +207,7 @@ const App: React.FC = () => {
     return (
       <div className="h-screen flex flex-col items-center justify-center bg-[#0a0f1d] text-white text-center">
         <h1 className="text-4xl font-black mb-4 uppercase italic">Connection Lost</h1>
-        <button onClick={() => window.location.reload()} className="bg-blue-600 px-12 py-5 rounded-2xl font-black">Reconnect 🔄</button>
+        <button onClick={() => window.location.reload()} className="bg-cyan-600 px-12 py-5 rounded-2xl font-black">Reconnect 🔄</button>
       </div>
     );
   }
@@ -220,8 +220,8 @@ const App: React.FC = () => {
     <div className="flex h-screen bg-[#f1f5f9] overflow-hidden">
       {/* 🔔 In-App Toast Notification Bubble (Pop-up inside app) */}
       {toast && (
-        <div className="fixed top-6 right-6 left-6 md:left-auto md:w-[420px] z-[9000] bg-white border-2 border-blue-600 p-8 rounded-[3rem] shadow-[0_30px_90px_rgba(37,99,235,0.3)] animate-reveal flex items-start gap-5 ring-[12px] ring-blue-50">
-           <div className="w-14 h-14 bg-blue-600 rounded-2xl flex items-center justify-center text-white text-2xl shrink-0 shadow-lg animate-bounce">🔔</div>
+        <div className="fixed top-6 right-6 left-6 md:left-auto md:w-[420px] z-[9000] bg-white border-2 border-cyan-600 p-8 rounded-[3rem] shadow-[0_30px_90px_rgba(37,99,235,0.3)] animate-reveal flex items-start gap-5 ring-[12px] ring-cyan-50">
+           <div className="w-14 h-14 bg-cyan-600 rounded-2xl flex items-center justify-center text-white text-2xl shrink-0 shadow-lg animate-bounce">🔔</div>
            <div className="flex-1">
               <h4 className="font-black text-slate-900 uppercase italic text-sm tracking-tighter">{toast.title}</h4>
               <p className="text-[11px] font-bold text-slate-500 mt-2 leading-relaxed">{toast.message}</p>
@@ -252,7 +252,7 @@ const App: React.FC = () => {
             <button onClick={() => setIsSidebarOpen(true)} className="md:hidden p-2.5 bg-slate-900 text-white rounded-xl shadow-lg">☰</button>
             <div>
               <h1 className="text-sm font-black text-slate-900 uppercase italic tracking-widest">{activeTab.replace(/_/g, ' ')}</h1>
-              <p className="text-[8px] font-black text-blue-600 uppercase tracking-[0.2em] mt-1.5 italic">• Node: {selectedCompany}</p>
+              <p className="text-[8px] font-black text-cyan-600 uppercase tracking-[0.2em] mt-1.5 italic">• Node: {selectedCompany}</p>
             </div>
           </div>
           
@@ -261,7 +261,7 @@ const App: React.FC = () => {
               <p className="text-[10px] font-black text-slate-900 uppercase italic leading-none">{user.name}</p>
               <p className="text-[7px] font-bold text-slate-400 mt-1 uppercase tracking-widest">{user.role} ACCESS</p>
             </div>
-            <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center text-white font-black italic shadow-lg">
+            <div className="w-10 h-10 bg-cyan-600 rounded-xl flex items-center justify-center text-white font-black italic shadow-lg">
               {user.name.charAt(0)}
             </div>
           </div>
@@ -280,7 +280,7 @@ const App: React.FC = () => {
             {activeTab === 'ad_manager' && <AdManager />}
             {activeTab === 'sales' && <Sales company={selectedCompany} role={user.role} user={user} />}
             {activeTab === 'collections' && <Collections company={selectedCompany} user={user} companies={companies} />}
-            {activeTab === 'order_management' && <OrderManagement company={selectedCompany} user={user} />}
+            {activeTab === 'order_management' && <OrderManagement company={selectedCompany} user={user} setActiveTab={setActiveTab} />}
             {activeTab === 'bookings' && <Bookings company={selectedCompany} role={user.role} user={user} />}
             {activeTab === 'replacements' && <Replacements company={selectedCompany} role={user.role} user={user} />}
             {activeTab === 'delivery_hub' && <DeliveryHub company={selectedCompany} user={user} companies={companies} />}
