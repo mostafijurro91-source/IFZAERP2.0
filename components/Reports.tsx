@@ -620,9 +620,9 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName }) => {
 
   if (activeReport === 'MAIN') {
     const reportOptions = [
-      { id: 'BOOKING_LOG', title: 'BOOKING MASTER', icon: '📅', desc: 'বাকি মাল ও আইটেম লিস্ট', color: 'from-blue-500 to-cyan-400' },
+      { id: 'BOOKING_LOG', title: 'BOOKING MASTER', icon: '📅', desc: 'বাকি মাল ও আইটেম লিস্ট', color: 'from-cyan-500 to-cyan-400' },
       { id: 'COLLECTION_REPORT', title: 'COLLECTION LOG', icon: '💰', desc: 'আজকের নগদ কালেকশন', color: 'from-emerald-500 to-teal-400' },
-      { id: 'STOCK_REPORT', title: 'STOCK LIST', icon: '📦', desc: 'ইনভেন্টরি লেজার', color: 'from-indigo-500 to-blue-500' },
+      { id: 'STOCK_REPORT', title: 'STOCK LIST', icon: '📦', desc: 'ইনভেন্টরি লেজার', color: 'from-indigo-500 to-cyan-500' },
       { id: 'DELIVERY_LOG_A4', title: 'DELIVERY SHEET', icon: '🚚', desc: 'প্রতিদিনের ডেলিভারি শিট', color: 'from-orange-500 to-amber-400' },
       { id: 'PURCHASE_HISTORY', title: 'PURCHASE LOG', icon: '📒', desc: 'কোম্পানি ক্রয় হিসাব', color: 'from-slate-700 to-slate-900' },
       { id: 'CUSTOMER_DUES', title: 'DUE REPORT', icon: '💸', desc: 'মার্কেট বকেয়া', color: 'from-rose-500 to-pink-500' },
@@ -806,7 +806,7 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName }) => {
                           <div>
                             <p className="font-black uppercase">{item.customers?.name}</p>
                             <p className="text-[9px] italic opacity-60">📍 {item.customers?.address}</p>
-                            <p className="text-[8px] font-black text-blue-600 mt-1 uppercase italic bg-blue-50 px-1 inline-block rounded">{getMemoNo(item.id, item.created_at, item.meta)}</p>
+                            <p className="text-[8px] font-black text-cyan-600 mt-1 uppercase italic bg-cyan-50 px-1 inline-block rounded">{getMemoNo(item.id, item.created_at, item.meta)}</p>
                           </div>
                           <button onClick={() => { setSelectedMemo(item); setShowMemoModal(true); }} className="no-print opacity-30 hover:opacity-100 transition-opacity" title="মেমো প্রিন্ট">⎙</button>
                         </div>
@@ -825,7 +825,7 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName }) => {
                       <td className="p-3 border-r border-black text-right font-black italic text-emerald-600">৳{parseAmount(item.amount).toLocaleString()}</td>
                       <td className="p-3 text-center leading-tight">
                         <div className="flex flex-col items-center gap-1">
-                          <span className="text-blue-700 bg-blue-50 px-3 py-1 rounded-lg border border-blue-100 shadow-sm font-black uppercase text-[10px]">
+                          <span className="text-cyan-700 bg-cyan-50 px-3 py-1 rounded-lg border border-cyan-100 shadow-sm font-black uppercase text-[10px]">
                             {item.submitted_by || 'জানা নেই'}
                           </span>
                           {item.meta?.approved_by && (
@@ -850,7 +850,7 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName }) => {
                         )}
                         <div className="flex items-center gap-2">
                           <span className={`w-1.5 h-1.5 rounded-full ${item.item_rem > 0 ? 'bg-rose-500 animate-pulse' : 'bg-emerald-500'}`}></span>
-                          <p className={`text-[12px] font-black uppercase italic tracking-tighter leading-none ${item.item_rem > 0 ? 'text-blue-900' : 'text-slate-400'}`}>{item.item_name}</p>
+                          <p className={`text-[12px] font-black uppercase italic tracking-tighter leading-none ${item.item_rem > 0 ? 'text-cyan-900' : 'text-slate-400'}`}>{item.item_name}</p>
                         </div>
                         {item.item_rem > 0 && <p className="text-[8px] font-black text-slate-400 mt-1 uppercase">Unit: ৳{(item.item_price || 0).toLocaleString()}</p>}
                       </td>
@@ -945,7 +945,7 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName }) => {
                       </td>
                       <td className="p-3 border-r border-black text-center text-[10px] bg-slate-50">
                         <div className="flex justify-center gap-1 font-black">
-                          <span className="text-blue-600">{item.pos_week || 0}</span>
+                          <span className="text-cyan-600">{item.pos_week || 0}</span>
                           <span className="text-slate-300">/</span>
                           <span className="text-indigo-600">{item.book_week || 0}</span>
                           <span className="text-slate-300">/</span>
@@ -955,7 +955,7 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName }) => {
                       </td>
                       <td className="p-3 border-r border-black text-center text-[10px]">
                         <div className="flex justify-center gap-1 font-bold">
-                          <span className="text-blue-700">{item.pos_total || 0}</span>
+                          <span className="text-cyan-700">{item.pos_total || 0}</span>
                           <span className="text-slate-200">/</span>
                           <span className="text-indigo-700">{item.book_total || 0}</span>
                           <span className="text-slate-200">/</span>
@@ -988,7 +988,7 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName }) => {
 
           <div className="mt-16 border-t-4 border-black pt-8 flex justify-between items-end">
             <div className="text-[10px] font-black uppercase italic space-y-2">
-              <p className="text-blue-600 font-black">* IFZA ELECTRONICS GROUP (OFFICIAL REPORT)</p>
+              <p className="text-cyan-600 font-black">* IFZA ELECTRONICS GROUP (OFFICIAL REPORT)</p>
               <p>* GENERATED BY: {userName}</p>
               <p>* BRANCH/NODE: {company}</p>
               <p>* TIMESTAMP: {new Date().toLocaleString('bn-BD')}</p>
@@ -1006,7 +1006,7 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName }) => {
               )}
               {activeReport === 'PRODUCT_SALES_REPORT' ? (
                 <div className="space-y-1.5">
-                  <div className="flex justify-between text-[11px] font-black text-blue-600 italic border-b border-black/5 pb-1">
+                  <div className="flex justify-between text-[11px] font-black text-cyan-600 italic border-b border-black/5 pb-1">
                     <span>মোট নগদ (POS Total):</span>
                     <span>{(summary.totalPosSold || 0).toLocaleString()} Pcs</span>
                   </div>
@@ -1069,7 +1069,7 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName }) => {
       {showMemoModal && selectedMemo && (
         <div className="fixed inset-0 bg-black/98 backdrop-blur-3xl z-[5000] flex flex-col items-center p-4 overflow-y-auto no-print">
           <div className="w-full max-w-[148mm] flex justify-between items-center mb-8 sticky top-0 z-[5001] bg-slate-900/90 p-6 rounded-[2.5rem] border border-white/10">
-            <button onClick={() => setShowMemoModal(false)} className="text-white font-black uppercase text-[10px] px-6 transition-colors hover:text-blue-400">← ফিরে যান</button>
+            <button onClick={() => setShowMemoModal(false)} className="text-white font-black uppercase text-[10px] px-6 transition-colors hover:text-cyan-400">← ফিরে যান</button>
             <button disabled={isDownloading} onClick={downloadMemoPDF} className="bg-white text-slate-900 px-8 py-4 rounded-xl font-black text-[10px] uppercase shadow-xl active:scale-95">PDF ডাউনলোড ⎙</button>
           </div>
 
@@ -1077,15 +1077,15 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName }) => {
             <p className="text-center font-bold text-[11px] mb-1 italic leading-tight text-black">বিসমিল্লাহির রাহমানির রাহিম</p>
 
             <div className={`text-center border-b border-black ${(selectedMemo.items?.length || 0) > 30 ? 'pb-2 mb-2' : 'pb-4 mb-4'}`}>
-              <h1 className={`${(selectedMemo.items?.length || 0) > 30 ? 'text-[22px]' : 'text-[26px]'} font-black uppercase italic tracking-tighter leading-none mb-1 text-blue-600`}>IFZA ELECTRONICS</h1>
+              <h1 className={`${(selectedMemo.items?.length || 0) > 30 ? 'text-[22px]' : 'text-[26px]'} font-black uppercase italic tracking-tighter leading-none mb-1 text-cyan-600`}>IFZA ELECTRONICS</h1>
               <p className="text-[10px] font-black uppercase tracking-[0.2em] mb-1 text-black">{selectedMemo.company} DIVISION</p>
             </div>
 
             <div className={`flex justify-between items-start ${(selectedMemo.items?.length || 0) > 30 ? 'mb-2' : 'mb-6'}`}>
               <div className="space-y-1 flex-1">
-                <p className={`${(selectedMemo.items?.length || 0) > 30 ? 'text-[15px]' : 'text-[18px]'} font-black uppercase italic leading-tight text-blue-600`}>{selectedMemo.customers?.name}</p>
+                <p className={`${(selectedMemo.items?.length || 0) > 30 ? 'text-[15px]' : 'text-[18px]'} font-black uppercase italic leading-tight text-cyan-600`}>{selectedMemo.customers?.name}</p>
                 <p className="text-[10px] font-bold text-black">📍 ঠিকানা: {selectedMemo.customers?.address}</p>
-                <p className="text-[11px] text-blue-600 font-black mt-2 uppercase italic leading-none">
+                <p className="text-[11px] text-cyan-600 font-black mt-2 uppercase italic leading-none">
                   মেমো নাম্বার: {getMemoNo(selectedMemo.id, selectedMemo.created_at, selectedMemo.meta)}
                 </p>
               </div>
@@ -1093,7 +1093,7 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName }) => {
               <div className="text-right space-y-0.5 w-44">
                 <p className="text-[9px] font-black uppercase text-black mb-1">তারিখ: {new Date(selectedMemo.created_at).toLocaleDateString('bn-BD')}</p>
                 <p className="flex justify-between font-black text-[11px] text-slate-500"><span>পূর্বের বাকি:</span> <span>৳{parseAmount(selectedMemo.meta?.previous_due).toLocaleString()}</span></p>
-                <p className="flex justify-between font-black text-[13px] border-t border-black pt-0.5 text-black"><span>মেমো বিল:</span> <span className="text-blue-700">৳{parseAmount(selectedMemo.amount).toLocaleString()}</span></p>
+                <p className="flex justify-between font-black text-[13px] border-t border-black pt-0.5 text-black"><span>মেমো বিল:</span> <span className="text-cyan-700">৳{parseAmount(selectedMemo.amount).toLocaleString()}</span></p>
                 <p className="flex justify-between font-black text-[15px] border-t-2 border-black pt-1 text-black bg-slate-50 px-1 mt-1"><span>মোট বাকি:</span> <span className="text-red-600">৳{(parseAmount(selectedMemo.meta?.final_balance) || (parseAmount(selectedMemo.amount) + parseAmount(selectedMemo.meta?.previous_due))).toLocaleString()}</span></p>
               </div>
             </div>
@@ -1111,7 +1111,7 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName }) => {
                 </thead>
                 <tbody className={`${(selectedMemo.items?.length || 0) > 40 ? "text-[7.5px]" : (selectedMemo.items?.length || 0) > 25 ? "text-[8.5px]" : "text-[10px]"} text-black`}>
                   {selectedMemo.items?.map((it: any, idx: number) => (
-                    <tr key={idx} className={`font-bold italic border-b border-black/10 ${it.action === 'RETURN' ? 'text-red-600' : it.action === 'REPLACE' ? 'text-blue-600' : 'text-black'}`}>
+                    <tr key={idx} className={`font-bold italic border-b border-black/10 ${it.action === 'RETURN' ? 'text-red-600' : it.action === 'REPLACE' ? 'text-cyan-600' : 'text-black'}`}>
                       <td className={`${(selectedMemo.items?.length || 0) > 30 ? 'py-0.5' : 'py-1.5'}`}>{idx + 1}</td>
                       <td className={`${(selectedMemo.items?.length || 0) > 30 ? 'py-0.5' : 'py-1.5'} uppercase`}>
                         <span>{it.name}</span>
@@ -1129,7 +1129,7 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName }) => {
 
             <div className={`${(selectedMemo.items?.length || 0) > 30 ? 'mt-4' : 'mt-8'} border-t-2 border-black pt-2 flex justify-between items-end`}>
               <div className="text-[8px] font-black uppercase italic space-y-0.5">
-                <p className="text-blue-600 font-extrabold">* IFZA ELECTRONICS GR.</p>
+                <p className="text-cyan-600 font-extrabold">* IFZA ELECTRONICS GR.</p>
                 <p>মেমো তৈরী: {selectedMemo.submitted_by}</p>
                 <p>প্রিন্ট সময়: {new Date().toLocaleString('bn-BD')}</p>
               </div>
