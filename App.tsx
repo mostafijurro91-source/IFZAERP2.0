@@ -12,12 +12,9 @@ import Team from './components/Team';
 import CompanyLedger from './components/CompanyLedger';
 import Collections from './components/Collections';
 import DeliveryHub from './components/DeliveryHub';
-import OrderManagement from './components/OrderManagement';
-import AdManager from './components/AdManager';
 import Login from './components/Login';
 import MarketingPage from './components/MarketingPage';
 import CustomerPortal from './components/CustomerPortal';
-import Showroom from './components/Showroom';
 import Tracking from './components/Tracking';
 import DatabaseExplorer from './components/DatabaseExplorer';
 import { User, Company, CompanyRecord } from './types';
@@ -276,11 +273,8 @@ const App: React.FC = () => {
             {activeTab === 'portal_order_history' && <CustomerPortal type="ORDER_HISTORY" user={user} />}
             {activeTab === 'portal_catalog' && <CustomerPortal type="CATALOG" user={user} />}
             {activeTab === 'portal_booking' && <CustomerPortal type="BOOKING" user={user} />}
-            {activeTab === 'showroom' && <Showroom />}
-            {activeTab === 'ad_manager' && <AdManager />}
             {activeTab === 'sales' && <Sales company={selectedCompany} role={user.role} user={user} />}
             {activeTab === 'collections' && <Collections company={selectedCompany} user={user} companies={companies} />}
-            {activeTab === 'order_management' && <OrderManagement company={selectedCompany} user={user} setActiveTab={setActiveTab} />}
             {activeTab === 'bookings' && <Bookings company={selectedCompany} role={user.role} user={user} />}
             {activeTab === 'replacements' && <Replacements company={selectedCompany} role={user.role} user={user} />}
             {activeTab === 'delivery_hub' && <DeliveryHub company={selectedCompany} user={user} companies={companies} />}

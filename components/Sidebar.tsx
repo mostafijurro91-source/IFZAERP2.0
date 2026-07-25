@@ -28,7 +28,6 @@ const Sidebar: React.FC<SidebarProps> = ({
   onClose
 }) => {
   const [pendingCollections, setPendingCollections] = useState(0);
-  const [pendingOrders, setPendingOrders] = useState(0);
   const [hasCustomerDue, setHasCustomerDue] = useState(false);
   
   const isCustomer = user.role === 'CUSTOMER';
@@ -71,20 +70,6 @@ const Sidebar: React.FC<SidebarProps> = ({
       if (isStaff) collQuery = collQuery.eq('company', mapToDbCompany(user.company));
       const { count: cCount } = await collQuery;
       setPendingCollections(cCount || 0);
-
-      // 2. Fetch Pending Market Orders (Filter by Today for badge)
-      let orderQuery = supabase
-        .from('market_orders')
-        .select('*', { count: 'exact', head: true })
-        .eq('status', 'PENDING')
-        .gte('created_at', startOfDay);
-        
-      if (isStaff) orderQuery = orderQuery.eq('company', mapToDbCompany(user.company));
-      else orderQuery = orderQuery.eq('company', dbCo);
-      
-      const { count: oCount } = await orderQuery;
-      setPendingOrders(oCount || 0);
-      
     } catch (e) {}
   };
 
@@ -110,14 +95,11 @@ const Sidebar: React.FC<SidebarProps> = ({
     { id: 'portal_dashboard', label: '🏠 কাস্টমার হোম', roles: ['CUSTOMER'] },
     { id: 'portal_order', label: '🛒 অর্ডার করুন', roles: ['CUSTOMER'] },
     { id: 'portal_order_history', label: '📦 আমার অর্ডারসমূহ', roles: ['CUSTOMER'] },
-    { id: 'showroom', label: '💎 ডিজিটাল শোরুম', roles: ['ADMIN', 'CUSTOMER'] },
     { id: 'portal_booking', label: '📅 আমার বুকিং', roles: ['CUSTOMER'] },
     { id: 'portal_ledger', label: '📒 আমার লেজার', roles: ['CUSTOMER'], badge: 'due' },
     { id: 'portal_catalog', label: '📢 অফার ও রেট', roles: ['CUSTOMER'] },
-    { id: 'ad_manager', label: '📢 ক্যাটালগ ম্যানেজার', roles: ['ADMIN'] },
     { id: 'sales', label: '📝 সেলস মেমো (POS)', roles: ['ADMIN'] },
     { id: 'collections', label: '💰 টাকা কালেকশন', roles: ['ADMIN', 'STAFF', 'DELIVERY'], badge: 'pending_collections' },
-    { id: 'order_management', label: '🛒 মার্কেট অর্ডার', roles: ['ADMIN', 'STAFF'], badge: 'pending_orders' },
     { id: 'bookings', label: '📅 বুকিং অর্ডার', roles: ['ADMIN', 'STAFF'] },
     { id: 'replacements', label: '🔄 রিপ্লেসমেন্ট (Claim)', roles: ['ADMIN'] },
     { id: 'delivery_hub', label: '🚚 ডেলিভারি হাব', roles: ['ADMIN', 'DELIVERY', 'STAFF'] },
@@ -192,10 +174,6 @@ const Sidebar: React.FC<SidebarProps> = ({
             let badgeColor = "bg-red-600";
             
             if (item.badge === 'pending_collections') badgeCount = pendingCollections;
-            if (item.badge === 'pending_orders') {
-              badgeCount = pendingOrders;
-              badgeColor = "bg-rose-600 shadow-[0_0_15px_rgba(225,29,72,0.4)]";
-            }
             if (item.badge === 'due' && hasCustomerDue) badgeCount = 1;
 
             return (
