@@ -50,6 +50,7 @@ const Bookings: React.FC<BookingsProps> = ({ company, role, user }) => {
    const slipRef = useRef<HTMLDivElement>(null);
    const [showSlipModal, setShowSlipModal] = useState(false);
    const [selectedSlipData, setSelectedSlipData] = useState<any>(null);
+   const [nextDeliveryCommitment, setNextDeliveryCommitment] = useState<string>("");
 
    const safeFormat = (val: any) => Math.round(parseAmount(val || 0)).toLocaleString();
 
@@ -73,12 +74,20 @@ const Bookings: React.FC<BookingsProps> = ({ company, role, user }) => {
 
          if (bkErr) throw bkErr;
 
-         const formattedBookings = (bkData || []).map(b => ({
-            ...b,
-            customer_name: b.customers?.name,
-            customer_address: b.customers?.address,
-            customer_phone: b.customers?.phone
-         }));
+         const formattedBookings = (bkData || []).map(b => {
+            const itemsArr = Array.isArray(b.items) ? b.items : [];
+            const metaItem = itemsArr.find((it: any) => it._is_meta || it.id === '_meta_') || {};
+            const cleanItems = itemsArr.filter((it: any) => !it._is_meta && it.id !== '_meta_');
+            return {
+               ...b,
+               items: cleanItems,
+               delivery_date: metaItem.delivery_date || '',
+               payment_history: metaItem.payment_history || [],
+               customer_name: b.customers?.name,
+               customer_address: b.customers?.address,
+               customer_phone: b.customers?.phone
+            };
+         });
 
          const [custData, prodData] = await Promise.all([
             db.getCustomers(),
@@ -102,7 +111,13 @@ const Bookings: React.FC<BookingsProps> = ({ company, role, user }) => {
             .neq('status', 'COMPLETED');
 
          if (error) throw error;
-         setActiveBookingsForCust(data || []);
+         const cleanedCustBookings = (data || []).map((b: any) => {
+            const itemsArr = Array.isArray(b.items) ? b.items : [];
+            const metaItem = itemsArr.find((it: any) => it._is_meta || it.id === '_meta_') || {};
+            const cleanItems = itemsArr.filter((it: any) => !it._is_meta && it.id !== '_meta_');
+            return { ...b, items: cleanItems, delivery_date: metaItem.delivery_date || '', payment_history: metaItem.payment_history || [] };
+         });
+         setActiveBookingsForCust(cleanedCustBookings);
          setTargetBookingId("NEW");
       } catch (err) { setActiveBookingsForCust([]); }
    };
@@ -169,8 +184,28 @@ const Bookings: React.FC<BookingsProps> = ({ company, role, user }) => {
          const totalDelivered = updatedItems.reduce((s, i) => s + (i.delivered_qty || 0), 0);
          const isAllDelivered = totalOrdered > 0 && totalDelivered >= totalOrdered;
 
+         const newTotal = updatedItems.reduce((s, i) => s + (parseAmount(i.qty || 0) * parseAmount(i.unitPrice || 0)), 0);
+         const paymentAmt = (parseAmount(newCashAmt) || 0) + (parseAmount(newBankAmt) || 0);
+         const newAdvance = parseAmount(selectedBooking.advance_amount) + paymentAmt;
+         const remainingDue = Math.max(0, newTotal - newAdvance);
+
+         const newHistory = [...(selectedBooking.payment_history || [])];
+         if (paymentAmt > 0) {
+            newHistory.push({
+               date: new Date().toISOString().split('T')[0],
+               amount: paymentAmt,
+               note: parseAmount(newCashAmt) > 0 ? `ক্যাশ জমা ৳${newCashAmt}` : `ব্যাংক জমা ৳${newBankAmt}`,
+               method: parseAmount(newCashAmt) > 0 ? 'CASH' : 'BANK'
+            });
+         }
+         const itemsToSave = [...updatedItems, { id: '_meta_', name: 'META_INFO', _is_meta: true, delivery_date: selectedBooking.delivery_date || '', payment_history: newHistory }];
+
          // ✅ সব মাল ডেলিভারি হলে অটো-ডিলিট কনফার্মেশন
          if (isAllDelivered) {
+            if (remainingDue > 0) {
+               const proceedDel = confirm(`সতর্কতা: এই বুকিংয়ের এখনও ৳${remainingDue.toLocaleString()} টাকা বাকি রয়েছে! আপনার নিয়ম অনুযায়ী ডেট অনুযায়ী ফুল টাকা জমা নিয়ে মাল ডেলিভারি দেওয়া উচিত। আপনি কি ফুল পেমেন্ট ছাড়াই মাল ডেলিভারি দিতে চান?`);
+               if (!proceedDel) { setIsSaving(false); return; }
+            }
             const confirmDel = confirm("সব মাল ডেলিভারি হয়েছে, বুকিংটি কি ডিলিট করে দেব? (হিসাব ট্রানজেকশনে জমা থাকবে)");
             if (confirmDel) {
                const { error: delErr } = await supabase.from('bookings').delete().eq('id', selectedBooking.id);
@@ -179,25 +214,15 @@ const Bookings: React.FC<BookingsProps> = ({ company, role, user }) => {
                setShowDetailModal(false);
             } else {
                // ডিলিট না করলে শুধু COMPLETED হবে
-               await supabase.from('bookings').update({ items: updatedItems, status: 'COMPLETED', qty: totalOrdered }).eq('id', selectedBooking.id);
+               await supabase.from('bookings').update({ items: itemsToSave, status: 'COMPLETED', qty: totalOrdered, total_amount: newTotal, advance_amount: newAdvance }).eq('id', selectedBooking.id);
                alert("বুকিং আপডেট সফল হয়েছে! ✅");
             }
          } else {
-            const newTotal = updatedItems.reduce((s, i) => s + (parseAmount(i.qty || 0) * parseAmount(i.unitPrice || 0)), 0);
-            const newAdvance = parseAmount(selectedBooking.advance_amount) + (parseAmount(newCashAmt) || 0) + (parseAmount(newBankAmt) || 0);
             await supabase.from('bookings').update({
-               items: updatedItems, total_amount: newTotal, advance_amount: newAdvance,
+               items: itemsToSave, total_amount: newTotal, advance_amount: newAdvance,
                qty: totalOrdered, status: 'PARTIAL'
             }).eq('id', selectedBooking.id);
             alert("বুকিং আপডেট সফল হয়েছে! ✅");
-         }
-
-         // ট্রানজেকশন এন্ট্রি
-         if (parseAmount(newCashAmt) > 0 || parseAmount(newBankAmt) > 0) {
-            await supabase.from('transactions').insert([{
-               customer_id: selectedBooking.customer_id, company: dbCo, amount: (parseAmount(newCashAmt) || 0) + (parseAmount(newBankAmt) || 0),
-               payment_type: 'COLLECTION', items: [{ note: `বুকিং অগ্রিম জমা` }], submitted_by: user.name, meta: { is_booking: true }
-            }]);
          }
 
          // স্টক আপডেট
@@ -252,27 +277,31 @@ const Bookings: React.FC<BookingsProps> = ({ company, role, user }) => {
             id: it.product_id, product_id: it.product_id, name: it.name, qty: it.qty, unitPrice: it.unitPrice, delivered_qty: 0
          }));
          const totalInitialDeposit = parseAmount(form.advance) + parseAmount(form.bank_deposit);
+         const initialHistory = totalInitialDeposit > 0 ? [{
+            date: new Date().toISOString().split('T')[0],
+            amount: totalInitialDeposit,
+            note: `বুকিং শুরুর অগ্রিম জমা (ক্যাশ: ৳${form.advance || 0}, ব্যাংক: ৳${form.bank_deposit || 0})`,
+            method: parseAmount(form.advance) > 0 ? 'CASH' : 'BANK'
+         }] : [];
 
          if (targetBookingId !== "NEW") {
             const existing = activeBookingsForCust.find(b => b.id === targetBookingId);
             const combinedItems = [...(existing.items || []), ...newItemsFormatted];
             const totalOrd = combinedItems.reduce((s, i) => s + i.qty, 0);
+            const combHistory = [...(existing.payment_history || []), ...initialHistory];
+            const itemsToSave = [...combinedItems, { id: '_meta_', name: 'META_INFO', _is_meta: true, delivery_date: existing.delivery_date || '', payment_history: combHistory }];
+
             await supabase.from('bookings').update({
-               items: combinedItems, total_amount: parseAmount(existing.total_amount) + newItemsValue,
+               items: itemsToSave, total_amount: parseAmount(existing.total_amount) + newItemsValue,
                advance_amount: parseAmount(existing.advance_amount) + totalInitialDeposit,
                qty: totalOrd, status: 'PARTIAL'
             }).eq('id', targetBookingId);
          } else {
+            const itemsToSave = [...newItemsFormatted, { id: '_meta_', name: 'META_INFO', _is_meta: true, delivery_date: '', payment_history: initialHistory }];
             await supabase.from('bookings').insert([{
                customer_id: selectedCust.id, company: dbCo, product_name: newItemsFormatted[0].name,
-               qty: newItemsFormatted.reduce((sum, item) => sum + item.qty, 0), items: newItemsFormatted,
+               qty: newItemsFormatted.reduce((sum, item) => sum + item.qty, 0), items: itemsToSave,
                advance_amount: totalInitialDeposit, total_amount: newItemsValue, status: 'PENDING'
-            }]);
-         }
-         if (totalInitialDeposit > 0) {
-            await supabase.from('transactions').insert([{
-               customer_id: selectedCust.id, company: dbCo, amount: totalInitialDeposit,
-               payment_type: 'COLLECTION', items: [{ note: `বুকিং অগ্রিম গ্রহণ` }], submitted_by: user.name, meta: { is_booking: true }
             }]);
          }
          alert(`বুকিং সম্পন্ন হয়েছে! ✅`);
@@ -489,6 +518,15 @@ const Bookings: React.FC<BookingsProps> = ({ company, role, user }) => {
                         <div className="space-y-3 flex-1">
                            <p className="text-3xl font-black uppercase italic leading-none">{selectedBooking.customer_name}</p>
                            <p className="text-[14px] font-bold mt-2">📍 {selectedBooking.customer_address} | 📱 {selectedBooking.customer_phone}</p>
+                           <div className="mt-3 flex items-center gap-3 no-print">
+                              <span className="text-[12px] font-black uppercase text-indigo-600 bg-indigo-50 px-3 py-1 rounded-lg border border-indigo-100">📅 ডেলিভারি তারিখ:</span>
+                              <input 
+                                 type="date" 
+                                 className="p-2 border-2 border-indigo-200 rounded-xl text-sm font-black text-slate-800 bg-white shadow-inner" 
+                                 value={selectedBooking.delivery_date || ''} 
+                                 onChange={(e) => setSelectedBooking({ ...selectedBooking, delivery_date: e.target.value })} 
+                              />
+                           </div>
                         </div>
                         <div className="text-right space-y-2 w-72 shrink-0">
                            <p className="flex justify-between font-black text-[16px] text-slate-400 border-b pb-2"><span>বুকিং বিল:</span> <span>৳{parseAmount(selectedBooking.total_amount).toLocaleString()}</span></p>
@@ -585,68 +623,159 @@ const Bookings: React.FC<BookingsProps> = ({ company, role, user }) => {
          )}
 
          {/* SLIP MODAL */}
-         {showSlipModal && selectedSlipData && (
-            <div className="fixed inset-0 bg-slate-950/95 backdrop-blur-xl z-[6000] flex flex-col items-center p-4 overflow-y-auto no-print">
-               <div className="w-full max-w-[148mm] flex justify-between gap-6 mb-8 sticky top-0 z-[6001] bg-slate-900/90 p-6 rounded-3xl border border-white/10 shadow-2xl items-center">
-                  <button onClick={() => setShowSlipModal(false)} className="text-white font-black uppercase text-[10px] px-6">← ফিরে যান</button>
-                  <button disabled={isDownloading} onClick={() => handleDownloadPDF(slipRef, 'Booking_Slip')} className="bg-emerald-600 text-white px-10 py-4 rounded-xl font-black text-[10px] uppercase shadow-xl">স্লিপ ⬇</button>
+         {showSlipModal && selectedSlipData && (() => {
+            const totalOrderQty = (selectedSlipData.items || []).reduce((s: number, it: any) => s + parseAmount(it.qty || 0), 0);
+            const totalPrevDel = (selectedSlipData.items || []).reduce((s: number, it: any) => s + parseAmount(it.delivered_qty || 0), 0);
+            const totalTodayDel = (selectedSlipData.items || []).reduce((s: number, it: any) => s + parseAmount((selectedSlipData.today_delivery_map && selectedSlipData.today_delivery_map[it.id]) || 0), 0);
+            const totalRemQty = Math.max(0, totalOrderQty - totalPrevDel - totalTodayDel);
+
+            return (
+               <div className="fixed inset-0 bg-slate-950/95 backdrop-blur-xl z-[6000] flex flex-col items-center p-4 overflow-y-auto no-print">
+                  <div className="w-full max-w-[148mm] flex flex-wrap justify-between gap-4 mb-8 sticky top-0 z-[6001] bg-slate-900/95 p-6 rounded-3xl border border-white/10 shadow-2xl items-center">
+                     <button onClick={() => setShowSlipModal(false)} className="text-white font-black uppercase text-[10px] px-5 py-2.5 bg-white/10 rounded-xl hover:bg-white/20 transition-all">← ফিরে যান</button>
+                     {totalRemQty > 0 && (
+                        <div className="flex items-center gap-2 bg-slate-800 px-3.5 py-2 rounded-xl border border-amber-500/40 flex-1 min-w-[220px]">
+                           <span className="text-[10px] font-black uppercase text-amber-400 shrink-0">⏰ পরবর্তী ডেলিভারি সময়:</span>
+                           <input 
+                              type="text" 
+                              placeholder="যেমন: ২৫ জুলাই, বিকেল ৫টা" 
+                              className="bg-slate-900 text-white font-bold text-xs px-2.5 py-1 rounded-lg border border-white/20 outline-none w-full focus:border-amber-400"
+                              value={nextDeliveryCommitment} 
+                              onChange={e => setNextDeliveryCommitment(e.target.value)} 
+                           />
+                        </div>
+                     )}
+                     <button disabled={isDownloading} onClick={() => handleDownloadPDF(slipRef, 'Booking_Slip')} className="bg-emerald-600 text-white px-8 py-3 rounded-xl font-black text-[10px] uppercase shadow-xl hover:bg-emerald-500 transition-all shrink-0">স্লিপ ⬇</button>
+                  </div>
+                  <div ref={slipRef} className="bg-white mx-auto w-[140mm] p-6 flex flex-col font-sans text-black shadow-2xl border-[3px] border-black">
+                     {/* UPPER PART - MAIN BILL & CHALLAN */}
+                     <div className="text-center mb-4 border-b-4 border-black pb-3">
+                        <h1 className="text-[26px] font-black uppercase italic tracking-tighter leading-none mb-1">IFZA ELECTRONICS</h1>
+                        <p className="text-md font-black uppercase italic">{company} DIVISION</p>
+                        <div className="mt-1 inline-block px-5 py-0.5 bg-black text-white text-[8px] font-black uppercase rounded-full italic">DELIVERY CHALLAN & BILL</div>
+                     </div>
+                     <div className="flex justify-between items-start mb-4 text-[10px] font-bold">
+                        <div>
+                           <p className="text-[8px] font-black border-b border-black w-fit mb-1 uppercase opacity-60">Customer Info:</p>
+                           <p className="text-lg font-black uppercase italic leading-none">{selectedSlipData.customer_name}</p>
+                           <p className="text-[10px] font-bold mt-1">📍 {selectedSlipData.address || selectedBooking?.customer_address || 'N/A'}</p>
+                           <p className="text-[10px] font-bold">📞 {selectedSlipData.phone || selectedBooking?.customer_phone || 'N/A'}</p>
+                        </div>
+                        <div className="text-right">
+                           <p className="text-[11px] font-black">ID: #{String(selectedSlipData.booking_id || 'N/A').slice(-6).toUpperCase()}</p>
+                           <p className="text-[10px] font-black">Date: {new Date().toLocaleDateString('bn-BD')}</p>
+                           {selectedSlipData.delivery_date && <p className="text-[10px] font-black text-indigo-600">Target Delv: {selectedSlipData.delivery_date}</p>}
+                        </div>
+                     </div>
+                     <table className="w-full border-collapse border-2 border-black mb-4">
+                        <thead>
+                           <tr className="bg-black text-white text-[9px] font-black uppercase italic">
+                              <th className="p-1.5 text-left border border-black">Description</th>
+                              <th className="p-1.5 text-center border border-black w-12">Order</th>
+                              <th className="p-1.5 text-center border border-black w-12">Prev</th>
+                              <th className="p-1.5 text-center border border-black w-12 bg-blue-600">Today</th>
+                              <th className="p-1.5 text-center border border-black w-12">Bal</th>
+                              <th className="p-1.5 text-right border border-black w-20">Amount</th>
+                           </tr>
+                        </thead>
+                        <tbody>
+                           {(selectedSlipData.items || []).map((item: any, idx: number) => {
+                              const todayDelivery = (selectedSlipData.today_delivery_map && selectedSlipData.today_delivery_map[item.id]) || 0;
+                              const bal = item.qty - (item.delivered_qty || 0) - todayDelivery;
+                              return (
+                                 <tr key={idx} className="border-b border-black text-[11px] font-black italic">
+                                    <td className="p-1.5 uppercase border-r border-black">{item.name}</td>
+                                    <td className="p-1.5 text-center border-r border-black">{item.qty}</td>
+                                    <td className="p-1.5 text-center border-r border-black text-slate-500">{item.delivered_qty}</td>
+                                    <td className="p-1.5 text-center border-r border-black bg-blue-50 text-blue-600 font-black">{todayDelivery}</td>
+                                    <td className={`p-1.5 text-center border-r border-black ${bal > 0 ? 'text-rose-600 font-black' : 'text-emerald-600'}`}>{bal}</td>
+                                    <td className="p-1.5 text-right">৳{(item.qty * (item.unitPrice || 0)).toLocaleString()}</td>
+                                 </tr>
+                              );
+                           })}
+                        </tbody>
+                     </table>
+
+                     <div className="grid grid-cols-2 gap-4 my-2">
+                        <div className="border-2 border-black p-3 space-y-1 bg-slate-50 flex flex-col justify-between">
+                           <div>
+                              <p className="text-[9px] font-black uppercase text-slate-500 border-b border-black/20 pb-0.5 mb-1">📦 পণ্য ডেলিভারি সামারি (Pieces Summary)</p>
+                              <div className="flex justify-between text-[11px] font-bold"><span>মোট অর্ডার (Total Order):</span><span>{totalOrderQty} Pcs</span></div>
+                              <div className="flex justify-between text-[11px] font-black text-blue-600"><span>আজ ডেলিভারি হচ্ছে (Today):</span><span>{totalTodayDel} Pcs</span></div>
+                              <div className="flex justify-between text-[12px] font-black text-rose-600 border-t border-black/10 pt-0.5 mt-0.5"><span>অবশিষ্ট পাওনা (Remaining):</span><span>{totalRemQty} Pcs</span></div>
+                           </div>
+                           {totalRemQty > 0 && (
+                              <div className="mt-2 pt-1.5 border-t border-black/30 text-[9px] text-indigo-900 font-black leading-tight bg-amber-100 p-1 border border-amber-300">
+                                 ⏰ পরবর্তী ডেলিভারির সময়:<br/>
+                                 <span className="text-[10px] text-rose-700 underline">{nextDeliveryCommitment || '_______________________'}</span>
+                              </div>
+                           )}
+                        </div>
+                        <div className="border-2 border-black p-3 space-y-1 flex flex-col justify-between">
+                           <div>
+                              <p className="text-[9px] font-black uppercase text-slate-500 border-b border-black/20 pb-0.5 mb-1">💰 আর্থিক হিসাব (Financials)</p>
+                              <div className="flex justify-between text-[11px] font-black"><span>TOTAL BILL:</span><span>৳{parseAmount(selectedSlipData.total_amount).toLocaleString()}</span></div>
+                              <div className="flex justify-between text-[11px] font-black text-emerald-600"><span>TOTAL PAID:</span><span>৳{parseAmount(selectedSlipData.advance_amount).toLocaleString()}</span></div>
+                           </div>
+                           <div className="flex justify-between text-[14px] font-black border-t-2 border-black pt-1 mt-1"><span>NET PENDING:</span><span className="text-rose-600">৳{Math.abs(parseAmount(selectedSlipData.total_amount) - parseAmount(selectedSlipData.advance_amount)).toLocaleString()}</span></div>
+                        </div>
+                     </div>
+
+                     <div className="mt-6 flex justify-between items-end px-2 mb-2">
+                        <div className="text-center w-36 border-t-2 border-black pt-1 font-black italic text-[11px]">Buyer Signature</div>
+                        <div className="text-center w-36 border-t-2 border-black pt-1 text-right font-black uppercase italic text-[11px]">Authority Sign</div>
+                     </div>
+
+                     {/* CUT-OFF LINE */}
+                     <div className="my-5 border-t-2 border-dashed border-black flex items-center justify-between text-[8px] font-black text-slate-500 uppercase tracking-widest pt-1">
+                        <span>✂️ এখান থেকে কেটে নিচের অংশ দোকানে রাখুন (Cut here for store record) ✂️</span>
+                     </div>
+
+                     {/* BOTTOM RECEIPT ACKNOWLEDGMENT SECTION */}
+                     <div className="border-[2px] border-black p-4 bg-slate-50/50">
+                        <div className="flex justify-between items-center border-b-2 border-black pb-2 mb-2">
+                           <div>
+                              <h3 className="text-[14px] font-black uppercase italic leading-none text-black">মাল প্রাপ্তি স্বীকারপত্র</h3>
+                              <p className="text-[8px] font-black uppercase text-slate-500 mt-0.5">GOODS RECEIVED ACKNOWLEDGMENT (STORE COPY)</p>
+                           </div>
+                           <div className="text-right text-[10px] font-black">
+                              <p>ID: #{String(selectedSlipData.booking_id || 'N/A').slice(-6).toUpperCase()}</p>
+                              <p>Date: {new Date().toLocaleDateString('bn-BD')}</p>
+                           </div>
+                        </div>
+                        
+                        <div className="text-[11px] font-bold space-y-1 mb-2">
+                           <p><span className="text-slate-500">গ্রাহকের নাম:</span> <span className="font-black uppercase">{selectedSlipData.customer_name}</span> ({selectedSlipData.phone || 'N/A'})</p>
+                           <div className="grid grid-cols-2 gap-2 bg-white p-2 border border-black text-center my-2">
+                              <div className="border-r border-black">
+                                 <span className="text-[8px] text-slate-500 block font-bold uppercase">আজ বুঝে পেলাম (Received Today)</span>
+                                 <span className="text-[15px] font-black text-blue-600">{totalTodayDel} পিস</span>
+                              </div>
+                              <div>
+                                 <span className="text-[8px] text-slate-500 block font-bold uppercase">অবশিষ্ট পাওনা রইল (Remaining Balance)</span>
+                                 <span className="text-[15px] font-black text-rose-600">{totalRemQty} পিস</span>
+                              </div>
+                           </div>
+                           {totalRemQty > 0 && (
+                              <p className="bg-amber-100 p-1.5 border border-amber-300 text-[10px] font-black text-amber-900 text-center">
+                                 ⏰ পরবর্তী ডেলিভারি নেওয়ার নির্ধারিত সময়: <span className="underline">{nextDeliveryCommitment || '_________________________________'}</span>
+                              </p>
+                           )}
+                        </div>
+
+                        <div className="mt-8 flex justify-between items-end">
+                           <p className="text-[9px] font-bold italic text-slate-500 max-w-[180px] leading-tight">
+                              আমি উক্ত পণ্যসমূহ সঠিকভাবে এবং অক্ষত অবস্থায় বুঝে পেলাম।
+                           </p>
+                           <div className="text-center w-40 border-t-2 border-black pt-1 font-black italic text-[11px]">
+                              গ্রাহকের স্বাক্ষর ও তারিখ (Sign)
+                           </div>
+                        </div>
+                     </div>
+                  </div>
                </div>
-               <div ref={slipRef} className="bg-white mx-auto w-[140mm] p-6 flex flex-col font-sans text-black shadow-2xl border-[3px] border-black">
-                  <div className="text-center mb-4 border-b-4 border-black pb-3">
-                     <h1 className="text-[28px] font-black uppercase italic tracking-tighter leading-none mb-1">IFZA ELECTRONICS</h1>
-                     <p className="text-lg font-black uppercase italic">{company} DIVISION</p>
-                     <div className="mt-1 inline-block px-6 py-0.5 bg-black text-white text-[8px] font-black uppercase rounded-full italic">DELIVERY CHALLAN</div>
-                  </div>
-                  <div className="flex justify-between items-start mb-6 text-[10px] font-bold">
-                     <div>
-                        <p className="text-[8px] font-black border-b border-black w-fit mb-1 uppercase opacity-60">Customer:</p>
-                        <p className="text-xl font-black uppercase italic leading-none">{selectedSlipData.customer_name}</p>
-                        <p className="text-[11px] font-bold mt-1">📍 {selectedSlipData.address || selectedBooking?.customer_address}</p>
-                     </div>
-                     <div className="text-right">
-                        <p className="text-[11px] font-black">ID: #{String(selectedSlipData.booking_id || 'N/A').slice(-6).toUpperCase()}</p>
-                        <p className="text-[11px] font-black">Date: {new Date().toLocaleDateString('bn-BD')}</p>
-                     </div>
-                  </div>
-                  <table className="w-full border-collapse border-2 border-black">
-                     <thead>
-                        <tr className="bg-black text-white text-[10px] font-black uppercase italic">
-                           <th className="p-2 text-left border border-black">Description</th>
-                           <th className="p-2 text-center border border-black w-20">Order</th>
-                           <th className="p-2 text-center border border-black w-20">Prev</th>
-                           <th className="p-2 text-center border border-black w-20 bg-blue-600">Today</th>
-                           <th className="p-2 text-center border border-black w-20">Bal</th>
-                        </tr>
-                     </thead>
-                     <tbody>
-                        {(selectedSlipData.items || []).map((item: any, idx: number) => {
-                           const todayDelivery = (selectedSlipData.today_delivery_map && selectedSlipData.today_delivery_map[item.id]) || 0;
-                           return (
-                              <tr key={idx} className="border-b border-black text-[13px] font-black italic">
-                                 <td className="p-2 uppercase border-r border-black">{item.name}</td>
-                                 <td className="p-2 text-right border-r border-black">{item.qty}</td>
-                                 <td className="p-2 text-right border-r border-black">{item.delivered_qty}</td>
-                                 <td className="p-2 text-right border-r border-black bg-blue-50 text-blue-600">{todayDelivery}</td>
-                                 <td className="p-2 text-right text-rose-600">{item.qty - (item.delivered_qty || 0) - todayDelivery}</td>
-                              </tr>
-                           );
-                        })}
-                     </tbody>
-                  </table>
-                  <div className="mt-8 flex justify-end">
-                     <div className="w-1/2 space-y-2 border-2 border-black p-4">
-                        <div className="flex justify-between text-[12px] font-black border-b border-black pb-1"><span>TOTAL BILL:</span><span>৳{parseAmount(selectedSlipData.total_amount).toLocaleString()}</span></div>
-                        <div className="flex justify-between text-[12px] font-black border-b border-black pb-1"><span>TOTAL PAID:</span><span>৳{parseAmount(selectedSlipData.advance_amount).toLocaleString()}</span></div>
-                        <div className="flex justify-between text-[16px] font-black"><span>NET PENDING:</span><span className="text-rose-600">৳{Math.abs(parseAmount(selectedSlipData.total_amount) - parseAmount(selectedSlipData.advance_amount)).toLocaleString()}</span></div>
-                     </div>
-                  </div>
-                  <div className="mt-20 flex justify-between items-end px-4 mb-4">
-                     <div className="text-center w-40 border-t-2 border-black pt-2 font-black italic text-[12px]">Buyer Sign</div>
-                     <div className="text-center w-40 border-t-2 border-black pt-2 text-right font-black uppercase italic text-[14px]">Authority</div>
-                  </div>
-               </div>
-            </div>
-         )}
+            );
+         })()}
       </div>
    );
 };

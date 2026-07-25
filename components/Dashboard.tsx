@@ -47,9 +47,10 @@ const Dashboard: React.FC<DashboardProps> = ({ company, role }) => {
       const thirtyDaysAgo = new Date();
       thirtyDaysAgo.setDate(today.getDate() - 30);
 
-      const [prodRes, custRes] = await Promise.all([
+      const [prodRes, custRes, bkRes] = await Promise.all([
         supabase.from('products').select('db_price, tp, stock').eq('company', dbCompany),
-        supabase.from('customers').select('id')
+        supabase.from('customers').select('id'),
+        supabase.from('bookings').select('customer_id, advance_amount, status').eq('company', dbCompany).neq('status', 'COMPLETED')
       ]);
       const validCustomerIds = new Set(custRes.data?.map(c => c.id) || []);
 
@@ -123,7 +124,7 @@ const Dashboard: React.FC<DashboardProps> = ({ company, role }) => {
         if (tx.payment_type === 'COLLECTION') {
           if (txDateStr === todayStr) t_coll += amt;
           if (isBooking) {
-            if (cid) customerStatsMap[cid].book_adv += amt;
+            // Isolated booking advance handled via bookings table
           } else {
             if (cid) customerStatsMap[cid].due -= amt;
           }
@@ -145,6 +146,19 @@ const Dashboard: React.FC<DashboardProps> = ({ company, role }) => {
         if (txDateStr === todayStr) {
           const cust = Array.isArray(tx.customers) ? tx.customers[0] : tx.customers;
           recent.push({ name: cust?.name || 'Unknown', amount: amt, date: tx.created_at, type: tx.payment_type === 'COLLECTION' ? 'C' : 'S' });
+        }
+      });
+
+      // Populate booking advance directly from bookings table
+      (bkRes.data || []).forEach((b: any) => {
+        const cid = b.customer_id;
+        if (cid && validCustomerIds.has(cid)) {
+          if (!customerStatsMap[cid]) {
+            customerStatsMap[cid] = {
+              name: 'Unknown', phone: '', address: '', due: 0, book_adv: 0, lastTxDate: new Date(0)
+            };
+          }
+          customerStatsMap[cid].book_adv += parseAmount(b.advance_amount);
         }
       });
 

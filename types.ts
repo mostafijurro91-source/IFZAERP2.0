@@ -74,6 +74,8 @@ export interface Booking {
   status: 'PENDING' | 'PARTIAL' | 'COMPLETED';
   created_at: string;
   customer_name?: string;
+  delivery_date?: string;
+  payment_history?: { date: string; amount: number; note: string; method?: string }[];
 }
 
 export interface Advertisement {

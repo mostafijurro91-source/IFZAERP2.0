@@ -130,10 +130,10 @@ const CustomerPortal: React.FC<PortalProps> = ({ type, user }: PortalProps) => {
    const fetchAllStats = useCallback(async () => {
       if (!user.customer_id) return;
       try {
-         const { data: allTxs } = await supabase
-            .from('transactions')
-            .select('amount, payment_type, company, meta, items')
-            .eq('customer_id', user.customer_id);
+         const [{ data: allTxs }, { data: bkData }] = await Promise.all([
+            supabase.from('transactions').select('amount, payment_type, company, meta, items').eq('customer_id', user.customer_id),
+            supabase.from('bookings').select('advance_amount, company, status').eq('customer_id', user.customer_id).neq('status', 'COMPLETED')
+         ]);
 
          const stats: Record<string, CompanyStats> = {
             'Transtec': { regularDue: 0, bookingAdvance: 0, totalBill: 0, totalPaid: 0 },
@@ -148,10 +148,10 @@ const CustomerPortal: React.FC<PortalProps> = ({ type, user }: PortalProps) => {
                const isBooking = tx.meta?.is_booking === true || (tx.items && tx.items[0]?.note?.includes('বুকিং'));
 
                if (tx.payment_type === 'COLLECTION') {
-                  stats[dbCo].totalPaid += amt;
                   if (isBooking) {
-                     stats[dbCo].bookingAdvance += amt;
+                     // Isolated booking advance handled via bookings table
                   } else {
+                     stats[dbCo].totalPaid += amt;
                      stats[dbCo].regularDue -= amt;
                   }
                } else if (tx.payment_type === 'DUE') {
@@ -163,6 +163,14 @@ const CustomerPortal: React.FC<PortalProps> = ({ type, user }: PortalProps) => {
                }
             }
          });
+
+         (bkData || []).forEach((b: any) => {
+            const dbCo = mapToDbCompany(b.company);
+            if (stats[dbCo]) {
+               stats[dbCo].bookingAdvance += parseAmount(b.advance_amount);
+            }
+         });
+
          setMultiStats(stats);
       } catch (err) { }
    }, [user.customer_id]);

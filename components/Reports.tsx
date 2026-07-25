@@ -572,7 +572,9 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName }) => {
     if (activeReport === 'BOOKING_LOG') {
       return {
         totalRemQty: filteredData.reduce((s: number, i: any) => s + parseAmount(i.item_rem || 0), 0),
-        totalRemVal: filteredData.reduce((s: number, i: any) => s + parseAmount(i.item_rem_val || 0), 0)
+        totalRemVal: filteredData.reduce((s: number, i: any) => s + parseAmount(i.item_rem_val || 0), 0),
+        totalBookingBill: filteredData.filter((i: any) => i.is_first_of_booking).reduce((s: number, i: any) => s + parseAmount(i.booking_total || 0), 0),
+        totalBookingAdvance: filteredData.filter((i: any) => i.is_first_of_booking).reduce((s: number, i: any) => s + parseAmount(i.booking_advance || 0), 0),
       };
     }
     if (activeReport === 'STOCK_REPORT') {
@@ -842,9 +844,10 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName }) => {
                         {item.is_first_of_booking && (
                           <div className="mb-2 pb-2 border-b border-black/10">
                             <p className="font-black uppercase italic leading-none text-indigo-700">{item.customers?.name}</p>
-                            <div className="flex justify-between mt-1 text-[8px] font-bold text-slate-500 uppercase">
-                              <span>Bill: ৳{parseAmount(item.booking_total).toLocaleString()}</span>
-                              <span>Paid: ৳{parseAmount(item.booking_advance).toLocaleString()}</span>
+                            <div className="flex justify-between mt-1 text-[9px] font-bold text-slate-600 uppercase bg-slate-100 p-1.5 rounded-lg border border-slate-200">
+                              <span className="text-indigo-600">Bill: ৳{parseAmount(item.booking_total).toLocaleString()}</span>
+                              <span className="text-emerald-600">Paid: ৳{parseAmount(item.booking_advance).toLocaleString()}</span>
+                              <span className="text-rose-600">Due: ৳{(parseAmount(item.booking_total) - parseAmount(item.booking_advance)).toLocaleString()}</span>
                             </div>
                           </div>
                         )}
@@ -999,10 +1002,20 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName }) => {
                 <span>{filteredData.length}</span>
               </div>
               {activeReport === 'BOOKING_LOG' && (
-                <div className="flex justify-between text-sm font-black text-rose-600 italic border-b-2 border-rose-100 pb-2">
-                  <span>বাকি মালের সংখ্যা (Requirement):</span>
-                  <span>{(summary.totalRemQty || 0)} Pcs</span>
-                </div>
+                <>
+                  <div className="flex justify-between text-sm font-black text-indigo-600 italic border-b border-indigo-100 pb-1">
+                    <span>মোট বুকিং বিল (Total Bill):</span>
+                    <span>৳{(summary.totalBookingBill || 0).toLocaleString()}</span>
+                  </div>
+                  <div className="flex justify-between text-sm font-black text-emerald-600 italic border-b border-emerald-100 pb-1">
+                    <span>মোট জমা (Total Advance):</span>
+                    <span>৳{(summary.totalBookingAdvance || 0).toLocaleString()}</span>
+                  </div>
+                  <div className="flex justify-between text-sm font-black text-rose-600 italic border-b-2 border-rose-100 pb-2">
+                    <span>বাকি মালের সংখ্যা (Requirement):</span>
+                    <span>{(summary.totalRemQty || 0)} Pcs</span>
+                  </div>
+                </>
               )}
               {activeReport === 'PRODUCT_SALES_REPORT' ? (
                 <div className="space-y-1.5">

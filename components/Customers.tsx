@@ -104,8 +104,10 @@ const Customers: React.FC<CustomerProps> = ({ company, role, userName }) => {
   const fetchCustomers = async () => {
     try {
       setLoading(true);
-      const dbCompany = mapToDbCompany(company);
-      const { data: custData, error: ce } = await supabase.from('customers').select('*').order('name');
+      const [{ data: custData, error: ce }, { data: bkData }] = await Promise.all([
+        supabase.from('customers').select('*').order('name'),
+        supabase.from('bookings').select('customer_id, advance_amount, status').eq('company', dbCompany).neq('status', 'COMPLETED')
+      ]);
       if (ce) console.error("Customer fetch error:", ce);
 
       let allTx: any[] = [];
@@ -142,10 +144,17 @@ const Customers: React.FC<CustomerProps> = ({ company, role, userName }) => {
           regMap[cid] = (regMap[cid] || 0) + amt;
         } else if (tx.payment_type === 'COLLECTION') {
           if (isBooking) {
-            bookMap[cid] = (bookMap[cid] || 0) + amt;
+            // Isolated booking advance handled via bookings table
           } else {
             regMap[cid] = (regMap[cid] || 0) - amt;
           }
+        }
+      });
+
+      (bkData || []).forEach((b: any) => {
+        const cid = b.customer_id;
+        if (cid) {
+          bookMap[cid] = (bookMap[cid] || 0) + parseAmount(b.advance_amount);
         }
       });
 
@@ -253,12 +262,10 @@ const Customers: React.FC<CustomerProps> = ({ company, role, userName }) => {
 
     try {
       const dbCo = mapToDbCompany(company); // Use 'company' from props
-      const { data, error } = await supabase
-        .from('transactions')
-        .select('*')
-        .eq('customer_id', cust.id) // Use cust.id
-        .eq('company', dbCo)
-        .order('created_at', { ascending: false });
+      const [{ data, error }, { data: bkData }] = await Promise.all([
+        supabase.from('transactions').select('*').eq('customer_id', cust.id).eq('company', dbCo).order('created_at', { ascending: false }),
+        supabase.from('bookings').select('advance_amount, status').eq('customer_id', cust.id).eq('company', dbCo).neq('status', 'COMPLETED')
+      ]);
 
       if (error) throw error;
       setLedgerHistory(data || []);
@@ -277,10 +284,10 @@ const Customers: React.FC<CustomerProps> = ({ company, role, userName }) => {
         const isBooking = tx.meta?.is_booking === true || tx.items?.[0]?.note?.includes('বুকিং');
 
         if (tx.payment_type === 'COLLECTION') {
-          lifetimePaid += amt;
           if (isBooking) {
-            totalB += amt;
+            // Isolated booking advance handled via bookings table
           } else {
+            lifetimePaid += amt;
             totalR -= amt;
           }
         } else if (tx.payment_type === 'DUE') {
@@ -291,6 +298,7 @@ const Customers: React.FC<CustomerProps> = ({ company, role, userName }) => {
           }
         }
       });
+      totalB = (bkData || []).reduce((sum, b) => sum + parseAmount(b.advance_amount), 0);
       // DEBUG: log ledger totals for modal
       try { console.debug('DEBUG ledger totals', { customerId: cust.id, totalR, totalB, lifetimeSales, lifetimePaid }); } catch (e) { }
       setCurrentLedgerStats({ regularDue: totalR, bookingAdvance: totalB, totalSales: lifetimeSales, totalPaid: lifetimePaid });
