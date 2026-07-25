@@ -107,12 +107,13 @@ const CompanyLedger: React.FC<LedgerProps> = ({ company, role }: LedgerProps) =>
     try {
       const dbCo = mapToDbCompany(company);
       const total = bulkCart.reduce((sum, i) => sum + (parseAmount(i.qty || 0) * parseAmount(i.tp || 0)), 0);
-      const note = "পারচেজ: " + bulkCart.map((i: any) => `${i.qty}X ${i.name}`).join(", ");
+      const cleanedCart = bulkCart.map(i => ({ ...i, qty: parseAmount(i.qty || 0) })).filter(i => i.qty > 0);
+      const note = "পারচেজ: " + cleanedCart.map((i: any) => `${i.qty}X ${i.name}`).join(", ");
       const { error: ledgerErr } = await supabase.from('company_ledger').insert([{
-        company: dbCo, type: 'PURCHASE', amount: total, note: note, date: purchaseDate, items_json: bulkCart
+        company: dbCo, type: 'PURCHASE', amount: total, note: note, date: purchaseDate, items_json: cleanedCart
       }]);
       if (ledgerErr) throw ledgerErr;
-      for (const item of bulkCart) { await supabase.rpc('increment_stock', { row_id: item.id, amt: item.qty }); }
+      for (const item of cleanedCart) { await supabase.rpc('increment_stock', { row_id: item.id, amt: item.qty }); }
       alert("বাল্ক পারচেজ সফল!"); setShowBulkModal(false); setBulkCart([]); fetchData();
     } catch (err: any) { alert(err.message); } finally { setIsSaving(false); }
   };
@@ -428,9 +429,25 @@ const CompanyLedger: React.FC<LedgerProps> = ({ company, role }: LedgerProps) =>
                             <p className="text-[11px] font-black uppercase italic flex-1 truncate pr-4">{item.name}</p>
                             <div className="flex items-center gap-4">
                                <div className="flex items-center bg-white rounded-2xl p-1 border shadow-inner">
-                                  <button onClick={() => setBulkCart(bulkCart.map(i=>i.id===item.id?{...i, qty:Math.max(0,i.qty-1)}:i).filter(i=>i.qty>0))} className="w-10 h-10 font-black text-xl text-slate-300">-</button>
-                                  <input type="number" className="w-12 text-center font-black text-xs bg-transparent" value={item.qty} readOnly />
-                                  <button onClick={() => setBulkCart(bulkCart.map(i=>i.id===item.id?{...i, qty:i.qty+1}:i))} className="w-10 h-10 font-black text-xl text-slate-300">+</button>
+                                  <button onClick={() => setBulkCart(bulkCart.map(i=>i.id===item.id?{...i, qty:Math.max(0,Number(i.qty||0)-1)}:i).filter(i=>Number(i.qty)>0))} className="w-10 h-10 font-black text-xl text-slate-300 hover:text-rose-500 transition-all">-</button>
+                                  <input 
+                                     type="number" 
+                                     className="w-16 text-center font-black text-xs bg-transparent outline-none focus:text-blue-600 focus:scale-105 py-1 transition-all" 
+                                     value={item.qty === 0 ? '' : item.qty} 
+                                     onChange={(e) => {
+                                        const val = e.target.value === '' ? '' : Math.max(0, Number(e.target.value));
+                                        setBulkCart(bulkCart.map(i => i.id === item.id ? { ...i, qty: val } : i));
+                                     }}
+                                     onBlur={(e) => {
+                                        const val = Number(e.target.value) || 0;
+                                        if (val <= 0) {
+                                           setBulkCart(bulkCart.filter(i => i.id !== item.id));
+                                        } else {
+                                           setBulkCart(bulkCart.map(i => i.id === item.id ? { ...i, qty: val } : i));
+                                        }
+                                     }}
+                                  />
+                                  <button onClick={() => setBulkCart(bulkCart.map(i=>i.id===item.id?{...i, qty:(Number(i.qty||0))+1}:i))} className="w-10 h-10 font-black text-xl text-slate-300 hover:text-blue-500 transition-all">+</button>
                                </div>
                                <button onClick={() => setBulkCart(bulkCart.filter(i=>i.id!==item.id))} className="text-red-300 hover:text-red-500 font-black">✕</button>
                             </div>
