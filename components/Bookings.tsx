@@ -468,27 +468,131 @@ const Bookings: React.FC<BookingsProps> = ({ company, role, user }) => {
                                  </div>
                               </div>
                               <div className="w-full lg:w-1/2 p-8 bg-white flex flex-col">
-                                 <div className="flex-1 overflow-y-auto custom-scroll space-y-3 pr-2 mb-6">
-                                    {bookingCart.map((it, idx) => (
-                                       <div key={it.product_id} className="p-4 bg-slate-50 rounded-[2rem] border border-slate-100 flex items-center justify-between">
-                                          <div className="min-w-0 flex-1 pr-4">
-                                             <p className="text-[10px] font-black uppercase text-slate-800 truncate mb-1">{it.name}</p>
-                                             <input type="number" className="w-20 p-2 bg-white border rounded-lg font-black text-[10px]" value={it.unitPrice} onChange={(e) => { const n = [...bookingCart]; n[idx].unitPrice = parseAmount(e.target.value); setBookingCart(n); }} />
+                                 <div className="flex-1 overflow-y-auto custom-scroll space-y-3 pr-2 mb-4">
+                                    {bookingCart.length === 0 ? (
+                                       <div className="h-40 flex flex-col items-center justify-center text-slate-400 border-2 border-dashed border-slate-200 rounded-[2rem] p-6 text-center">
+                                          <span className="text-3xl mb-2">🛒</span>
+                                          <p className="text-xs font-black uppercase">কোনো প্রোডাক্ট সিলেক্ট করা হয়নি</p>
+                                          <p className="text-[10px] font-bold mt-1 text-slate-400">বাম পাশের লিস্ট থেকে প্রোডাক্টে ক্লিক করে কার্টে যোগ করুন</p>
+                                       </div>
+                                    ) : (
+                                       bookingCart.map((it, idx) => (
+                                          <div key={it.product_id} className="p-4 bg-slate-50 rounded-[2rem] border border-slate-100 flex items-center justify-between gap-3 shadow-sm hover:border-indigo-200 transition-all">
+                                             <div className="min-w-0 flex-1">
+                                                <p className="text-[11px] font-black uppercase text-slate-800 truncate mb-1.5" title={it.name}>{it.name}</p>
+                                                <div className="flex items-center gap-1.5">
+                                                   <span className="text-[10px] font-bold text-slate-500">দর (৳):</span>
+                                                   <input 
+                                                      type="number" 
+                                                      min="0"
+                                                      className="w-20 p-1.5 bg-white border border-slate-200 rounded-lg font-black text-[11px] text-indigo-600 outline-none focus:border-indigo-500 shadow-inner" 
+                                                      value={it.unitPrice === 0 ? '' : it.unitPrice} 
+                                                      placeholder="দর"
+                                                      onChange={(e) => { const n = [...bookingCart]; n[idx].unitPrice = parseAmount(e.target.value); setBookingCart(n); }} 
+                                                   />
+                                                   <span className="text-[10px] font-black text-slate-400 ml-1">মোট: ৳{(it.qty * (it.unitPrice || 0)).toLocaleString()}</span>
+                                                </div>
+                                             </div>
+                                             <div className="flex items-center gap-2">
+                                                <div className="flex items-center bg-white rounded-xl p-1 border border-slate-200 shadow-inner gap-1">
+                                                   <button onClick={() => { const n = [...bookingCart]; n[idx].qty = Math.max(1, n[idx].qty - 1); setBookingCart(n); }} className="w-7 h-7 font-black text-sm bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg transition-all">-</button>
+                                                   <input 
+                                                      type="number" 
+                                                      min="1" 
+                                                      className="w-14 text-center font-black text-sm bg-indigo-50/50 border border-indigo-200 rounded-lg py-1 outline-none text-indigo-700 shadow-sm" 
+                                                      value={it.qty === 0 ? '' : it.qty} 
+                                                      placeholder="পরিমাণ"
+                                                      onChange={(e) => { 
+                                                         const val = Math.max(1, parseInt(e.target.value) || 0); 
+                                                         const n = [...bookingCart]; 
+                                                         n[idx].qty = val; 
+                                                         setBookingCart(n); 
+                                                      }} 
+                                                   />
+                                                   <button onClick={() => { const n = [...bookingCart]; n[idx].qty++; setBookingCart(n); }} className="w-7 h-7 font-black text-sm bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg transition-all">+</button>
+                                                </div>
+                                                <button onClick={() => { setBookingCart(bookingCart.filter((_, i) => i !== idx)); }} className="w-8 h-8 bg-rose-50 hover:bg-rose-100 text-rose-500 rounded-xl font-black flex items-center justify-center transition-all" title="লিস্ট থেকে বাদ দিন">×</button>
+                                             </div>
                                           </div>
-                                          <div className="flex items-center bg-white rounded-xl p-1 border shadow-inner">
-                                             <button onClick={() => { const n = [...bookingCart]; n[idx].qty = Math.max(0, n[idx].qty - 1); setBookingCart(n.filter(i => i.qty > 0)); }} className="w-8 h-8 font-black text-lg text-slate-300">-</button>
-                                             <span className="w-10 text-center font-black text-sm">{it.qty}</span>
-                                             <button onClick={() => { const n = [...bookingCart]; n[idx].qty++; setBookingCart(n); }} className="w-8 h-8 font-black text-lg text-slate-300">+</button>
+                                       ))
+                                    )}
+                                 </div>
+
+                                 {/* 💰 বুকিং অগ্রিম জমা ও বিলের হিসাব কার্ড */}
+                                 <div className="mt-2 pt-4 border-t-2 border-indigo-100 bg-indigo-50/40 p-6 rounded-[2.5rem] space-y-4 shadow-sm">
+                                    <div className="border-b border-indigo-100/80 pb-2">
+                                       <h3 className="text-xs font-black text-indigo-950 uppercase italic flex items-center gap-2">
+                                          <span>💰 বুকিং অগ্রিম জমা ও বিলের হিসাব (Deposit & Bill Summary)</span>
+                                       </h3>
+                                       <p className="text-[10px] font-bold text-slate-600 mt-1 leading-relaxed">
+                                          বুকিং নেওয়ার সময় কাস্টমার যে পরিমাণ টাকা অগ্রিম জমা দিচ্ছেন তা নিচের ক্যাশ বা ব্যাংক অপশনে লিখুন। বাকি টাকা মাল ডেলিভারি নেওয়ার সময় পরিশোধ করতে হবে।
+                                       </p>
+                                    </div>
+
+                                    {/* বিল ও জমার হিসাব সামারি */}
+                                    <div className="bg-white p-3.5 rounded-2xl border border-indigo-100 shadow-sm grid grid-cols-3 gap-2 text-center">
+                                       <div>
+                                          <p className="text-[9px] font-black text-slate-400 uppercase">মোট অর্ডারের বিল</p>
+                                          <p className="text-sm font-black text-slate-800 mt-0.5">
+                                             ৳{bookingCart.reduce((sum, item) => sum + (item.qty * (item.unitPrice || 0)), 0).toLocaleString()}
+                                          </p>
+                                       </div>
+                                       <div className="border-x border-slate-100">
+                                          <p className="text-[9px] font-black text-emerald-500 uppercase">মোট অগ্রিম জমা</p>
+                                          <p className="text-sm font-black text-emerald-600 mt-0.5">
+                                             ৳{(parseAmount(form.advance) + parseAmount(form.bank_deposit)).toLocaleString()}
+                                          </p>
+                                       </div>
+                                       <div>
+                                          <p className="text-[9px] font-black text-rose-500 uppercase">বাকি থাকবে (Due)</p>
+                                          <p className="text-sm font-black text-rose-600 mt-0.5">
+                                             ৳{Math.max(0, bookingCart.reduce((sum, item) => sum + (item.qty * (item.unitPrice || 0)), 0) - (parseAmount(form.advance) + parseAmount(form.bank_deposit))).toLocaleString()}
+                                          </p>
+                                       </div>
+                                    </div>
+
+                                    {/* জমা দেওয়ার অপশন */}
+                                    <div className="space-y-2">
+                                       <p className="text-[10px] font-black text-slate-700 uppercase">টাকা জমা দেওয়ার মাধ্যম ও পরিমাণ লিখুন:</p>
+                                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                          <div className="bg-emerald-50/80 p-3 rounded-2xl border border-emerald-200">
+                                             <label className="block text-[10px] font-black text-emerald-800 uppercase mb-1 flex items-center justify-between">
+                                                <span>💵 ক্যাশ জমা (Cash)</span>
+                                                <span className="text-[8px] bg-emerald-200/70 text-emerald-900 px-1.5 py-0.5 rounded font-black">নগদ টাকা</span>
+                                             </label>
+                                             <input 
+                                                type="number" 
+                                                min="0"
+                                                className="w-full p-2.5 bg-white text-emerald-700 rounded-xl font-black text-sm text-center outline-none border border-emerald-300 shadow-inner focus:ring-2 focus:ring-emerald-400" 
+                                                placeholder="ক্যাশ টাকার পরিমাণ..." 
+                                                value={form.advance === 0 ? '' : form.advance} 
+                                                onChange={e => setForm({ ...form, advance: parseAmount(e.target.value) })} 
+                                             />
+                                          </div>
+                                          <div className="bg-blue-50/80 p-3 rounded-2xl border border-blue-200">
+                                             <label className="block text-[10px] font-black text-blue-800 uppercase mb-1 flex items-center justify-between">
+                                                <span>🏦 ব্যাংক জমা (Bank)</span>
+                                                <span className="text-[8px] bg-blue-200/70 text-blue-900 px-1.5 py-0.5 rounded font-black">ব্যাংক / বিকাশ / নগদ</span>
+                                             </label>
+                                             <input 
+                                                type="number" 
+                                                min="0"
+                                                className="w-full p-2.5 bg-white text-blue-700 rounded-xl font-black text-sm text-center outline-none border border-blue-300 shadow-inner focus:ring-2 focus:ring-blue-400" 
+                                                placeholder="ব্যাংক জমার পরিমাণ..." 
+                                                value={form.bank_deposit === 0 ? '' : form.bank_deposit} 
+                                                onChange={e => setForm({ ...form, bank_deposit: parseAmount(e.target.value) })} 
+                                             />
                                           </div>
                                        </div>
-                                    ))}
-                                 </div>
-                                 <div className="space-y-6 pt-6 border-t border-slate-100">
-                                    <div className="grid grid-cols-2 gap-4">
-                                       <input type="number" className="w-full p-4 bg-emerald-50 text-emerald-600 rounded-2xl font-black text-lg text-center outline-none border" placeholder="Cash" value={form.advance} onChange={e => setForm({ ...form, advance: parseAmount(e.target.value) })} />
-                                       <input type="number" className="w-full p-4 bg-blue-50 text-blue-600 rounded-2xl font-black text-lg text-center outline-none border" placeholder="Bank" value={form.bank_deposit} onChange={e => setForm({ ...form, bank_deposit: parseAmount(e.target.value) })} />
                                     </div>
-                                    <button disabled={isSaving || bookingCart.length === 0} onClick={handleAddBooking} className="w-full bg-indigo-600 text-white py-6 rounded-[2.5rem] font-black uppercase text-xs tracking-[0.3em] shadow-xl">বুকিং সেভ করুন ➔</button>
+
+                                    <button 
+                                       disabled={isSaving || bookingCart.length === 0 || bookingCart.some(i => i.qty <= 0)} 
+                                       onClick={handleAddBooking} 
+                                       className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 text-white py-4 rounded-2xl font-black uppercase text-xs tracking-widest shadow-xl active:scale-95 transition-all flex items-center justify-center gap-2"
+                                    >
+                                       <span>✅ নতুন বুকিং কনফার্ম ও সেভ করুন ➔</span>
+                                    </button>
                                  </div>
                               </div>
                            </div>
