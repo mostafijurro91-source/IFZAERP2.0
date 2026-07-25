@@ -41,6 +41,12 @@ const CompanyLedger: React.FC<LedgerProps> = ({ company, role }: LedgerProps) =>
 
   useEffect(() => {
     fetchData();
+    const channel = supabase
+      .channel('company-ledger-realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'company_ledger' }, () => fetchData())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'products' }, () => fetchData())
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
   }, [company]);
 
   const fetchData = async () => {

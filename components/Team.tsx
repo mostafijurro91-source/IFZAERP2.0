@@ -27,16 +27,23 @@ const Team: React.FC = () => {
 
   useEffect(() => {
     fetchUsers();
+    const channel = supabase
+      .channel('team-realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'users' }, () => { fetchUsers(); setRefreshTimer(0); })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'customers' }, () => { fetchUsers(); setRefreshTimer(0); })
+      .subscribe();
+
     const interval = setInterval(() => {
       fetchUsers();
       setRefreshTimer(0);
-    }, 600000); // 10 minutes refresh
+    }, 600000); // 10 minutes fallback
 
     const timer = setInterval(() => {
       setRefreshTimer(prev => prev + 1);
     }, 1000);
 
     return () => {
+      supabase.removeChannel(channel);
       clearInterval(interval);
       clearInterval(timer);
     };

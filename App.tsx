@@ -254,11 +254,16 @@ const App: React.FC = () => {
           </div>
           
           <div className="flex items-center gap-4">
+            <div className="hidden md:flex items-center gap-2 bg-emerald-50 text-emerald-600 px-3.5 py-1.5 rounded-full border border-emerald-200/60 shadow-sm animate-pulse-glow">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping inline-block"></span>
+              <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block -ml-4"></span>
+              <span className="text-[9px] font-black uppercase tracking-widest italic ml-1">Live Sync Active</span>
+            </div>
             <div className="text-right hidden sm:block">
               <p className="text-[10px] font-black text-slate-900 uppercase italic leading-none">{user.name}</p>
               <p className="text-[7px] font-bold text-slate-400 mt-1 uppercase tracking-widest">{user.role} ACCESS</p>
             </div>
-            <div className="w-10 h-10 bg-cyan-600 rounded-xl flex items-center justify-center text-white font-black italic shadow-lg">
+            <div className="w-10 h-10 bg-cyan-600 rounded-xl flex items-center justify-center text-white font-black italic shadow-lg hover-smooth">
               {user.name.charAt(0)}
             </div>
           </div>

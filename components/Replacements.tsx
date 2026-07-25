@@ -44,7 +44,15 @@ const Replacements: React.FC<ReplacementsProps> = ({ company, role, user }) => {
   const [selectedRpForSend, setSelectedRpForSend] = useState<any>(null);
   const [sendToCompanyQty, setSendToCompanyQty] = useState<number>(1);
 
-  useEffect(() => { fetchData(); }, [company]);
+  useEffect(() => { 
+    fetchData(); 
+    const channel = supabase
+      .channel('replacements-realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'replacements' }, () => fetchData())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'products' }, () => fetchData())
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [company]);
 
   const fetchData = async () => {
     try {

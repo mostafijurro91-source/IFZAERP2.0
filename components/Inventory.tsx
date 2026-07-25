@@ -24,7 +24,18 @@ const Inventory: React.FC<InventoryProps> = ({ company, role }) => {
   const dbCo = mapToDbCompany(company);
   const isAdmin = role === 'ADMIN';
 
-  useEffect(() => { fetchProducts(); }, [company]);
+  useEffect(() => { 
+    fetchProducts();
+    const channel = supabase
+      .channel('inventory-realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'products' }, () => fetchProducts())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'transactions' }, () => fetchProducts())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'bookings' }, () => fetchProducts())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'replacements' }, () => fetchProducts())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'company_ledger' }, () => fetchProducts())
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [company]);
 
   const fetchProducts = async () => {
     try {

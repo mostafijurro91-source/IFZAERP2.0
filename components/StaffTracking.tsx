@@ -29,16 +29,23 @@ const StaffTracking: React.FC<StaffTrackingProps> = ({ company }) => {
 
   useEffect(() => {
     fetchData();
+    const channel = supabase
+      .channel('staff-tracking-realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'staff_locations' }, () => { fetchData(); setRefreshTimer(0); })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'customers' }, () => { fetchData(); setRefreshTimer(0); })
+      .subscribe();
+
     const interval = setInterval(() => {
       fetchData();
       setRefreshTimer(0);
-    }, 600000); // 10 minutes refresh for staff tracking
+    }, 600000); // 10 minutes fallback
 
     const timer = setInterval(() => {
       setRefreshTimer(prev => prev + 1);
     }, 1000);
 
     return () => {
+      supabase.removeChannel(channel);
       clearInterval(interval);
       clearInterval(timer);
     };
