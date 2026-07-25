@@ -75,6 +75,7 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName }) => {
 
   const fetchReport = async (type: ReportType) => {
     setLoading(true);
+    setReportData([]);
     const dbCompany = mapToDbCompany(company);
     try {
       if (type === 'STOCK_REPORT') {
@@ -328,21 +329,26 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName }) => {
           }
         });
 
-        const rows = cos?.map((c: any) => {
-          const sales = salesMap[c.name] || 0;
+        const companyNames = new Set<string>();
+        ['Transtec', 'SQ Light', 'SQ Cables'].forEach(c => companyNames.add(c));
+        cos?.forEach((c: any) => { if (c.name) companyNames.add(c.name); });
+        txs?.forEach((tx: any) => { if (tx.company && tx.company !== 'Unknown') companyNames.add(tx.company); });
+
+        const rows = Array.from(companyNames).sort().map((name: string) => {
+          const sales = salesMap[name] || 0;
           return {
-            name: c.name,
+            name: name,
             sales: sales,
-            commission: commissionMap[c.name] || 0,
-            collection: collectionMap[c.name] || 0,
-            myEarnings: myEarningsMap[c.name] || 0,
+            commission: commissionMap[name] || 0,
+            collection: collectionMap[name] || 0,
+            myEarnings: myEarningsMap[name] || 0,
             percentage: totalSalesAll > 0 ? (sales / totalSalesAll) * 100 : 0,
             grandTotalSales: totalSalesAll,
             grandTotalComm: totalCommAll,
             grandTotalColl: totalCollAll,
             grandTotalMyEarn: totalMyEarnAll
           };
-        }) || [];
+        });
 
         setReportData(rows);
       }
@@ -904,26 +910,26 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName }) => {
                   ) : activeReport === 'COMPANY_SALES' ? (
                     <>
                       <td className="p-3 border-r border-black uppercase">
-                        <p className="font-black text-[11px]">{item.name}</p>
+                        <p className="font-black text-[11px]">{item.name || 'Unknown'}</p>
                       </td>
                       <td className="p-3 border-r border-black text-right font-black italic text-[13px] text-slate-700">
-                        ৳{parseAmount(item.sales).toLocaleString()}
+                        ৳{parseAmount(item.sales || 0).toLocaleString()}
                       </td>
                       <td className="p-3 border-r border-black text-right font-black italic text-[13px] text-rose-600">
-                        ৳{parseAmount(item.commission).toLocaleString()}
+                        ৳{parseAmount(item.commission || 0).toLocaleString()}
                       </td>
                       <td className="p-3 border-r border-black text-right font-black italic text-sm text-indigo-700 bg-indigo-50">
-                        ৳{parseAmount(item.myEarnings).toLocaleString()}
+                        ৳{parseAmount(item.myEarnings || 0).toLocaleString()}
                       </td>
                       <td className="p-3 border-r border-black text-right font-black italic text-[13px] text-emerald-600">
-                        ৳{parseAmount(item.collection).toLocaleString()}
+                        ৳{parseAmount(item.collection || 0).toLocaleString()}
                       </td>
                       <td className="p-3 text-center">
                         <div className="flex flex-col items-center">
                           <div className="w-full bg-slate-100 h-1 rounded-full overflow-hidden mb-1 border border-slate-200">
-                            <div className="bg-indigo-600 h-full" style={{ width: `${item.percentage}%` }}></div>
+                            <div className="bg-indigo-600 h-full" style={{ width: `${Math.min(100, Math.max(0, Number(item.percentage) || 0))}%` }}></div>
                           </div>
-                          <span className="font-black text-indigo-600 text-[8px]">{item.percentage.toFixed(1)}%</span>
+                          <span className="font-black text-indigo-600 text-[8px]">{(Number(item.percentage) || 0).toFixed(1)}%</span>
                         </div>
                       </td>
                     </>
@@ -944,7 +950,7 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName }) => {
                     <>
                       <td className="p-3 border-r border-black uppercase text-[11px]">
                         <p className="font-black leading-tight">{item.name}</p>
-                        <p className="text-[8px] opacity-50 uppercase mt-1">Code: {item.id.slice(0,8)}</p>
+                        <p className="text-[8px] opacity-50 uppercase mt-1">Code: {String(item.id || '').slice(0,8)}</p>
                       </td>
                       <td className="p-3 border-r border-black text-center text-[10px] bg-slate-50">
                         <div className="flex justify-center gap-1 font-black">
