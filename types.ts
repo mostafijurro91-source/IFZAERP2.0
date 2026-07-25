@@ -44,6 +44,7 @@ export interface Product {
   id: string;
   name: string;
   company: string;
+  db_price?: number; // Dealer Buying Price
   mrp: number;
   tp: number;
   etp: number;

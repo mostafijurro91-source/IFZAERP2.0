@@ -19,7 +19,7 @@ const Inventory: React.FC<InventoryProps> = ({ company, role }) => {
   const [isSaving, setIsSaving] = useState(false);
 
   // New Product State
-  const [newProd, setNewProd] = useState({ name: '', tp: '', mrp: '', stock: '0' });
+  const [newProd, setNewProd] = useState({ name: '', db_price: '', etp: '', tp: '', mrp: '', stock: '0' });
 
   const dbCo = mapToDbCompany(company);
   const isAdmin = role === 'ADMIN';
@@ -96,6 +96,8 @@ const Inventory: React.FC<InventoryProps> = ({ company, role }) => {
     try {
         const { error } = await supabase.from('products').insert([{
         name: newProd.name.trim(),
+        db_price: parseAmount(newProd.db_price) || 0,
+        etp: parseAmount(newProd.etp) || 0,
         tp: parseAmount(newProd.tp) || 0,
         mrp: parseAmount(newProd.mrp) || 0,
         stock: parseAmount(newProd.stock) || 0,
@@ -104,7 +106,7 @@ const Inventory: React.FC<InventoryProps> = ({ company, role }) => {
       if (error) throw error;
       alert("নতুন প্রোডাক্ট সফলভাবে যোগ করা হয়েছে! ✅");
       setShowAddModal(false);
-      setNewProd({ name: '', tp: '', mrp: '', stock: '0' });
+      setNewProd({ name: '', db_price: '', etp: '', tp: '', mrp: '', stock: '0' });
       fetchProducts();
     } catch (err: any) { alert("ত্রুটি: " + err.message); } finally { setIsSaving(false); }
   };
@@ -124,6 +126,8 @@ const Inventory: React.FC<InventoryProps> = ({ company, role }) => {
     try {
         const { error } = await supabase.from('products').update({
         name: editingProduct.name,
+        db_price: parseAmount(editingProduct.db_price) || 0,
+        etp: parseAmount(editingProduct.etp) || 0,
         tp: parseAmount(editingProduct.tp),
         mrp: parseAmount(editingProduct.mrp),
         stock: parseAmount(editingProduct.stock)
@@ -135,20 +139,52 @@ const Inventory: React.FC<InventoryProps> = ({ company, role }) => {
   };
 
   const filtered = useMemo(() => products.filter(p => p.name.toLowerCase().includes(search.toLowerCase())), [products, search]);
-  const totalStockVal = useMemo(() => products.reduce((acc, p) => acc + (p.stock * p.tp), 0), [products]);
+  
+  // 4 Types of Valuation
+  const totalStockValDB = useMemo(() => products.reduce((acc, p) => acc + ((p.stock || 0) * (parseAmount(p.db_price) || parseAmount(p.tp) || 0)), 0), [products]);
+  const totalStockValETP = useMemo(() => products.reduce((acc, p) => acc + ((p.stock || 0) * (parseAmount(p.etp) || parseAmount(p.tp) || 0)), 0), [products]);
+  const totalStockValTP = useMemo(() => products.reduce((acc, p) => acc + ((p.stock || 0) * (parseAmount(p.tp) || 0)), 0), [products]);
+  const totalStockValMRP = useMemo(() => products.reduce((acc, p) => acc + ((p.stock || 0) * (parseAmount(p.mrp) || 0)), 0), [products]);
+
+  // Expected Profit Valuation
+  const expectedProfitTP = useMemo(() => totalStockValTP - totalStockValDB, [totalStockValTP, totalStockValDB]);
+  const expectedProfitMRP = useMemo(() => totalStockValMRP - totalStockValDB, [totalStockValMRP, totalStockValDB]);
 
   return (
     <div className="space-y-8 pb-40 text-slate-900 animate-reveal">
+
+      {/* 📊 4 Tiers Valuation & Profit Summary Cards */}
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+        <div className="bg-gradient-to-br from-indigo-900 to-slate-900 text-white p-4 rounded-3xl shadow-lg border border-indigo-500/20">
+          <p className="text-[8px] font-black uppercase tracking-widest text-indigo-300 italic">DB Price Valuation (কেনা মূল্য)</p>
+          <h4 className="text-base md:text-lg font-black italic mt-1 text-white">{formatCurrency(totalStockValDB)}</h4>
+        </div>
+        <div className="bg-white p-4 rounded-3xl shadow-sm border border-slate-100">
+          <p className="text-[8px] font-black uppercase tracking-widest text-slate-400 italic">ETP Price Valuation</p>
+          <h4 className="text-base md:text-lg font-black italic mt-1 text-cyan-600">{formatCurrency(totalStockValETP)}</h4>
+        </div>
+        <div className="bg-white p-4 rounded-3xl shadow-sm border border-slate-100">
+          <p className="text-[8px] font-black uppercase tracking-widest text-slate-400 italic">TP Price Valuation</p>
+          <h4 className="text-base md:text-lg font-black italic mt-1 text-indigo-600">{formatCurrency(totalStockValTP)}</h4>
+        </div>
+        <div className="bg-white p-4 rounded-3xl shadow-sm border border-slate-100">
+          <p className="text-[8px] font-black uppercase tracking-widest text-slate-400 italic">MRP Price Valuation</p>
+          <h4 className="text-base md:text-lg font-black italic mt-1 text-purple-600">{formatCurrency(totalStockValMRP)}</h4>
+        </div>
+        <div className="bg-emerald-50/70 p-4 rounded-3xl shadow-sm border border-emerald-200/50">
+          <p className="text-[8px] font-black uppercase tracking-widest text-emerald-600 italic">সম্ভাব্য লাভ (TP - DB)</p>
+          <h4 className="text-base md:text-lg font-black italic mt-1 text-emerald-700">+{formatCurrency(expectedProfitTP)}</h4>
+        </div>
+        <div className="bg-purple-50/70 p-4 rounded-3xl shadow-sm border border-purple-200/50">
+          <p className="text-[8px] font-black uppercase tracking-widest text-purple-600 italic">সম্ভাব্য লাভ (MRP - DB)</p>
+          <h4 className="text-base md:text-lg font-black italic mt-1 text-purple-700">+{formatCurrency(expectedProfitMRP)}</h4>
+        </div>
+      </div>
 
       <div className="bg-white rounded-[2.5rem] border border-slate-100 shadow-xl overflow-hidden animate-reveal">
         {/* -- Unified Header Content Start -- */}
         <div className="p-4 md:p-5 bg-slate-50 border-b flex flex-col md:flex-row gap-4 justify-between items-center relative z-10 transition-all">
           <div className="flex-1 w-full flex flex-col sm:flex-row gap-4">
-            <div className="flex flex-col justify-center">
-              <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-0.5 italic">Total Valuation</p>
-              <h3 className="text-xl font-black italic tracking-tighter text-indigo-600">{formatCurrency(totalStockVal)}</h3>
-            </div>
-
             <div className="flex-1 flex gap-2 items-center bg-white px-4 rounded-xl shadow-sm border w-full h-[3rem]">
               <span className="text-slate-400 text-xs">🔍</span>
               <input type="text" placeholder="মডেল সার্চ করুন..." className="flex-1 p-1 bg-transparent border-none text-[11px] font-black uppercase outline-none" value={search} onChange={e => setSearch(e.target.value)} />
@@ -170,6 +206,8 @@ const Inventory: React.FC<InventoryProps> = ({ company, role }) => {
               <tr>
                 <th className="px-2 py-2.5 text-center">#</th>
                 <th className="px-2 py-2.5">Product Model</th>
+                <th className="px-2 py-2.5 text-center">DB Rate</th>
+                <th className="px-2 py-2.5 text-center">ETP Rate</th>
                 <th className="px-2 py-2.5 text-center">TP Rate</th>
                 <th className="px-2 py-2.5 text-center">Purchased</th>
                 <th className="px-2 py-2.5 text-center text-rose-400">Sold</th>
@@ -177,15 +215,15 @@ const Inventory: React.FC<InventoryProps> = ({ company, role }) => {
                 <th className="px-2 py-2.5 text-center text-emerald-400">Retr.</th>
                 <th className="px-2 py-2.5 text-center text-blue-400">Net</th>
                 <th className="px-2 py-2.5 text-center bg-white/5 text-emerald-400">Stock</th>
-                <th className="px-2 py-2.5 text-center text-indigo-400">Value</th>
+                <th className="px-2 py-2.5 text-center text-indigo-400">Value (DB)</th>
                 <th className="px-2 py-2.5 text-right">Manage</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50 text-[11px] font-bold italic">
               {loading ? (
-                <tr><td colSpan={11} className="py-20 text-center animate-pulse text-slate-300 font-black uppercase italic tracking-[0.4em]">Syncing...</td></tr>
+                <tr><td colSpan={13} className="py-20 text-center animate-pulse text-slate-300 font-black uppercase italic tracking-[0.4em]">Syncing...</td></tr>
               ) : filtered.length === 0 ? (
-                <tr><td colSpan={11} className="py-20 text-center text-slate-300 font-black uppercase">No Data</td></tr>
+                <tr><td colSpan={13} className="py-20 text-center text-slate-300 font-black uppercase">No Data</td></tr>
               ) : filtered.map((p, idx) => (
                 <tr key={p.id} className="hover:bg-blue-50/30 transition-all group animate-reveal">
                   <td className="px-2 py-1.5 text-center text-slate-400 text-[10px]">{idx + 1}</td>
@@ -193,6 +231,8 @@ const Inventory: React.FC<InventoryProps> = ({ company, role }) => {
                     <p className="font-black uppercase italic text-slate-800 leading-none text-[11px]">{p.name}</p>
                     <p className="text-[7px] text-slate-400 uppercase mt-0.5 tracking-tight">MRP: ৳{p.mrp}</p>
                   </td>
+                  <td className="px-2 py-1.5 text-center text-indigo-950 font-black bg-indigo-50/50 rounded-lg">৳{p.db_price || p.tp || 0}</td>
+                  <td className="px-2 py-1.5 text-center text-cyan-700 font-bold">৳{p.etp || 0}</td>
                   <td className="px-2 py-1.5 text-center text-slate-800 font-black">৳{p.tp}</td>
                   <td className="px-2 py-1.5 text-center text-slate-500">{p.purchased}</td>
                   <td className="px-2 py-1.5 text-center text-rose-500">{p.sold}</td>
@@ -206,7 +246,7 @@ const Inventory: React.FC<InventoryProps> = ({ company, role }) => {
                       <button onClick={() => handleQuickAdjust(p.id, 1)} className="w-5 h-5 bg-white border border-emerald-100 text-emerald-500 rounded flex items-center justify-center hover:bg-emerald-500 hover:text-white transition-all shadow-sm text-[10px] font-black">+</button>
                     </div>
                   </td>
-                  <td className="px-2 py-1.5 text-center text-indigo-600 font-black">৳{((p.stock || 0) * (p.tp || 0)).toLocaleString()}</td>
+                  <td className="px-2 py-1.5 text-center text-indigo-600 font-black">৳{((p.stock || 0) * (parseAmount(p.db_price) || parseAmount(p.tp) || 0)).toLocaleString()}</td>
                   <td className="px-2 py-1.5 text-right">
                     <div className="flex justify-end gap-1">
                       <button onClick={() => { setEditingProduct(p); setShowEditModal(true); }} className="w-7 h-7 bg-white border text-indigo-600 rounded flex items-center justify-center text-[9px] hover:bg-indigo-600 hover:text-white shadow-sm transition-all">📝</button>
@@ -237,12 +277,20 @@ const Inventory: React.FC<InventoryProps> = ({ company, role }) => {
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1.5">
+                  <label className="text-[9px] font-black uppercase text-indigo-600 ml-4 italic">DB Rate (কেনা দাম)</label>
+                  <input required type="number" className="w-full p-4 bg-indigo-50/30 border-2 border-indigo-100 rounded-2xl outline-none font-black italic text-lg text-indigo-950" value={newProd.db_price} onChange={e => setNewProd({ ...newProd, db_price: e.target.value })} placeholder="0" />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-[9px] font-black uppercase text-cyan-600 ml-4 italic">ETP Rate</label>
+                  <input required type="number" className="w-full p-4 bg-slate-50 border-2 border-slate-100 rounded-2xl outline-none font-black italic text-lg" value={newProd.etp} onChange={e => setNewProd({ ...newProd, etp: e.target.value })} placeholder="0" />
+                </div>
+                <div className="space-y-1.5">
                   <label className="text-[9px] font-black uppercase text-slate-400 ml-4 italic">TP Rate</label>
-                  <input required type="number" className="w-full p-5 bg-slate-50 border-2 border-slate-100 rounded-2xl outline-none font-black italic text-lg" value={newProd.tp} onChange={e => setNewProd({ ...newProd, tp: e.target.value })} placeholder="0" />
+                  <input required type="number" className="w-full p-4 bg-slate-50 border-2 border-slate-100 rounded-2xl outline-none font-black italic text-lg" value={newProd.tp} onChange={e => setNewProd({ ...newProd, tp: e.target.value })} placeholder="0" />
                 </div>
                 <div className="space-y-1.5">
                   <label className="text-[9px] font-black uppercase text-slate-400 ml-4 italic">MRP Rate</label>
-                  <input required type="number" className="w-full p-5 bg-slate-50 border-2 border-slate-100 rounded-2xl outline-none font-black italic text-lg" value={newProd.mrp} onChange={e => setNewProd({ ...newProd, mrp: e.target.value })} placeholder="0" />
+                  <input required type="number" className="w-full p-4 bg-slate-50 border-2 border-slate-100 rounded-2xl outline-none font-black italic text-lg" value={newProd.mrp} onChange={e => setNewProd({ ...newProd, mrp: e.target.value })} placeholder="0" />
                 </div>
               </div>
               <div className="p-8 bg-blue-600 rounded-[2.5rem] text-center shadow-xl">
@@ -272,12 +320,20 @@ const Inventory: React.FC<InventoryProps> = ({ company, role }) => {
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1.5">
+                  <label className="text-[9px] font-black uppercase text-indigo-600 ml-4 italic">DB Rate (কেনা দাম)</label>
+                  <input type="number" className="w-full p-4 bg-indigo-50/30 border-2 border-indigo-100 rounded-2xl outline-none font-black italic text-lg text-indigo-950" value={editingProduct.db_price || ''} onChange={e => setEditingProduct({ ...editingProduct, db_price: Number(e.target.value) })} placeholder="0" />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-[9px] font-black uppercase text-cyan-600 ml-4 italic">ETP Rate</label>
+                  <input type="number" className="w-full p-4 bg-slate-50 border-2 border-slate-100 rounded-2xl outline-none font-black italic text-lg" value={editingProduct.etp || ''} onChange={e => setEditingProduct({ ...editingProduct, etp: Number(e.target.value) })} placeholder="0" />
+                </div>
+                <div className="space-y-1.5">
                   <label className="text-[9px] font-black uppercase text-slate-400 ml-4 italic">TP Rate</label>
-                  <input type="number" className="w-full p-5 bg-slate-50 border-2 border-slate-100 rounded-2xl outline-none font-black italic text-lg" value={editingProduct.tp} onChange={e => setEditingProduct({ ...editingProduct, tp: Number(e.target.value) })} />
+                  <input type="number" className="w-full p-4 bg-slate-50 border-2 border-slate-100 rounded-2xl outline-none font-black italic text-lg" value={editingProduct.tp} onChange={e => setEditingProduct({ ...editingProduct, tp: Number(e.target.value) })} />
                 </div>
                 <div className="space-y-1.5">
                   <label className="text-[9px] font-black uppercase text-slate-400 ml-4 italic">MRP Rate</label>
-                  <input type="number" className="w-full p-5 bg-slate-50 border-2 border-slate-100 rounded-2xl outline-none font-black italic text-lg" value={editingProduct.mrp} onChange={e => setEditingProduct({ ...editingProduct, mrp: Number(e.target.value) })} />
+                  <input type="number" className="w-full p-4 bg-slate-50 border-2 border-slate-100 rounded-2xl outline-none font-black italic text-lg" value={editingProduct.mrp} onChange={e => setEditingProduct({ ...editingProduct, mrp: Number(e.target.value) })} />
                 </div>
               </div>
               <div className="p-8 bg-slate-900 rounded-[2.5rem] text-center shadow-2xl relative overflow-hidden group">

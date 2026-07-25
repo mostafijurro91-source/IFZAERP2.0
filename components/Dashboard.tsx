@@ -48,7 +48,7 @@ const Dashboard: React.FC<DashboardProps> = ({ company, role }) => {
       thirtyDaysAgo.setDate(today.getDate() - 30);
 
       const [prodRes, custRes] = await Promise.all([
-        supabase.from('products').select('tp, stock').eq('company', dbCompany),
+        supabase.from('products').select('db_price, tp, stock').eq('company', dbCompany),
         supabase.from('customers').select('id')
       ]);
       const validCustomerIds = new Set(custRes.data?.map(c => c.id) || []);
@@ -171,7 +171,7 @@ const Dashboard: React.FC<DashboardProps> = ({ company, role }) => {
       const totalSales = activeMonths.reduce((sum, key) => sum + monthlyMap[key].sales, 0);
       const totalCollection = activeMonths.reduce((sum, key) => sum + monthlyMap[key].collection, 0);
 
-      const sValue = prodRes.data?.reduce((acc, p) => acc + (parseAmount(p.tp) * parseAmount(p.stock)), 0) || 0;
+      const sValue = prodRes.data?.reduce((acc, p: any) => acc + (parseAmount(p.db_price || p.tp) * parseAmount(p.stock)), 0) || 0;
       setStats({
         todaySales: t_sales,
         todayCollection: t_coll,

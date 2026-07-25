@@ -578,7 +578,7 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName }) => {
     if (activeReport === 'STOCK_REPORT') {
       return {
         totalRemQty: filteredData.reduce((s: number, i: any) => s + parseAmount(i.current_stock || 0), 0),
-        totalRemVal: filteredData.reduce((s: number, i: any) => s + (parseAmount(i.current_stock || 0) * parseAmount(i.tp || 0)), 0)
+        totalRemVal: filteredData.reduce((s: number, i: any) => s + (parseAmount(i.current_stock || 0) * parseAmount(i.db_price || i.tp || 0)), 0)
       };
     }
     if (activeReport === 'CUSTOMER_DUES') {
@@ -747,7 +747,7 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName }) => {
                     <th className="p-3 border-r border-white/20 text-center w-16">ক্রয় (+)</th>
                     <th className="p-3 border-r border-white/20 text-center w-16">বিক্রয় (-)</th>
                     <th className="p-3 border-r border-white/20 text-center w-20 bg-slate-800">স্টক</th>
-                    <th className="p-3 text-right w-32">স্টক মূল্য (TP)</th>
+                    <th className="p-3 text-right w-32">স্টক মূল্য (DB/কেনা)</th>
                   </>
                 ) : activeReport === 'CUSTOMER_LEDGER' ? (
                   <>
@@ -873,12 +873,12 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName }) => {
                     <>
                       <td className="p-3 border-r border-black uppercase">
                         <p className="font-black">{item.name}</p>
-                        <p className="text-[8px] opacity-50 uppercase">Rate: ৳{(item.tp || 0)}</p>
+                        <p className="text-[8px] opacity-50 uppercase">Rate: ৳{(item.db_price || item.tp || 0)} (DB) | TP: ৳{(item.tp || 0)}</p>
                       </td>
                       <td className="p-3 border-r border-black text-center text-emerald-600">+{(item.purchased || 0)}</td>
                       <td className="p-3 border-r border-black text-center text-rose-600">-{(item.sold || 0)}</td>
                       <td className="p-3 border-r border-black text-center font-black bg-slate-50 text-base italic">{(item.current_stock || 0)}</td>
-                      <td className="p-3 text-right font-black italic">৳{(parseAmount(item.current_stock || 0) * parseAmount(item.tp || 0)).toLocaleString()}</td>
+                      <td className="p-3 text-right font-black italic">৳{(parseAmount(item.current_stock || 0) * parseAmount(item.db_price || item.tp || 0)).toLocaleString()}</td>
                     </>
                   ) : activeReport === 'CUSTOMER_LEDGER' ? (
                     <>
