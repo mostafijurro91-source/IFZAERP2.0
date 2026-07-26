@@ -24,6 +24,7 @@ export const parseAmount = (v: any): number => {
 export const toLocale = (v: any) => parseAmount(v).toLocaleString();
 
 const Customers: React.FC<CustomerProps> = ({ company, role, userName }) => {
+  const dbCompany = mapToDbCompany(company);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [regularDues, setRegularDues] = useState<Record<string, number>>({});
   const [bookingAdvances, setBookingAdvances] = useState<Record<string, number>>({});
@@ -177,7 +178,6 @@ const Customers: React.FC<CustomerProps> = ({ company, role, userName }) => {
     if (isSaving || !isAdmin) return;
     setIsSaving(true);
     try {
-      const dbCompany = mapToDbCompany(company);
       const payload = {
         name: formData.name.trim(),
         phone: formData.phone.trim(),
