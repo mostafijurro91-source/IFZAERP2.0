@@ -45,7 +45,7 @@ const Customers: React.FC<CustomerProps> = ({ company, role, userName }) => {
   const [newPolicyDate, setNewPolicyDate] = useState<string>("");
   const [newPolicyStatus, setNewPolicyStatus] = useState<string>('PENDING');
 
-  const [currentLedgerStats, setCurrentLedgerStats] = useState<CustomerFinancials>({ regularDue: 0, bookingAdvance: 0, totalSales: 0, totalPaid: 0 });
+  const [currentLedgerStats, setCurrentLedgerStats] = useState<CustomerFinancials>({ regularDue: 0, totalSales: 0, totalPaid: 0 });
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
 
   const [selectedMemo, setSelectedMemo] = useState<any>(null);
@@ -105,10 +105,7 @@ const Customers: React.FC<CustomerProps> = ({ company, role, userName }) => {
   const fetchCustomers = async () => {
     try {
       setLoading(true);
-      const [{ data: custData, error: ce }, { data: bkData }] = await Promise.all([
-        supabase.from('customers').select('*').order('name'),
-        supabase.from('bookings').select('customer_id, advance_amount, status').eq('company', dbCompany).neq('status', 'COMPLETED')
-      ]);
+      const { data: custData, error: ce } = await supabase.from('customers').select('*').order('name');
       if (ce) console.error("Customer fetch error:", ce);
 
       let allTx: any[] = [];
@@ -128,20 +125,11 @@ const Customers: React.FC<CustomerProps> = ({ company, role, userName }) => {
         page++;
       }
 
-      // DEBUG: show a small sample of fetched transactions to compare with per-customer ledger
-      try { console.debug('DEBUG fetchCustomers tx sample', allTx.slice(0, 20)); } catch (e) { }
-
-      // using shared parseAmount from lib/utils
-
       const regMap: Record<string, number> = {};
-      const bookMap: Record<string, number> = {};
 
       allTx.forEach(tx => {
         const amt = parseAmount(tx.amount);
         const cid = tx.customer_id;
-        const isBooking = tx.meta?.is_booking === true || tx.items?.[0]?.note?.includes('বুকিং');
-
-        // if (isBooking) return; // Include booking in regMap to balance total collections
 
         if (tx.payment_type === 'DUE') {
           regMap[cid] = (regMap[cid] || 0) + amt;
@@ -150,23 +138,8 @@ const Customers: React.FC<CustomerProps> = ({ company, role, userName }) => {
         }
       });
 
-      (bkData || []).forEach((b: any) => {
-        const cid = b.customer_id;
-        if (cid) {
-          bookMap[cid] = (bookMap[cid] || 0) + parseAmount(b.advance_amount);
-        }
-      });
-
-      // DEBUG: expose small sample of maps to console to trace list-vs-ledger issues
-      try {
-        // show top 10 entries for quick inspection in browser console
-        console.debug('DEBUG regMap sample', Object.entries(regMap).slice(0, 10));
-        console.debug('DEBUG bookMap sample', Object.entries(bookMap).slice(0, 10));
-      } catch (e) { /* ignore */ }
-
       setCustomers(custData || []);
       setRegularDues(regMap);
-      setBookingAdvances(bookMap);
       setUniqueAreas(Array.from(new Set(custData?.map((c: Customer) => c.address?.trim()).filter(Boolean) || [])).sort() as string[]);
     } catch (err) { console.error(err); } finally { setLoading(false); }
   };
@@ -256,46 +229,36 @@ const Customers: React.FC<CustomerProps> = ({ company, role, userName }) => {
     setSelectedLedgerCust(cust);
     setShowLedger(true);
     setLedgerHistory([]); // Clear previous ledger
-    setCurrentLedgerStats({ regularDue: 0, bookingAdvance: 0, totalSales: 0, totalPaid: 0 }); // Clear previous stats
+    setCurrentLedgerStats({ regularDue: 0, totalSales: 0, totalPaid: 0 }); // Clear previous stats
 
     try {
       const dbCo = mapToDbCompany(company); // Use 'company' from props
-      const [{ data, error }, { data: bkData }] = await Promise.all([
-        supabase.from('transactions').select('*').eq('customer_id', cust.id).eq('company', dbCo).order('created_at', { ascending: false }),
-        supabase.from('bookings').select('advance_amount, status').eq('customer_id', cust.id).eq('company', dbCo).neq('status', 'COMPLETED')
-      ]);
+      const { data, error } = await supabase.from('transactions').select('*').eq('customer_id', cust.id).eq('company', dbCo).order('created_at', { ascending: false });
 
       if (error) throw error;
       setLedgerHistory(data || []);
 
-      // DEBUG: show a small sample of ledger transactions for this customer
-      try { console.debug('DEBUG fetchCustomerLedger tx sample', (data as any)?.slice?.(0, 20)); } catch (e) { }
-
-      // Calculate totals
-      let totalR = 0;
-      let totalB = 0;
+      // Calculate totals accurately
+      let totalDue = 0;
       let lifetimeSales = 0;
       let lifetimePaid = 0;
+      let lifetimeReturns = 0;
 
       (data as unknown as Transaction[])?.forEach(tx => {
         const amt = parseAmount(tx.amount);
-        const isBooking = tx.meta?.is_booking === true || tx.items?.[0]?.note?.includes('বুকিং');
-
-        // if (isBooking) return; // Include booking in totalR and lifetimePaid
 
         if (tx.payment_type === 'COLLECTION') {
           lifetimePaid += amt;
-          totalR -= amt;
+          totalDue -= amt;
         } else if (tx.payment_type === 'DUE') {
-          totalR += amt;
+          totalDue += amt;
           const returnAmount = Math.abs(tx.items?.reduce((s: number, it: any) => it.action === 'RETURN' ? s + parseAmount(it.total) : s, 0) || 0);
-          lifetimeSales += (amt + returnAmount);
+          lifetimeSales += (amt + returnAmount); // The original invoice value before returning
+          lifetimeReturns += returnAmount;
         }
       });
-      totalB = (bkData || []).reduce((sum, b) => sum + parseAmount(b.advance_amount), 0);
-      // DEBUG: log ledger totals for modal
-      try { console.debug('DEBUG ledger totals', { customerId: cust.id, totalR, totalB, lifetimeSales, lifetimePaid }); } catch (e) { }
-      setCurrentLedgerStats({ regularDue: totalR, bookingAdvance: totalB, totalSales: lifetimeSales, totalPaid: lifetimePaid });
+
+      setCurrentLedgerStats({ regularDue: totalDue, totalSales: lifetimeSales, totalPaid: lifetimePaid });
     } catch (err: any) {
       console.error('Error fetching ledger:', err);
     }
@@ -577,18 +540,16 @@ const Customers: React.FC<CustomerProps> = ({ company, role, userName }) => {
         <div className={isCompact ? "bg-white rounded-[3.5rem] border border-slate-100 shadow-xl overflow-hidden" : "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"}>
           {isCompact && (
             <div className="grid grid-cols-12 bg-slate-900 text-white/50 p-6 text-[8px] font-black uppercase tracking-widest border-b border-white/5">
-              <div className="col-span-3">Shop Identity</div>
+              <div className="col-span-6">Shop Identity</div>
               <div className="col-span-3 text-right">Regular Due (isolated)</div>
-              <div className="col-span-3 text-right">Booking Depo (isolated)</div>
               <div className="col-span-3 text-right">Actions</div>
             </div>
           )}
           {filtered.map((c, idx) => {
             const regBal = regularDues[c.id] || 0;
-            const bookBal = bookingAdvances[c.id] || 0;
             return (
               <div key={c.id} className={isCompact ? "grid grid-cols-12 p-6 border-b border-slate-50 items-center animate-reveal hover:bg-slate-50 transition-all group" : "bg-white p-8 rounded-[3.5rem] border border-slate-100 shadow-lg hover:shadow-2xl transition-all duration-500 hover:-translate-y-1 animate-reveal relative overflow-hidden"} style={{ animationDelay: `${idx * 0.03}s` }}>
-                <div className={isCompact ? "col-span-3 pr-4" : "mb-6 relative z-10"}>
+                <div className={isCompact ? "col-span-6 pr-4" : "mb-6 relative z-10"}>
                   <p className="font-black text-[13px] uppercase italic text-slate-800 truncate mb-1 group-hover:text-blue-600 transition-colors">{c.name}</p>
                   <p className={`text-[9px] font-bold tracking-widest uppercase italic ${!c.phone || c.phone.trim() === "" ? 'text-rose-500 animate-pulse' : 'text-slate-400'}`}>
                     {(!c.phone || c.phone.trim() === "") ? "📵 নাম্বার নেই!" : `📱 ${c.phone}`}
@@ -600,10 +561,6 @@ const Customers: React.FC<CustomerProps> = ({ company, role, userName }) => {
                 <div className={isCompact ? `col-span-3 text-right font-black italic text-[14px] ${regBal > 1 ? 'text-rose-600' : 'text-emerald-600'}` : "mt-6 pt-6 border-t relative z-10 flex justify-between"}>
                   {!isCompact && <p className="text-[8px] text-slate-400 uppercase tracking-widest italic">Regular Due</p>}
                   <span className={!isCompact ? `text-2xl tracking-tighter ${regBal > 1 ? 'text-rose-600' : 'text-emerald-600'}` : ""}>{regBal.toLocaleString()}৳</span>
-                </div>
-                <div className={isCompact ? `col-span-3 text-right font-black italic text-[14px] text-indigo-600` : "mt-2 relative z-10 flex justify-between"}>
-                  {!isCompact && <p className="text-[8px] text-indigo-400 uppercase tracking-widest italic">Booking Deposit</p>}
-                  <span className={!isCompact ? `text-2xl tracking-tighter text-indigo-600` : ""}>{bookBal.toLocaleString()}৳</span>
                 </div>
                 <div className={isCompact ? "col-span-3 flex justify-end gap-2" : "mt-8 flex gap-3 relative z-10"}>
                   <button onClick={() => fetchCustomerLedger(c)} className="w-10 h-10 bg-slate-900 text-white rounded-xl flex items-center justify-center text-xs shadow-xl active:scale-90 hover:bg-indigo-600" title="লেজার দেখুন">📑</button>
@@ -733,10 +690,6 @@ const Customers: React.FC<CustomerProps> = ({ company, role, userName }) => {
                   <div className="bg-slate-900 p-6 rounded-[2.5rem] border border-white/5 shadow-xl text-center">
                     <p className="text-[10px] font-black text-rose-400 uppercase tracking-widest mb-2 italic">বকেয়া (Regular Due)</p>
                     <p className="text-2xl font-black italic tracking-tighter text-rose-400">৳{currentLedgerStats.regularDue.toLocaleString()}</p>
-                  </div>
-                  <div className="bg-slate-900 p-6 rounded-[2.5rem] border border-white/5 shadow-xl text-center">
-                    <p className="text-[10px] font-black text-indigo-400 uppercase tracking-widest mb-2 italic">বুকিং জমা (Booking)</p>
-                    <p className="text-2xl font-black italic tracking-tighter text-indigo-400">৳{currentLedgerStats.bookingAdvance.toLocaleString()}</p>
                   </div>
                 </div>
 

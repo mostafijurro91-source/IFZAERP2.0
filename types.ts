@@ -53,7 +53,17 @@ export interface Product {
   category?: string;
 }
 
-export interface BookingItem {
+export interface FastBookingCustomer {
+  id: string;
+  name: string;
+  phone?: string;
+  address?: string;
+  company: string;
+  isActive: boolean;
+  created_at: string;
+}
+
+export interface FastBookingOrderItem {
   id: string;
   product_id: string;
   name: string;
@@ -62,20 +72,29 @@ export interface BookingItem {
   delivered_qty: number;
 }
 
-export interface Booking {
+export interface FastBookingOrder {
   id: string;
   customer_id: string;
   company: string;
-  product_name: string;
-  qty: number;
-  items: BookingItem[];
-  advance_amount: number;
-  total_amount: number;
+  total_bill: number;
+  total_deposit: number;
+  items: FastBookingOrderItem[];
   status: 'PENDING' | 'PARTIAL' | 'COMPLETED';
   created_at: string;
+  fast_booking_customers?: FastBookingCustomer;
   customer_name?: string;
-  delivery_date?: string;
-  payment_history?: { date: string; amount: number; note: string; method?: string }[];
+}
+
+export interface FastBookingTransaction {
+  id: string;
+  order_id: string;
+  customer_id: string;
+  company: string;
+  amount: number;
+  type: 'DEPOSIT' | 'REFUND';
+  method: 'CASH' | 'BANK';
+  note?: string;
+  created_at: string;
 }
 
 export interface Advertisement {
@@ -127,14 +146,12 @@ export interface MarketOrder {
 
 export interface CustomerFinancials {
   regularDue: number;
-  bookingAdvance: number;
   totalSales: number;
   totalPaid: number;
 }
 
 export interface CompanyStats {
   regularDue: number;
-  bookingAdvance: number;
   totalBill: number;
   totalPaid: number;
 }

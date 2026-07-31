@@ -100,7 +100,7 @@ const Sidebar: React.FC<SidebarProps> = ({
     { id: 'portal_catalog', label: '📢 অফার ও রেট', roles: ['CUSTOMER'] },
     { id: 'sales', label: '📝 সেলস মেমো (POS)', roles: ['ADMIN'] },
     { id: 'collections', label: '💰 টাকা কালেকশন', roles: ['ADMIN', 'STAFF', 'DELIVERY'], badge: 'pending_collections' },
-    { id: 'bookings', label: '📅 বুকিং অর্ডার', roles: ['ADMIN', 'STAFF'] },
+    { id: 'fast_bookings', label: '🚀 ফাস্ট বুকিং', roles: ['ADMIN', 'STAFF'] },
     { id: 'replacements', label: '🔄 রিপ্লেসমেন্ট (Claim)', roles: ['ADMIN'] },
     { id: 'delivery_hub', label: '🚚 ডেলিভারি হাব', roles: ['ADMIN', 'DELIVERY', 'STAFF'] },
     { id: 'inventory', label: '📦 স্টক ইনভেন্টরি', roles: ['ADMIN'] },

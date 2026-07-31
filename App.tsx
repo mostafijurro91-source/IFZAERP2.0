@@ -5,7 +5,7 @@ import Dashboard from './components/Dashboard';
 import Sales from './components/Sales';
 import Inventory from './components/Inventory';
 import Customers from './components/Customers';
-import Bookings from './components/Bookings';
+import FastBooking from './components/FastBooking';
 import Replacements from './components/Replacements';
 import Reports from './components/Reports';
 import Team from './components/Team';
@@ -280,7 +280,7 @@ const App: React.FC = () => {
             {activeTab === 'portal_booking' && <CustomerPortal type="BOOKING" user={user} />}
             {activeTab === 'sales' && <Sales company={selectedCompany} role={user.role} user={user} />}
             {activeTab === 'collections' && <Collections company={selectedCompany} user={user} companies={companies} />}
-            {activeTab === 'bookings' && <Bookings company={selectedCompany} role={user.role} user={user} />}
+            {activeTab === 'fast_bookings' && <FastBooking company={selectedCompany} role={user.role} user={user} />}
             {activeTab === 'replacements' && <Replacements company={selectedCompany} role={user.role} user={user} />}
             {activeTab === 'delivery_hub' && <DeliveryHub company={selectedCompany} user={user} companies={companies} />}
             {activeTab === 'inventory' && <Inventory company={selectedCompany} role={user.role} />}
