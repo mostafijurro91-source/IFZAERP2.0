@@ -141,7 +141,7 @@ const Customers: React.FC<CustomerProps> = ({ company, role, userName }) => {
         const cid = tx.customer_id;
         const isBooking = tx.meta?.is_booking === true || tx.items?.[0]?.note?.includes('বুকিং');
 
-        if (isBooking) return;
+        // if (isBooking) return; // Include booking in regMap to balance total collections
 
         if (tx.payment_type === 'DUE') {
           regMap[cid] = (regMap[cid] || 0) + amt;
@@ -281,7 +281,7 @@ const Customers: React.FC<CustomerProps> = ({ company, role, userName }) => {
         const amt = parseAmount(tx.amount);
         const isBooking = tx.meta?.is_booking === true || tx.items?.[0]?.note?.includes('বুকিং');
 
-        if (isBooking) return;
+        // if (isBooking) return; // Include booking in totalR and lifetimePaid
 
         if (tx.payment_type === 'COLLECTION') {
           lifetimePaid += amt;

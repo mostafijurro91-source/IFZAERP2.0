@@ -237,8 +237,7 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName }) => {
           if (!dues[cid]) dues[cid] = 0;
           const amt = parseAmount(tx.amount || 0);
           const isBooking = tx.meta?.is_booking === true || tx.items?.[0]?.note?.includes('বুকিং');
-          
-          if (isBooking) return;
+          // if (isBooking) return;
           
           if (tx.payment_type === 'DUE') {
             dues[cid] += amt;

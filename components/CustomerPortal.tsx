@@ -147,7 +147,7 @@ const CustomerPortal: React.FC<PortalProps> = ({ type, user }: PortalProps) => {
                const amt = parseAmount(tx.amount);
                const isBooking = tx.meta?.is_booking === true || (tx.items && tx.items[0]?.note?.includes('বুকিং'));
 
-               if (isBooking) return;
+               // if (isBooking) return;
 
                if (tx.payment_type === 'COLLECTION') {
                   stats[dbCo].totalPaid += amt;

@@ -121,7 +121,7 @@ const Dashboard: React.FC<DashboardProps> = ({ company, role }) => {
           }
         }
 
-        if (isBooking) return;
+        // if (isBooking) return;
 
         if (tx.payment_type === 'COLLECTION') {
           if (txDateStr === todayStr) t_coll += amt;
