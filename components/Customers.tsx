@@ -288,10 +288,8 @@ const Customers: React.FC<CustomerProps> = ({ company, role, userName }) => {
           totalR -= amt;
         } else if (tx.payment_type === 'DUE') {
           totalR += amt;
-          const returnItem = tx.items?.find((it: any) => it.action === 'RETURN');
-          if (!returnItem) {
-            lifetimeSales += amt;
-          }
+          const returnAmount = Math.abs(tx.items?.reduce((s: number, it: any) => it.action === 'RETURN' ? s + parseAmount(it.total) : s, 0) || 0);
+          lifetimeSales += (amt + returnAmount);
         }
       });
       totalB = (bkData || []).reduce((sum, b) => sum + parseAmount(b.advance_amount), 0);
@@ -760,17 +758,19 @@ const Customers: React.FC<CustomerProps> = ({ company, role, userName }) => {
                       ) : ledgerHistory.map((tx) => {
                         const returnItem = tx.items?.find((it: any) => it.action === 'RETURN');
                         const returnAmount = returnItem ? Math.abs(tx.items?.reduce((s: number, it: any) => it.action === 'RETURN' ? s + parseAmount(it.total) : s, 0) || 0) : 0;
+                        const isMixed = (parseAmount(tx.amount) + returnAmount) > 0 && returnAmount > 0;
+                        const desc = tx.items?.[0]?.note || (isMixed ? 'Transaction (Sale & Return)' : (returnItem ? `ফেরত: ${returnItem.name}` : 'Transaction'));
 
                         return (
                           <tr key={tx.id} className="group hover:bg-slate-50/50 transition-colors">
                             <td className="py-4 text-[11px] font-bold text-slate-400 pl-4">{new Date(tx.created_at).toLocaleDateString('bn-BD')}</td>
                             <td className="py-4">
-                              <p className="text-[13px] font-black text-slate-700 italic leading-none">{tx.items?.[0]?.note || (returnItem ? `ফেরত: ${returnItem.name}` : 'Transaction')}</p>
+                              <p className="text-[13px] font-black text-slate-700 italic leading-none">{desc}</p>
                               <p className="text-[9px] font-bold text-slate-300 uppercase mt-1">ID: {String(tx.id).slice(-6).toUpperCase()}</p>
                             </td>
                             <td className="py-4 text-right pr-2">
-                              {tx.payment_type === 'DUE' && !returnItem ? (
-                                <span className="text-[14px] font-black italic text-rose-600">৳{toLocale(tx.amount)}</span>
+                              {tx.payment_type === 'DUE' && (parseAmount(tx.amount) + returnAmount) > 0 ? (
+                                <span className="text-[14px] font-black italic text-rose-600">৳{toLocale(parseAmount(tx.amount) + returnAmount)}</span>
                               ) : '-'}
                             </td>
                             <td className="py-4 text-right pr-2">
