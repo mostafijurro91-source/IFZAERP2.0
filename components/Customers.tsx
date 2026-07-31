@@ -247,18 +247,24 @@ const Customers: React.FC<CustomerProps> = ({ company, role, userName }) => {
       (data as unknown as Transaction[])?.forEach(tx => {
         const amt = parseAmount(tx.amount);
 
+      (data as unknown as Transaction[])?.forEach(tx => {
+        const amt = parseAmount(tx.amount);
+        const returnAmount = Math.abs(tx.items?.reduce((s: number, it: any) => it.action === 'RETURN' ? s + parseAmount(it.total) : s, 0) || 0);
+
         if (tx.payment_type === 'COLLECTION') {
           lifetimePaid += amt;
           totalDue -= amt;
         } else if (tx.payment_type === 'DUE') {
           totalDue += amt;
-          const returnAmount = Math.abs(tx.items?.reduce((s: number, it: any) => it.action === 'RETURN' ? s + parseAmount(it.total) : s, 0) || 0);
           lifetimeSales += (amt + returnAmount); // The original invoice value before returning
           lifetimeReturns += returnAmount;
         }
       });
 
-      setCurrentLedgerStats({ regularDue: totalDue, totalSales: lifetimeSales, totalPaid: lifetimePaid });
+      // Total Deposit = Cash Collections + Value of Returned Goods
+      const totalDeposit = lifetimePaid + lifetimeReturns;
+
+      setCurrentLedgerStats({ regularDue: lifetimeSales - totalDeposit, totalSales: lifetimeSales, totalPaid: totalDeposit });
     } catch (err: any) {
       console.error('Error fetching ledger:', err);
     }
@@ -684,7 +690,7 @@ const Customers: React.FC<CustomerProps> = ({ company, role, userName }) => {
                     <p className="text-2xl font-black italic tracking-tighter text-blue-700">৳{currentLedgerStats.totalSales.toLocaleString()}</p>
                   </div>
                   <div className="bg-emerald-50 p-6 rounded-[2.5rem] border border-emerald-100 shadow-sm text-center">
-                    <p className="text-[10px] font-black text-emerald-600 uppercase tracking-widest mb-2 italic">মোট জমা (Lifetime Paid)</p>
+                    <p className="text-[10px] font-black text-emerald-600 uppercase tracking-widest mb-2 italic">মোট জমা (আদায় + ফেরত)</p>
                     <p className="text-2xl font-black italic tracking-tighter text-emerald-700">৳{currentLedgerStats.totalPaid.toLocaleString()}</p>
                   </div>
                   <div className="bg-slate-900 p-6 rounded-[2.5rem] border border-white/5 shadow-xl text-center">
@@ -709,10 +715,19 @@ const Customers: React.FC<CustomerProps> = ({ company, role, userName }) => {
                       {ledgerHistory.length === 0 ? (
                         <tr><td colSpan={6} className="py-20 text-center opacity-30 font-black uppercase italic">কোনো লেনদেন রেকর্ড পাওয়া যায়নি</td></tr>
                       ) : ledgerHistory.map((tx) => {
+                        const returnAmount = Math.abs(tx.items?.reduce((s: number, it: any) => it.action === 'RETURN' ? s + parseAmount(it.total) : s, 0) || 0);
+                        let salesAmount = 0;
+                        let collectionAmount = 0;
+
+                        if (tx.payment_type === 'DUE') {
+                           salesAmount = parseAmount(tx.amount) + returnAmount;
+                        } else if (tx.payment_type === 'COLLECTION') {
+                           collectionAmount = parseAmount(tx.amount);
+                        }
+
                         const returnItem = tx.items?.find((it: any) => it.action === 'RETURN');
-                        const returnAmount = returnItem ? Math.abs(tx.items?.reduce((s: number, it: any) => it.action === 'RETURN' ? s + parseAmount(it.total) : s, 0) || 0) : 0;
-                        const isMixed = (parseAmount(tx.amount) + returnAmount) > 0 && returnAmount > 0;
-                        const desc = tx.items?.[0]?.note || (isMixed ? 'Transaction (Sale & Return)' : (returnItem ? `ফেরত: ${returnItem.name}` : 'Transaction'));
+                        const isMixed = salesAmount > 0 && returnAmount > 0;
+                        const desc = tx.items?.[0]?.note || (isMixed ? 'মেমো ও ফেরত' : (returnAmount > 0 && salesAmount === 0 ? `মাল ফেরত` : (tx.payment_type === 'COLLECTION' ? 'নগদ/ব্যাংক জমা' : 'পণ্য ক্রয় (মেমো)')));
 
                         return (
                           <tr key={tx.id} className="group hover:bg-slate-50/50 transition-colors">
@@ -722,8 +737,8 @@ const Customers: React.FC<CustomerProps> = ({ company, role, userName }) => {
                               <p className="text-[9px] font-bold text-slate-300 uppercase mt-1">ID: {String(tx.id).slice(-6).toUpperCase()}</p>
                             </td>
                             <td className="py-4 text-right pr-2">
-                              {tx.payment_type === 'DUE' && (parseAmount(tx.amount) + returnAmount) > 0 ? (
-                                <span className="text-[14px] font-black italic text-rose-600">৳{toLocale(parseAmount(tx.amount) + returnAmount)}</span>
+                              {salesAmount > 0 ? (
+                                <span className="text-[14px] font-black italic text-rose-600">৳{salesAmount.toLocaleString()}</span>
                               ) : '-'}
                             </td>
                             <td className="py-4 text-right pr-2">
@@ -732,8 +747,8 @@ const Customers: React.FC<CustomerProps> = ({ company, role, userName }) => {
                               ) : '-'}
                             </td>
                             <td className="py-4 text-right pr-2">
-                              {tx.payment_type === 'COLLECTION' ? (
-                                <span className="text-[14px] font-black italic text-emerald-600">৳{toLocale(tx.amount)}</span>
+                              {collectionAmount > 0 ? (
+                                <span className="text-[14px] font-black italic text-emerald-600">৳{collectionAmount.toLocaleString()}</span>
                               ) : '-'}
                             </td>
                             <td className="py-4 text-center pr-4">
