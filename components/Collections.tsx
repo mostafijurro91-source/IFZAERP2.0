@@ -387,8 +387,7 @@ const Collections: React.FC<CollectionsProps> = ({ company, user, companies }) =
                   </div>
 
                   <div className="bg-slate-100 p-2 rounded-[2rem] flex gap-2">
-                     <button onClick={() => setCollectionType('REGULAR')} className={`flex-1 py-4 rounded-2xl font-black uppercase text-[10px] tracking-widest ${collectionType === 'REGULAR' ? 'bg-white text-blue-600 shadow-xl' : 'text-slate-400'}`}>💰 সাধারণ জমা</button>
-                     <button onClick={() => setCollectionType('BOOKING')} className={`flex-1 py-4 rounded-2xl font-black uppercase text-[10px] tracking-widest ${collectionType === 'BOOKING' ? 'bg-indigo-600 text-white shadow-xl' : 'text-slate-400'}`}>📅 বুকিং অগ্রিম</button>
+                     <button className="flex-1 py-4 rounded-2xl font-black uppercase text-[10px] tracking-widest bg-white text-blue-600 shadow-xl">💰 সাধারণ জমা</button>
                   </div>
 
                   <div className="bg-slate-900 p-8 rounded-[3rem] border border-white/5 shadow-2xl space-y-6">
@@ -415,7 +414,7 @@ const Collections: React.FC<CollectionsProps> = ({ company, user, companies }) =
                      <div className="absolute left-10 top-1/2 -translate-y-1/2 text-4xl font-black text-blue-200">৳</div>
                   </div>
 
-                  <button disabled={isSaving || !amount || !selectedCust} onClick={handleManualSubmit} className={`w-full ${collectionType === 'REGULAR' ? 'bg-blue-600' : 'bg-indigo-600'} text-white py-8 rounded-[3rem] font-black uppercase text-xs tracking-[0.4em] shadow-2xl transition-all disabled:opacity-20`}>
+                  <button disabled={isSaving || !amount || !selectedCust} onClick={handleManualSubmit} className="w-full bg-blue-600 text-white py-8 rounded-[3rem] font-black uppercase text-xs tracking-[0.4em] shadow-2xl transition-all disabled:opacity-20">
                      {isSaving ? 'SYNCING...' : 'সেভ করুন ➔'}
                   </button>
                </div>

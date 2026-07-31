@@ -130,42 +130,30 @@ const CustomerPortal: React.FC<PortalProps> = ({ type, user }: PortalProps) => {
    const fetchAllStats = useCallback(async () => {
       if (!user.customer_id) return;
       try {
-         const [{ data: allTxs }, { data: bkData }] = await Promise.all([
-            supabase.from('transactions').select('amount, payment_type, company, meta, items').eq('customer_id', user.customer_id),
-            supabase.from('bookings').select('advance_amount, company, status').eq('customer_id', user.customer_id).neq('status', 'COMPLETED')
-         ]);
+      try {
+         const { data: allTxs } = await supabase.from('transactions').select('amount, payment_type, company, meta, items').eq('customer_id', user.customer_id);
 
          const stats: Record<string, CompanyStats> = {
-            'Transtec': { regularDue: 0, bookingAdvance: 0, totalBill: 0, totalPaid: 0 },
-            'SQ Light': { regularDue: 0, bookingAdvance: 0, totalBill: 0, totalPaid: 0 },
-            'SQ Cables': { regularDue: 0, bookingAdvance: 0, totalBill: 0, totalPaid: 0 }
+            'Transtec': { regularDue: 0, totalBill: 0, totalPaid: 0 },
+            'SQ Light': { regularDue: 0, totalBill: 0, totalPaid: 0 },
+            'SQ Cables': { regularDue: 0, totalBill: 0, totalPaid: 0 }
          };
 
          (allTxs as unknown as Transaction[] || []).forEach(tx => {
             const dbCo = mapToDbCompany(tx.company);
             if (stats[dbCo]) {
                const amt = parseAmount(tx.amount);
-               const isBooking = tx.meta?.is_booking === true || (tx.items && tx.items[0]?.note?.includes('বুকিং'));
-
-               // if (isBooking) return;
+               const amt = parseAmount(tx.amount);
+               const returnAmount = Math.abs(tx.items?.reduce((s: number, it: any) => it.action === 'RETURN' ? s + parseAmount(it.total) : s, 0) || 0);
 
                if (tx.payment_type === 'COLLECTION') {
                   stats[dbCo].totalPaid += amt;
                   stats[dbCo].regularDue -= amt;
                } else if (tx.payment_type === 'DUE') {
-                  const hasReturn = tx.items?.some((it: any) => it.action === 'RETURN');
-                  if (!hasReturn) {
-                     stats[dbCo].totalBill += amt;
-                  }
                   stats[dbCo].regularDue += amt;
+                  stats[dbCo].totalBill += (amt + returnAmount);
+                  stats[dbCo].totalPaid += returnAmount; // Total deposit includes returns
                }
-            }
-         });
-
-         (bkData || []).forEach((b: any) => {
-            const dbCo = mapToDbCompany(b.company);
-            if (stats[dbCo]) {
-               stats[dbCo].bookingAdvance += parseAmount(b.advance_amount);
             }
          });
 
@@ -369,10 +357,6 @@ const CustomerPortal: React.FC<PortalProps> = ({ type, user }: PortalProps) => {
                                <p className="text-[8px] font-black text-rose-500 uppercase mb-1">বকেয়া</p>
                                <p className="text-sm md:text-lg font-black italic text-rose-600 leading-none">৳{safeFormat(multiStats[activeCompany]?.regularDue)}</p>
                             </div>
-                            <div className="bg-white/60 backdrop-blur-md p-3 md:p-4 rounded-2xl border border-white shadow-sm text-center min-w-[100px] md:min-w-[120px]">
-                               <p className="text-[8px] font-black text-indigo-500 uppercase mb-1">বুকিং জমা</p>
-                               <p className="text-sm md:text-lg font-black italic text-indigo-600 leading-none">৳{safeFormat(multiStats[activeCompany]?.bookingAdvance)}</p>
-                            </div>
                          </div>
                      </div>
 
@@ -392,18 +376,27 @@ const CustomerPortal: React.FC<PortalProps> = ({ type, user }: PortalProps) => {
                               ) : ledger.length === 0 ? (
                                  <tr><td colSpan={4} className="p-24 text-center text-slate-300 italic uppercase font-black tracking-widest opacity-40">কোনো রেকর্ড পাওয়া যায়নি</td></tr>
                               ) : (ledger as Transaction[]).slice(0, 10).map((tx: Transaction, idx: number) => {
-                                 const isBooking = (tx.meta as any)?.is_booking === true || (tx.items && tx.items[0]?.note?.includes('বুকিং'));
-                                 const hasReturns = tx.payment_type === 'DUE' && tx.items?.some((it: TransactionItem) => it.action === 'RETURN');
+                                 const returnAmount = Math.abs(tx.items?.reduce((s: number, it: any) => it.action === 'RETURN' ? s + parseAmount(it.total) : s, 0) || 0);
+                                 let salesAmount = 0;
+                                 let collectionAmount = 0;
+
+                                 if (tx.payment_type === 'DUE') {
+                                    salesAmount = parseAmount(tx.amount) + returnAmount;
+                                 } else if (tx.payment_type === 'COLLECTION') {
+                                    collectionAmount = parseAmount(tx.amount);
+                                 }
+                                 const isMixed = salesAmount > 0 && returnAmount > 0;
+                                 const desc = tx.items?.[0]?.note || (isMixed ? 'মেমো ও ফেরত' : (returnAmount > 0 && salesAmount === 0 ? 'মাল ফেরত' : (tx.payment_type === 'COLLECTION' ? 'নগদ/ব্যাংক জমা' : 'পণ্য ক্রয় (মেমো)')));
 
                                  return (
                                     <tr key={tx.id} className="hover:bg-slate-50/50 transition-colors group animate-reveal" style={{ animationDelay: `${idx * 0.05}s` }}>
                                        <td className="p-6 text-slate-400 font-medium">{new Date(tx.created_at).toLocaleDateString('bn-BD')}</td>
                                        <td className="p-6 uppercase font-black text-slate-800 italic flex items-center gap-3">
                                           <span className={`w-2 h-2 rounded-full ${tx.payment_type === 'COLLECTION' ? 'bg-emerald-500' : 'bg-rose-500'}`}></span>
-                                          {tx.payment_type === 'COLLECTION' ? (isBooking ? '📅 বুকিং জমা' : '💰 নগদ জমা') : (hasReturns ? '🔄 মেমো ও ফেরত' : '📄 সেলস মেমো')}
+                                          {desc}
                                        </td>
-                                       <td className={`p-6 text-right font-black italic text-base ${tx.payment_type === 'COLLECTION' ? (isBooking ? 'text-indigo-600' : 'text-emerald-600') : 'text-rose-600'}`}>
-                                          {tx.payment_type === 'COLLECTION' ? '-' : ''}৳{safeFormat(Math.abs(tx.amount))}
+                                       <td className={`p-6 text-right font-black italic text-base ${tx.payment_type === 'COLLECTION' ? 'text-emerald-600' : (salesAmount > 0 ? 'text-rose-600' : 'text-orange-600')}`}>
+                                          {tx.payment_type === 'COLLECTION' ? '-' : ''}৳{safeFormat(tx.payment_type === 'COLLECTION' ? collectionAmount : (salesAmount > 0 ? salesAmount : returnAmount))}
                                        </td>
                                        <td className="p-6 text-center">
                                           <button onClick={() => setSelectedTxDetails(tx)} className="w-10 h-10 bg-slate-50 text-slate-300 rounded-xl flex items-center justify-center hover:bg-blue-600 hover:text-white hover:shadow-lg transition-all active:scale-90">👁️</button>
@@ -576,14 +569,10 @@ const CustomerPortal: React.FC<PortalProps> = ({ type, user }: PortalProps) => {
                <div className="bg-white rounded-[2rem] border border-slate-100 shadow-xl overflow-hidden min-h-[400px]">
                   <div className="p-6 border-b bg-slate-50/50 flex flex-col gap-4">
                      <h3 className="text-lg font-black uppercase italic text-slate-800">{activeCompany} Ledger</h3>
-                     <div className="grid grid-cols-2 gap-4">
-                        <div className="p-3 bg-slate-50 rounded-2xl">
-                           <p className="text-[8px] font-black text-slate-400 uppercase italic">মালের বকেয়া</p>
-                           <p className={`text-lg font-black italic ${(multiStats[activeCompany]?.regularDue || 0) > 0 ? 'text-rose-600' : 'text-emerald-600'}`}>৳{safeFormat(multiStats[activeCompany]?.regularDue)}</p>
-                        </div>
-                        <div className="p-3 bg-indigo-50/30 rounded-2xl">
-                           <p className="text-[8px] font-black text-indigo-400 uppercase italic">বুকিং জমা</p>
-                           <p className="text-lg font-black italic text-indigo-600">৳{safeFormat(multiStats[activeCompany]?.bookingAdvance)}</p>
+                     <div className="grid grid-cols-1 gap-4">
+                        <div className="p-3 bg-slate-50 rounded-2xl flex justify-between items-center">
+                           <p className="text-[10px] font-black text-slate-400 uppercase italic">মালের বকেয়া (Due)</p>
+                           <p className={`text-xl font-black italic ${(multiStats[activeCompany]?.regularDue || 0) > 0 ? 'text-rose-600' : 'text-emerald-600'}`}>৳{safeFormat(multiStats[activeCompany]?.regularDue)}</p>
                         </div>
                      </div>
                   </div>
@@ -603,25 +592,34 @@ const CustomerPortal: React.FC<PortalProps> = ({ type, user }: PortalProps) => {
                            ) : ledger.length === 0 ? (
                               <tr><td colSpan={4} className="p-20 text-center text-slate-300 italic uppercase font-black tracking-widest opacity-40">No Records</td></tr>
                            ) : ledger.map((tx) => {
-                              const isBooking = tx.meta?.is_booking === true || (tx.items && tx.items[0]?.note?.includes('বুকিং'));
-                              const returnItems = tx.items?.filter((it: any) => it.action === 'RETURN') || [];
-                              const returnAmount = returnItems.reduce((s: number, it: any) => s + (Number(it.total) || 0), 0);
+                              const returnAmount = Math.abs(tx.items?.reduce((s: number, it: any) => it.action === 'RETURN' ? s + parseAmount(it.total) : s, 0) || 0);
+                              let salesAmount = 0;
+                              let collectionAmount = 0;
+
+                              if (tx.payment_type === 'DUE') {
+                                 salesAmount = parseAmount(tx.amount) + returnAmount;
+                              } else if (tx.payment_type === 'COLLECTION') {
+                                 collectionAmount = parseAmount(tx.amount);
+                              }
+                              
+                              const isMixed = salesAmount > 0 && returnAmount > 0;
+                              const desc = tx.items?.[0]?.note || (isMixed ? 'মেমো ও ফেরত' : (returnAmount > 0 && salesAmount === 0 ? 'মাল ফেরত' : (tx.payment_type === 'COLLECTION' ? 'নগদ/ব্যাংক জমা' : 'পণ্য ক্রয় (মেমো)')));
 
                               return (
                                  <tr key={tx.id} className="active:bg-slate-50 transition-colors group">
                                     <td className="p-5 text-slate-400 font-medium">{new Date(tx.created_at).toLocaleDateString('bn-BD')}</td>
                                     <td className="p-5">
                                        <p className="uppercase font-black text-slate-800 italic leading-none">
-                                          {tx.payment_type === 'COLLECTION' ? (isBooking ? '📅 বুকিং জমা' : '💰 জমা') : (returnItems.length > 0 ? '🔄 মেমো ও ফেরত' : '📄 মেমো')}
+                                          {desc}
                                        </p>
-                                       {returnItems.length > 0 && (
+                                       {returnAmount > 0 && salesAmount > 0 && (
                                           <p className="text-[8px] font-bold text-orange-600 uppercase mt-1">
                                              ফেরত পণ্য বাবদ ৳{Math.abs(parseAmount(returnAmount)).toLocaleString()} সমন্বিত
                                           </p>
                                        )}
                                     </td>
-                                    <td className={`p-5 text-right font-black italic ${tx.payment_type === 'COLLECTION' ? (isBooking ? 'text-indigo-600' : 'text-emerald-600') : 'text-rose-600'}`}>
-                                       {tx.payment_type === 'COLLECTION' ? '-' : ''}৳{safeFormat(Math.abs(tx.amount))}
+                                    <td className={`p-5 text-right font-black italic ${tx.payment_type === 'COLLECTION' ? 'text-emerald-600' : (salesAmount > 0 ? 'text-rose-600' : 'text-orange-600')}`}>
+                                       {tx.payment_type === 'COLLECTION' ? '-' : ''}৳{safeFormat(tx.payment_type === 'COLLECTION' ? collectionAmount : (salesAmount > 0 ? salesAmount : returnAmount))}
                                     </td>
                                     <td className="p-5 text-center">
                                        {tx.items && (
