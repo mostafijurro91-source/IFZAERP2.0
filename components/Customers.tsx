@@ -141,6 +141,8 @@ const Customers: React.FC<CustomerProps> = ({ company, role, userName }) => {
         const cid = tx.customer_id;
         const isBooking = tx.meta?.is_booking === true || tx.items?.[0]?.note?.includes('বুকিং');
 
+        if (isBooking) return;
+
         if (tx.payment_type === 'DUE') {
           regMap[cid] = (regMap[cid] || 0) + amt;
         } else if (tx.payment_type === 'COLLECTION') {
@@ -278,6 +280,8 @@ const Customers: React.FC<CustomerProps> = ({ company, role, userName }) => {
       (data as unknown as Transaction[])?.forEach(tx => {
         const amt = parseAmount(tx.amount);
         const isBooking = tx.meta?.is_booking === true || tx.items?.[0]?.note?.includes('বুকিং');
+
+        if (isBooking) return;
 
         if (tx.payment_type === 'COLLECTION') {
           lifetimePaid += amt;

@@ -238,8 +238,9 @@ const Collections: React.FC<CollectionsProps> = ({ company, user, companies }) =
                allTxs?.forEach(tx => {
                   const a = parseAmount(tx.amount);
                   const isBk = tx.meta?.is_booking === true || tx.items?.[0]?.note?.includes('বুকিং');
+                  if (isBk) return;
                   if (tx.payment_type === 'DUE') totalDue += a;
-                  else if (tx.payment_type === 'COLLECTION' && !isBk) totalDue -= a;
+                  else if (tx.payment_type === 'COLLECTION') totalDue -= a;
                });
 
                const msg = `প্রিয় কাস্টমার, আপনার ${req.company} কোম্পানির ${isBooking ? 'বুকিং বাবদ' : 'বকেয়া বাবদ'} ৳${toLocale(req.amount)} জমা গ্রহণ করা হয়েছে। আপনার বর্তমান মোট বকেয়া ৳${totalDue.toLocaleString()}। ধন্যবাদ - ইফজা ইআরপি`;
