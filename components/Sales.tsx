@@ -200,15 +200,12 @@ const Sales: React.FC<SalesProps> = ({ company, role, user }) => {
 
       data?.forEach(tx => {
         const amt = parseAmount(tx.amount);
-        const isBooking = tx.meta?.is_booking === true || tx.items?.[0]?.note?.includes('বুকিং');
 
         if (tx.payment_type === 'COLLECTION') {
-          if (!isBooking) {
-            due -= amt;
-            if (!foundLastColl) {
-              lastColl = amt;
-              foundLastColl = true;
-            }
+          due -= amt;
+          if (!foundLastColl) {
+            lastColl = amt;
+            foundLastColl = true;
           }
         } else {
           due += amt;

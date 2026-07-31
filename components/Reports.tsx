@@ -240,7 +240,7 @@ const Reports: React.FC<ReportsProps> = ({ company, userRole, userName }) => {
           
           if (tx.payment_type === 'DUE') {
             dues[cid] += amt;
-          } else if (tx.payment_type === 'COLLECTION' && !isBooking) {
+          } else if (tx.payment_type === 'COLLECTION') {
             dues[cid] -= amt;
           }
         });

@@ -144,11 +144,7 @@ const Customers: React.FC<CustomerProps> = ({ company, role, userName }) => {
         if (tx.payment_type === 'DUE') {
           regMap[cid] = (regMap[cid] || 0) + amt;
         } else if (tx.payment_type === 'COLLECTION') {
-          if (isBooking) {
-            // Isolated booking advance handled via bookings table
-          } else {
-            regMap[cid] = (regMap[cid] || 0) - amt;
-          }
+          regMap[cid] = (regMap[cid] || 0) - amt;
         }
       });
 
@@ -284,12 +280,8 @@ const Customers: React.FC<CustomerProps> = ({ company, role, userName }) => {
         const isBooking = tx.meta?.is_booking === true || tx.items?.[0]?.note?.includes('বুকিং');
 
         if (tx.payment_type === 'COLLECTION') {
-          if (isBooking) {
-            // Isolated booking advance handled via bookings table
-          } else {
-            lifetimePaid += amt;
-            totalR -= amt;
-          }
+          lifetimePaid += amt;
+          totalR -= amt;
         } else if (tx.payment_type === 'DUE') {
           totalR += amt;
           const returnItem = tx.items?.find((it: any) => it.action === 'RETURN');

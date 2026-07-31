@@ -148,12 +148,8 @@ const CustomerPortal: React.FC<PortalProps> = ({ type, user }: PortalProps) => {
                const isBooking = tx.meta?.is_booking === true || (tx.items && tx.items[0]?.note?.includes('বুকিং'));
 
                if (tx.payment_type === 'COLLECTION') {
-                  if (isBooking) {
-                     // Isolated booking advance handled via bookings table
-                  } else {
-                     stats[dbCo].totalPaid += amt;
-                     stats[dbCo].regularDue -= amt;
-                  }
+                  stats[dbCo].totalPaid += amt;
+                  stats[dbCo].regularDue -= amt;
                } else if (tx.payment_type === 'DUE') {
                   const hasReturn = tx.items?.some((it: any) => it.action === 'RETURN');
                   if (!hasReturn) {

@@ -123,11 +123,7 @@ const Dashboard: React.FC<DashboardProps> = ({ company, role }) => {
 
         if (tx.payment_type === 'COLLECTION') {
           if (txDateStr === todayStr) t_coll += amt;
-          if (isBooking) {
-            // Isolated booking advance handled via bookings table
-          } else {
-            if (cid) customerStatsMap[cid].due -= amt;
-          }
+          if (cid) customerStatsMap[cid].due -= amt;
           if (monthlyMap[txMonth]) monthlyMap[txMonth].collection += amt;
         } else if (tx.payment_type === 'DUE') {
           if (txDateStr === todayStr) t_sales += amt;
