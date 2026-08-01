@@ -28,6 +28,15 @@ const FastBooking: React.FC<FastBookingProps> = ({ company, role, user }) => {
    const [qtyInput, setQtyInput] = useState(1);
    const [priceInput, setPriceInput] = useState(0);
 
+   // Search states
+   const [customerSearch, setCustomerSearch] = useState('');
+   const [showCustomerDropdown, setShowCustomerDropdown] = useState(false);
+   const [productSearch, setProductSearch] = useState('');
+   const [showProductDropdown, setShowProductDropdown] = useState(false);
+
+   const filteredCustomers = customers.filter(c => c.name.toLowerCase().includes(customerSearch.toLowerCase()) || (c.phone || '').includes(customerSearch));
+   const filteredProducts = products.filter(p => p.name.toLowerCase().includes(productSearch.toLowerCase()));
+
    useEffect(() => {
       fetchData();
    }, [company]);
@@ -75,6 +84,7 @@ const FastBooking: React.FC<FastBookingProps> = ({ company, role, user }) => {
          setCart([...cart, { product_id: prod.id, name: prod.name, qty: qtyInput, unitPrice: priceInput }]);
       }
       setSelectedProduct('');
+      setProductSearch('');
       setQtyInput(1);
       setPriceInput(0);
    };
@@ -126,6 +136,7 @@ const FastBooking: React.FC<FastBookingProps> = ({ company, role, user }) => {
          alert("বুকিং অর্ডার সফলভাবে তৈরি হয়েছে! ✅");
          setShowOrderModal(false);
          setOrderForm({ customer_id: '', deposit: 0, method: 'CASH' });
+         setCustomerSearch('');
          setCart([]);
          fetchData();
       } catch (err: any) {
@@ -284,20 +295,76 @@ const FastBooking: React.FC<FastBookingProps> = ({ company, role, user }) => {
                      
                      <div>
                         <label className="block text-[10px] font-black text-slate-400 uppercase mb-2">Customer</label>
-                        <select required className="w-full p-4 bg-slate-50 border-2 border-slate-100 rounded-2xl font-bold focus:border-indigo-500 outline-none transition-colors" value={orderForm.customer_id} onChange={e => setOrderForm({...orderForm, customer_id: e.target.value})}>
-                           <option value="">-- Select Customer --</option>
-                           {customers.map(c => <option key={c.id} value={c.id}>{c.name} {c.address ? `(${c.address})` : ''}</option>)}
-                        </select>
+                        <div className="relative">
+                           <input 
+                              type="text" 
+                              placeholder="Search Customer by Name or Phone..." 
+                              className="w-full p-4 bg-slate-50 border-2 border-slate-100 rounded-2xl font-bold focus:border-indigo-500 outline-none transition-colors"
+                              value={customerSearch}
+                              onChange={e => {
+                                 setCustomerSearch(e.target.value);
+                                 setShowCustomerDropdown(true);
+                                 if (!e.target.value) setOrderForm({...orderForm, customer_id: ''});
+                              }}
+                              onFocus={() => setShowCustomerDropdown(true)}
+                              onBlur={() => setTimeout(() => setShowCustomerDropdown(false), 200)}
+                           />
+                           {showCustomerDropdown && (
+                              <div className="absolute z-10 w-full mt-2 bg-white border border-slate-200 rounded-2xl shadow-xl max-h-48 overflow-y-auto">
+                                 {filteredCustomers.map(c => (
+                                    <div 
+                                       key={c.id} 
+                                       className="p-4 hover:bg-indigo-50 cursor-pointer border-b border-slate-50 text-sm font-bold text-slate-700"
+                                       onClick={() => {
+                                          setOrderForm({...orderForm, customer_id: c.id});
+                                          setCustomerSearch(`${c.name} ${c.address ? `(${c.address})` : ''} ${c.phone ? `- ${c.phone}` : ''}`);
+                                          setShowCustomerDropdown(false);
+                                       }}
+                                    >
+                                       {c.name} {c.address ? `(${c.address})` : ''} {c.phone ? `- ${c.phone}` : ''}
+                                    </div>
+                                 ))}
+                                 {filteredCustomers.length === 0 && <div className="p-4 text-slate-400 text-sm font-bold">No customers found</div>}
+                              </div>
+                           )}
+                        </div>
                      </div>
 
                      <div className="bg-slate-50 p-6 rounded-3xl border-2 border-slate-100">
                         <label className="block text-[10px] font-black text-slate-400 uppercase mb-4">Add Products</label>
                         <div className="grid grid-cols-1 md:grid-cols-12 gap-3 mb-4">
-                           <div className="md:col-span-6">
-                              <select className="w-full p-3 bg-white border border-slate-200 rounded-xl font-bold" value={selectedProduct} onChange={e => handleProductSelect(e.target.value)}>
-                                 <option value="">Select Product...</option>
-                                 {products.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                              </select>
+                           <div className="md:col-span-6 relative">
+                              <input 
+                                 type="text" 
+                                 placeholder="Search Product..." 
+                                 className="w-full p-3 bg-white border border-slate-200 rounded-xl font-bold focus:border-indigo-500 outline-none"
+                                 value={productSearch}
+                                 onChange={e => {
+                                    setProductSearch(e.target.value);
+                                    setShowProductDropdown(true);
+                                    if (!e.target.value) setSelectedProduct('');
+                                 }}
+                                 onFocus={() => setShowProductDropdown(true)}
+                                 onBlur={() => setTimeout(() => setShowProductDropdown(false), 200)}
+                              />
+                              {showProductDropdown && (
+                                 <div className="absolute z-10 w-full mt-1 bg-white border border-slate-200 rounded-xl shadow-xl max-h-48 overflow-y-auto">
+                                    {filteredProducts.map(p => (
+                                       <div 
+                                          key={p.id} 
+                                          className="p-3 hover:bg-indigo-50 cursor-pointer border-b border-slate-50 text-sm font-bold text-slate-700"
+                                          onClick={() => {
+                                             handleProductSelect(p.id);
+                                             setProductSearch(p.name);
+                                             setShowProductDropdown(false);
+                                          }}
+                                       >
+                                          {p.name}
+                                       </div>
+                                    ))}
+                                    {filteredProducts.length === 0 && <div className="p-3 text-slate-400 text-sm font-bold">No products found</div>}
+                                 </div>
+                              )}
                            </div>
                            <div className="md:col-span-2">
                               <input type="number" min="1" className="w-full p-3 bg-white border border-slate-200 rounded-xl font-bold text-center" placeholder="Qty" value={qtyInput} onChange={e => setQtyInput(parseInt(e.target.value) || 0)} />
