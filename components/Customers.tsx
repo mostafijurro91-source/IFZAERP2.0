@@ -246,9 +246,6 @@ const Customers: React.FC<CustomerProps> = ({ company, role, userName }) => {
 
       (data as unknown as Transaction[])?.forEach(tx => {
         const amt = parseAmount(tx.amount);
-
-      (data as unknown as Transaction[])?.forEach(tx => {
-        const amt = parseAmount(tx.amount);
         const returnAmount = Math.abs(tx.items?.reduce((s: number, it: any) => it.action === 'RETURN' ? s + parseAmount(it.total) : s, 0) || 0);
 
         if (tx.payment_type === 'COLLECTION') {

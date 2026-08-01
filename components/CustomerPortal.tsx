@@ -130,7 +130,6 @@ const CustomerPortal: React.FC<PortalProps> = ({ type, user }: PortalProps) => {
    const fetchAllStats = useCallback(async () => {
       if (!user.customer_id) return;
       try {
-      try {
          const { data: allTxs } = await supabase.from('transactions').select('amount, payment_type, company, meta, items').eq('customer_id', user.customer_id);
 
          const stats: Record<string, CompanyStats> = {
@@ -142,7 +141,6 @@ const CustomerPortal: React.FC<PortalProps> = ({ type, user }: PortalProps) => {
          (allTxs as unknown as Transaction[] || []).forEach(tx => {
             const dbCo = mapToDbCompany(tx.company);
             if (stats[dbCo]) {
-               const amt = parseAmount(tx.amount);
                const amt = parseAmount(tx.amount);
                const returnAmount = Math.abs(tx.items?.reduce((s: number, it: any) => it.action === 'RETURN' ? s + parseAmount(it.total) : s, 0) || 0);
 
