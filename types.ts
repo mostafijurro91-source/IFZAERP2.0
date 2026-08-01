@@ -53,16 +53,6 @@ export interface Product {
   category?: string;
 }
 
-export interface FastBookingCustomer {
-  id: string;
-  name: string;
-  phone?: string;
-  address?: string;
-  company: string;
-  isActive: boolean;
-  created_at: string;
-}
-
 export interface FastBookingOrderItem {
   id: string;
   product_id: string;
@@ -81,7 +71,7 @@ export interface FastBookingOrder {
   items: FastBookingOrderItem[];
   status: 'PENDING' | 'PARTIAL' | 'COMPLETED';
   created_at: string;
-  fast_booking_customers?: FastBookingCustomer;
+  customers?: Customer;
   customer_name?: string;
 }
 
